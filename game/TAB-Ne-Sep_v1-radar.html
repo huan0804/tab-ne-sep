@@ -1,0 +1,1469 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>TAB: Né Sếp</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Be+Vietnam+Pro:ital,wght@0,400;0,500;0,600;0,700;1,500&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --wall:#f4f6f8; --wall-dark:#e2e6ea; --wood:#ffffff; --wood-dark:#c9ced4;
+    --glass-frame:#2b2d31; --bezel:#101012;
+    --work-glow:#2563eb; --personal-glow:#d97706;
+    --radar-bg: rgba(8,16,12,0.82); --radar-ring: rgba(255,255,255,0.22);
+    --danger:#dc2626; --safe:#22c55e; --paper:#f5f1e6; --ink:#1c1c1c;
+    --accent-yellow:#f2b705; --accent-green:#8bc34a;
+    --mono: 'JetBrains Mono', 'Courier New', ui-monospace, monospace;
+    --display: 'Baloo 2', 'Segoe UI', sans-serif;
+    --body: 'Be Vietnam Pro', 'Segoe UI', sans-serif;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;height:100%;background:#111;overflow:hidden;font-family:var(--body);color:var(--paper);}
+  #stage{position:relative;width:100%;height:100%;display:flex;flex-direction:column;user-select:none;background:#111;}
+
+  #hud{position:relative; z-index:30; display:flex; align-items:center; justify-content:space-between; padding:10px 16px; gap:14px; flex-wrap:wrap; border-bottom:1px solid #3a3d46; background:#1a1c20;}
+  .hud-block{display:flex;flex-direction:column;gap:3px;min-width:100px;}
+  .hud-label{font-size:10px;letter-spacing:0.04em;color:#9a9a95;}
+  .hud-value{font-size:18px;font-weight:bold;color:var(--paper); font-family:var(--mono);}
+  #lives{font-size:16px;letter-spacing:3px;}
+  #progressWrap{flex:1;min-width:160px;max-width:300px;}
+  #progressText{font-family:var(--mono);}
+  #clock2{font-family:var(--mono);}
+  #progressTrack{height:12px;border-radius:6px;background:#0e0e10;overflow:hidden;border:1px solid #444;}
+  #progressFill{height:100%; width:0%; background:linear-gradient(90deg, var(--personal-glow), #fbbf24); transition:width 0.15s linear;}
+  #hud #title{font-family:var(--display); font-style:italic; font-size:15px; color:#c9c4b6;}
+
+  #scene{position:relative; flex:1; overflow:hidden; background:linear-gradient(180deg, #fbfcfd 0%, #f2f4f6 55%, #dfe3e7 55%, #c7ccd2 100%);}
+  .column{position:absolute; top:0; bottom:0; width:38px; background:linear-gradient(90deg,#e4e7ea,#ffffff,#e4e7ea); box-shadow:0 0 20px rgba(0,0,0,0.08);}
+  #colLeft{left:3%;} #colRight{right:3%;}
+  .pendant-big{position:absolute; top:0; width:56px; z-index:2;}
+  .pendant-big .wire{width:2px;height:40px;background:#b8bcc2;margin:0 auto;}
+  .pendant-big .shade{width:56px;height:22px;background:linear-gradient(180deg,#ffffff,#d8dbe0);border:1px solid #c5c9ce; border-radius:5px 5px 22px 22px; box-shadow:0 4px 8px rgba(0,0,0,0.12);}
+  .pendant-big .glow{position:absolute; top:60px; left:50%; transform:translateX(-50%); width:180px; height:180px; background:radial-gradient(circle, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0.18) 45%, transparent 72%); pointer-events:none;}
+  .window-daylight{position:absolute; top:4%; right:6%; width:22%; height:48%; background:linear-gradient(180deg,#cfe8f5,#eaf5fb); border:5px solid #fff; box-shadow:0 6px 18px rgba(0,0,0,0.08); border-radius:2px; overflow:hidden;}
+  .window-daylight::after{content:'';position:absolute; top:0; bottom:0; left:50%; width:5px; background:#fff;}
+  .window-daylight .tree{position:absolute; bottom:0; width:30%; height:40%; background:#8bc34a; border-radius:50% 50% 0 0; opacity:0.6;}
+  .plantbig{position:absolute; bottom:41%; left:8%; width:56px; z-index:4;}
+  .plantbig .pot{width:32px;height:28px;background:var(--accent-yellow);border-radius:0 0 6px 6px;margin:0 auto;}
+  .plantbig.right{left:auto; right:8%;}
+
+  .coworkers{position:absolute; bottom:41%; left:0; right:0; height:17%; display:flex; justify-content:space-evenly; padding:0 90px; z-index:3;}
+  .co-desk{width:60px; height:100%; position:relative;}
+  .co-desk .silhouette{position:absolute; bottom:0; left:50%; transform:translateX(-50%); width:34px; height:36px; background:var(--accent-green); border-radius:14px 14px 4px 4px; opacity:0.9;}
+  .co-desk .headsil{position:absolute; bottom:32px; left:50%; transform:translateX(-50%); width:17px; height:19px; border-radius:50% 50% 45% 45%; background:#e0b88f;}
+  .co-desk .glow{position:absolute; bottom:6px; left:50%; transform:translateX(-50%); width:30px; height:16px; background:#1c1c1c; border-radius:2px; opacity:0.92;}
+  .co-desk .glow::after{content:'';position:absolute; inset:2px; background:#2f6fd6; border-radius:1px; opacity:0.9;}
+  .co-desk .drawer{position:absolute; bottom:0; left:50%; transform:translateX(-50%); width:36px; height:8px; background:var(--accent-yellow); border-radius:0 0 3px 3px;}
+
+  #radarWrap{position:absolute; top:12px; right:14px; z-index:25; display:flex; flex-direction:column; align-items:center; gap:5px;}
+  #radar{width:168px; height:168px; border-radius:50%; background:var(--radar-bg); border:3px solid #3d4d3a; position:relative; overflow:hidden; box-shadow:0 8px 22px rgba(0,0,0,0.5);}
+  .radar-ring{position:absolute; border:1px solid var(--radar-ring); border-radius:50%; top:50%; left:50%; transform:translate(-50%,-50%);}
+  #radarSweep{position:absolute; inset:0; background:conic-gradient(from 0deg, rgba(90,255,140,0.4), transparent 45deg); animation:sweep 2.3s linear infinite; border-radius:50%;}
+  @keyframes sweep{ from{transform:rotate(0deg);} to{transform:rotate(360deg);} }
+  #radarCenter{position:absolute; width:10px; height:10px; border-radius:50%; background:#eaeaea; top:50%; left:50%; transform:translate(-50%,-50%); box-shadow:0 0 8px #fff;}
+  #radarBoss{position:absolute; width:14px; height:14px; border-radius:50%; background:var(--danger); top:50%; left:50%; transform:translate(-50%,-50%); box-shadow:0 0 10px var(--danger); transition:background 0.15s;}
+  #radarDist{font-size:14px; font-weight:bold; color:#dfe7dc; background:rgba(0,0,0,0.45); padding:3px 10px; border-radius:6px; font-family:var(--mono);}
+  #radarAlert{font-size:11px; font-weight:bold; color:#ffb4b0; opacity:0; transition:opacity 0.15s; text-align:center;}
+  #radarAlert.show{opacity:1;}
+
+  #bossFaceCard{display:flex; flex-direction:column; align-items:center; gap:3px; margin-top:2px;}
+  #bossFaceSvgWrap{width:132px; height:132px; border-radius:50%; background:#2a2118; border:3px solid #55483a; overflow:hidden; box-shadow:0 6px 16px rgba(0,0,0,0.45); transition:box-shadow 0.2s, border-color 0.2s;}
+  #bossFaceSvgWrap svg{width:100%;height:100%;display:block;}
+  #bossFaceCard.calm #bossFaceSvgWrap{ animation:bossIdle 3.2s ease-in-out infinite; }
+  #bossFaceCard.alert #bossFaceSvgWrap{ border-color:#f59e0b; animation:bossTwitch 0.5s ease-in-out infinite; }
+  #bossFaceCard.angry #bossFaceSvgWrap{ border-color:var(--danger); box-shadow:0 0 22px 6px rgba(220,38,38,0.65); animation:bossShake 0.35s ease-in-out infinite; }
+  @keyframes bossIdle{ 0%,100%{transform:scale(1);} 50%{transform:scale(1.02);} }
+  @keyframes bossTwitch{ 0%,100%{transform:translateX(0);} 30%{transform:translateX(-2px);} 60%{transform:translateX(2px);} }
+  @keyframes bossShake{ 0%,100%{transform:translate(0,0) rotate(0);} 25%{transform:translate(-3px,1px) rotate(-2deg);} 75%{transform:translate(3px,-1px) rotate(2deg);} }
+  #bossLabel{font-size:12px; color:#c9c4b6; letter-spacing:0.04em; font-weight:600;}
+  #bossBubble{
+    position:relative; max-width:190px; background:#fff; color:#2b2620; font-size:12px; font-weight:600;
+    padding:7px 11px; border-radius:11px; text-align:center; opacity:0; transform:scale(0.8) translateY(-4px);
+    transition:opacity 0.15s, transform 0.15s; pointer-events:none;
+  }
+  #bossBubble.show{ opacity:1; transform:scale(1) translateY(0); }
+  #bossBubble::after{content:''; position:absolute; top:-6px; left:50%; transform:translateX(-50%); border:6px solid transparent; border-bottom-color:#fff;}
+
+  #desk{position:absolute; bottom:0; left:50%; transform:translateX(-50%); width:min(760px, 96%); height:58%; z-index:6;}
+  #monitorRig{position:absolute; bottom:28%; left:50%; transform:translateX(-50%); display:flex; flex-direction:column; align-items:center;}
+  .arm-clamp{width:30px; height:9px; background:#1c1c1e; border-radius:2px; margin-top:2px;}
+  .arm-pole{width:9px; height:64px; background:linear-gradient(90deg,#2a2a2c,#111);}
+  .arm-joint{width:16px; height:16px; border-radius:50%; background:#2a2a2c; margin:-2px 0;}
+  .arm-horiz{width:100px; height:10px; background:linear-gradient(180deg,#2a2a2c,#111); border-radius:3px; align-self:flex-start; margin-left:-4px;}
+  #monitor{width:clamp(320px, 48vw, 660px); height:clamp(200px, 33vh, 420px); background:var(--bezel); border-radius:14px; padding:12px; box-shadow:0 20px 44px rgba(0,0,0,0.55); position:relative;}
+  #screen{width:100%; height:100%; border-radius:6px; overflow:hidden; position:relative; background:#0a0a0a;}
+  .glow-work{ box-shadow:0 0 46px 10px rgba(37,99,235,0.55); }
+  .glow-personal{ box-shadow:0 0 46px 10px rgba(217,119,6,0.6); }
+
+  .work-content, .personal-content{position:absolute; inset:0; padding:12px; font-size:12px; line-height:1.4; overflow:hidden; color:#dfe;}
+  .work-content{font-family:var(--mono);}
+  .personal-content{font-family:var(--body);}
+
+  /* Excel theme */
+  .excel-theme{background:#1c2b1e; display:flex; flex-direction:column;}
+  .xl-topbar{background:#1f6e3c; color:#fff; font-size:11px; padding:4px 8px; border-radius:3px; margin-bottom:5px;}
+  .xl-formula{color:#9fd8ab; font-size:10px; margin-bottom:5px;}
+  .xl-body{display:flex; gap:8px; flex:1; min-height:0;}
+  .xl-grid{background:#0f1a10; border:1px solid #2f4a33; border-radius:3px; overflow:hidden; flex:1.3;}
+  .xl-row{display:grid; grid-template-columns:1.3fr 0.9fr 0.7fr; border-bottom:1px solid #24361f;}
+  .xl-row div{padding:3px 5px; border-right:1px solid #24361f; font-size:10px; color:#cfe8d2;}
+  .xl-header{background:#274d2c; font-weight:bold; color:#fff;}
+  .xl-selected{background:#2c5a33; outline:2px solid #7ee08b;}
+  .xl-chartbox{flex:1; background:#0f1a10; border:1px solid #2f4a33; border-radius:3px; padding:6px; display:flex; flex-direction:column;}
+  .xl-chartbox .xl-chart-title{font-size:9px; color:#9fd8ab; margin-bottom:4px;}
+  .xl-bars{flex:1; display:flex; align-items:flex-end; gap:3px;}
+  .xl-bars div{flex:1; background:linear-gradient(180deg,#7ee08b,#2f9e4f); border-radius:2px 2px 0 0;}
+  .xl-tabs{display:flex; gap:2px; margin-top:5px;}
+  .xl-tabs span{font-size:8px; background:#274d2c; color:#bfe8c5; padding:2px 6px; border-radius:2px 2px 0 0;}
+  .xl-tabs span.active{background:#3a7a44; color:#fff; font-weight:bold;}
+
+  /* Dashboard theme */
+  .dash-theme{background:#0d1b2e; display:flex; flex-direction:column;}
+  .dash-title{font-size:11px; color:#a9c9f5; margin-bottom:6px; font-weight:bold; display:flex; justify-content:space-between;}
+  .dash-cards{display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:6px;}
+  .dash-card{background:#132a45; border-radius:6px; padding:6px; text-align:center;}
+  .dash-num{font-size:15px; font-weight:bold; color:#7ec8ff;}
+  .dash-lbl{font-size:8px; color:#8fa9c2; margin-top:1px;}
+  .dash-row{display:flex; gap:8px; flex:1; min-height:0;}
+  .dash-panel{flex:1; background:#132a45; border-radius:6px; padding:6px; display:flex; flex-direction:column;}
+  .dash-panel-title{font-size:8px; color:#8fa9c2; margin-bottom:3px;}
+  .dash-spark{width:100%; flex:1;}
+  .dash-donut{width:52px; height:52px; border-radius:50%; margin:0 auto;}
+  .dash-donut-lbl{font-size:9px; color:#a9c9f5; text-align:center; margin-top:3px; font-weight:bold;}
+  .dash-bars-mini{flex:1; display:flex; align-items:flex-end; gap:2px;}
+  .dash-bars-mini div{flex:1; background:linear-gradient(180deg,#93c5fd,#3b82f6); border-radius:1px 1px 0 0;}
+
+  /* Stock theme */
+  .stock-theme{background:#0a0f0c; display:flex; flex-direction:column;}
+  .stock-ticker{font-size:13px; font-weight:bold; margin-bottom:4px;}
+  .stock-ticker .up{color:#4ade80;} .stock-ticker .down{color:#f87171;}
+  .stock-chart{width:100%; height:52px;}
+  .stock-vol{width:100%; height:16px; display:flex; align-items:flex-end; gap:1px; margin-top:2px;}
+  .stock-vol div{flex:1; background:#2f4a3a;}
+  .stock-watchlist{margin-top:6px; border-top:1px solid #223022; padding-top:4px;}
+  .stock-wrow{display:flex; justify-content:space-between; font-size:9.5px; padding:1.5px 0; color:#c9d9c9;}
+  .stock-wrow span.up{color:#4ade80;} .stock-wrow span.down{color:#f87171;}
+
+  /* Personal / video content */
+  .personal-content{background:#151515; display:flex; flex-direction:column;}
+  .vid-topbar{font-size:10px; color:#ff5c5c; margin-bottom:4px; display:flex; justify-content:space-between;}
+  .vid-frame{flex:1; background:#1c1c1c; border-radius:5px; display:flex; align-items:center; justify-content:center; position:relative; overflow:hidden;}
+  .vid-caption{font-size:11px; color:#ffe2a8; margin-top:6px; font-weight:bold;}
+  .vid-stats{font-size:9px; color:#c9c1a8; margin-top:2px;}
+  .vid-progress{height:4px; background:#333; border-radius:2px; margin-top:5px; overflow:hidden;}
+  .vid-progress-fill{height:100%; width:38%; background:#e11d48; animation:vidbar 6s linear infinite;}
+  @keyframes vidbar{ 0%{width:5%;} 100%{width:96%;} }
+
+  .aura-ring{position:absolute; border-radius:50%; border:2px solid rgba(255,180,60,0.6); animation:auraPulse 1.4s ease-out infinite;}
+  @keyframes auraPulse{ 0%{transform:scale(0.6); opacity:0.9;} 100%{transform:scale(1.6); opacity:0;} }
+
+  #deskSurface{position:absolute; bottom:0; left:0; right:0; height:28%;}
+  .keyboard{position:absolute; bottom:16%; left:50%; transform:translateX(-50%); width:190px; height:52px; background:#232326; border-radius:6px; box-shadow:0 4px 10px rgba(0,0,0,0.3);}
+  .keyboard::after{content:'';position:absolute; inset:6px; background-image:repeating-linear-gradient(90deg,#3a3a3e 0 14px, transparent 14px 17px), repeating-linear-gradient(0deg,#3a3a3e 0 9px, transparent 9px 12px); border-radius:3px;}
+  .mouse{position:absolute; bottom:20%; left:calc(50% + 122px); width:22px; height:34px; background:#2a2a2e; border-radius:11px;}
+  .mug{position:absolute; bottom:18%; left:calc(50% - 165px); width:28px; height:30px; background:#f2f0ea; border-radius:3px 3px 6px 6px;}
+  .mug::after{content:'';position:absolute; right:-9px; top:6px; width:10px; height:14px; border:3px solid #f2f0ea; border-left:none; border-radius:0 8px 8px 0;}
+  .succulent{position:absolute; bottom:17%; left:calc(50% + 163px); width:26px; height:26px;}
+  .notepad{position:absolute; bottom:19%; left:calc(50% - 122px); width:36px; height:26px; background:#eee; border:1px solid #ccc; transform:rotate(-4deg);}
+
+  #switcherOverlay{position:absolute; inset:0; z-index:35; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,0); pointer-events:none; opacity:0; transition:opacity 0.12s;}
+  #switcherOverlay.show{ opacity:1; background:rgba(0,0,0,0.3); }
+  #switcherCard{background:#1c1c1e; border:2px solid #55555a; border-radius:10px; padding:14px 24px; font-size:14px; color:#eee; box-shadow:0 10px 40px rgba(0,0,0,0.6); transform:scale(0.9); transition:transform 0.12s;}
+  #switcherOverlay.show #switcherCard{ transform:scale(1); }
+
+  #vignette{position:absolute; inset:0; z-index:20; pointer-events:none; box-shadow:inset 0 0 0 0 rgba(220,38,38,0); transition:box-shadow 0.15s;}
+
+  #controls{position:relative; z-index:30; display:flex; align-items:center; justify-content:center; padding:10px; gap:12px; border-top:1px solid #3a3d46; background:#1a1c20; flex-wrap:wrap;}
+  #tabBtn{font-family:var(--mono); font-weight:bold; font-size:14px; letter-spacing:0.03em; padding:11px 24px; border-radius:8px; border:2px solid #555; background:#26272c; color:var(--paper); cursor:pointer; transition:transform 0.08s, background 0.15s;}
+  #tabBtn:active{ transform:scale(0.96); background:#33343a; }
+  #hint{font-size:11px; color:#b7b7b2; max-width:280px;}
+
+  #modal{position:absolute; inset:0; z-index:50; display:none; align-items:center; justify-content:center; background:rgba(10,10,12,0.8);}
+  #modal.show{display:flex;}
+  #modalCard{background:var(--paper); color:var(--ink); padding:26px 30px; border-radius:10px; max-width:380px; width:92%; text-align:center; box-shadow:0 20px 60px rgba(0,0,0,0.5); max-height:88vh; overflow-y:auto; position:relative;}
+  .modalCloseX{position:absolute; top:10px; right:10px; width:30px; height:30px; border-radius:50%; border:none; background:#eee2; background:rgba(0,0,0,0.06); color:#555; font-size:15px; cursor:pointer; display:flex; align-items:center; justify-content:center; line-height:1;}
+  .modalCloseX:hover{background:rgba(0,0,0,0.12);}
+  .lbInviteRowSmall{display:grid; grid-template-columns:repeat(4,1fr); gap:6px; margin-top:8px;}
+  #replayFab{position:absolute; bottom:70px; right:16px; z-index:45; width:56px; height:56px; border-radius:50%; border:none; background:#c1272d; color:#fff; font-size:22px; cursor:pointer; box-shadow:0 8px 20px rgba(193,39,45,0.5); display:none; align-items:center; justify-content:center;}
+  #replayFab.show{display:flex;}
+  #modalCard h2{ font-family:var(--display); font-size:24px; margin:0 0 8px; }
+  #modalCard p{ font-size:13.5px; line-height:1.5; color:#333; }
+  #modalBtn{margin-top:14px; font-family:var(--mono); font-weight:bold; font-size:13px; padding:10px 22px; border-radius:6px; border:none; background:var(--ink); color:var(--paper); cursor:pointer;}
+  .stats-box{background:#efe9d8; border-radius:8px; padding:10px 12px; margin-top:10px; text-align:left;}
+  .stats-row{display:flex; justify-content:space-between; font-size:12.5px; padding:3px 0; color:#3a3327;}
+  .leaderboard-title{font-size:12px; font-weight:bold; margin-top:12px; margin-bottom:4px; color:#8a6d1f;}
+  .leaderboard-list{margin:0; padding-left:18px; text-align:left; font-size:12px; color:#4a4130; max-height:120px; overflow-y:auto;}
+
+  #flash{position:absolute; inset:0; z-index:40; background:var(--danger); opacity:0; pointer-events:none;}
+  #flash.hit{ animation:flashHit 0.35s ease-out; }
+  @keyframes flashHit{ 0%{opacity:0.5;} 100%{opacity:0;} }
+
+  @keyframes monitorShake{
+    0%,100%{ transform:translate(0,0) rotate(0); }
+    20%{ transform:translate(-6px,3px) rotate(-1.5deg); }
+    40%{ transform:translate(5px,-3px) rotate(1.5deg); }
+    60%{ transform:translate(-4px,2px) rotate(-1deg); }
+    80%{ transform:translate(4px,-2px) rotate(1deg); }
+  }
+  #monitorRig.shake{ animation:monitorShake 0.4s ease-in-out; }
+
+  #catchPopup, #safePopup{position:absolute; top:38%; left:50%; transform:translate(-50%,-50%) scale(0.7); z-index:45; font-weight:bold; opacity:0; pointer-events:none; text-shadow:0 2px 8px rgba(0,0,0,0.6); white-space:nowrap;}
+  #catchPopup{font-size:26px; color:#ff6b6b;}
+  #safePopup{font-size:18px; color:#6ee08b;}
+  #catchPopup.pop, #safePopup.pop{ animation:popFeedback 0.9s ease-out forwards; }
+  @keyframes popFeedback{
+    0%{ opacity:0; transform:translate(-50%,-50%) scale(0.6); }
+    18%{ opacity:1; transform:translate(-50%,-50%) scale(1.08); }
+    30%{ transform:translate(-50%,-50%) scale(1); }
+    100%{ opacity:0; transform:translate(-50%,-65%) scale(1); }
+  }
+
+  #introScreen{position:absolute; inset:0; z-index:80; display:flex; align-items:center; justify-content:center; background:rgba(20,18,30,0.86); padding:16px;}
+  #introScreen.hide{display:none;}
+  #introCard{background:#fffaf0; color:#2b2620; border-radius:20px; max-width:460px; width:100%; padding:26px 24px 22px; box-shadow:0 24px 70px rgba(0,0,0,0.5); text-align:center; max-height:92vh; overflow-y:auto;}
+  #introCard h1{font-family:var(--display); font-size:24px; margin:0 0 6px; color:#c1272d;}
+  .introLead{font-size:14px; color:#5a5142; margin:0 0 16px; line-height:1.5;}
+  .introSteps{display:flex; flex-direction:column; gap:10px; text-align:left; margin-bottom:14px; max-height:0; overflow:hidden; opacity:0; transition:max-height 0.3s ease, opacity 0.2s ease, margin 0.3s ease;}
+  .introSteps.open{max-height:600px; opacity:1; margin-top:12px;}
+  #howToPlayToggle{display:block; margin:10px auto 0; background:none; border:none; font-family:var(--body); font-size:12.5px; color:#8a6d1f; text-decoration:underline; cursor:pointer; padding:4px;}
+  .introStep{display:flex; align-items:center; gap:12px; background:#f3ecd8; border-radius:14px; padding:9px 13px;}
+  .stepNum{flex:0 0 24px; height:24px; border-radius:50%; background:#c1272d; color:#fff; font-weight:bold; font-size:12px; display:flex; align-items:center; justify-content:center;}
+  .stepIcon{font-size:24px; flex:0 0 32px; text-align:center;}
+  .stepText{font-size:13.5px; line-height:1.4; color:#3a3327;}
+  .stepText b{color:#b4272c;}
+  #nameInputWrap{margin-bottom:14px; text-align:left;}
+  #nameInputWrap label{font-size:12px; color:#5a5142; font-weight:600; display:block; margin-bottom:5px;}
+  #nameInput{width:100%; font-family:var(--body); font-size:15px; padding:10px 12px; border-radius:10px; border:2px solid #e0d6c0; background:#fff; color:#2b2620;}
+  #nameInput:focus{outline:none; border-color:#c1272d;}
+  #nameSuggestions{display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;}
+  .nameChip{font-family:var(--body); font-size:12px; font-weight:600; padding:5px 10px; border-radius:14px; border:1.5px solid #e0d6c0; background:#f8f3e6; color:#8a6d1f; cursor:pointer;}
+  .nameChip:active{ transform:scale(0.95); }
+  #recordLine{font-size:12px; color:#8a6d1f; margin-bottom:12px;}
+  #hudTrophyBtn{background:none; border:none; font-size:20px; cursor:pointer; padding:2px 4px;}
+
+  #lbModal{position:absolute; inset:0; z-index:55; display:none; align-items:center; justify-content:center; background:rgba(10,10,12,0.8);}
+  #lbModal.show{display:flex;}
+  #lbCard{background:var(--paper); color:var(--ink); padding:22px 24px; border-radius:12px; max-width:400px; width:92%; max-height:84vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,0.5);}
+  #lbCard h2{font-family:var(--display); font-size:22px; margin:0 0 12px; text-align:center;}
+  #lbTabs{display:flex; gap:6px; margin-bottom:12px;}
+  .lbTabBtn{flex:1; font-family:var(--body); font-weight:700; font-size:13px; padding:9px; border-radius:8px; border:2px solid #ddd; background:#fff; color:#555; cursor:pointer;}
+  .lbTabBtn.active{background:#c1272d; color:#fff; border-color:#c1272d;}
+  #lbBody{min-height:120px;}
+  .lbRow{display:flex; align-items:center; gap:10px; padding:8px 6px; border-bottom:1px solid #ece6d6; font-size:13.5px;}
+  .lbRow.me{background:#fff3d6; border-radius:8px;}
+  .lbScrollWrap{max-height:280px; overflow-y:auto;}
+  .lbRank{width:26px; font-weight:bold; color:#8a6d1f; text-align:center;}
+  .lbName{flex:1; font-weight:600; color:#2b2620;}
+  .lbScore{font-family:var(--mono); font-weight:bold; color:#c1272d;}
+  .lbMeta{font-size:10.5px; color:#999; margin-top:1px;}
+  #lbInviteBtn{margin-top:14px; width:100%; font-family:var(--body); font-weight:700; font-size:14px; padding:11px; border-radius:8px; border:none; background:#2563eb; color:#fff; cursor:pointer;}
+  #lbInviteRow{display:grid; grid-template-columns:repeat(4,1fr); gap:7px; margin-top:12px;}
+  .shareBtn{display:flex; flex-direction:column; align-items:center; gap:3px; font-family:var(--body); font-size:10.5px; font-weight:600; padding:9px 4px; border-radius:10px; border:1.5px solid #e0d6c0; background:#fff; color:#3a3327; cursor:pointer;}
+  .shareBtn .ic{font-size:20px;}
+  .shareBtn.fb{border-color:#1877f2;} .shareBtn.zalo{border-color:#0068ff;}
+  #lbCloseBtn{margin-top:8px; width:100%; font-family:var(--body); font-weight:600; font-size:13px; padding:9px; border-radius:8px; border:1px solid #ccc; background:#fff; color:#555; cursor:pointer;}
+  #lbLoading{text-align:center; color:#999; font-size:13px; padding:20px 0;}
+  #startBtn{font-family:var(--mono); font-weight:bold; font-size:16px; padding:14px 34px; border-radius:12px; border:none; background:#c1272d; color:#fff; cursor:pointer; box-shadow:0 8px 20px rgba(193,39,45,0.4); animation:pulseBtn 1.6s ease-in-out infinite;}
+  #startBtn:active{ transform:scale(0.96); }
+  @keyframes pulseBtn{ 0%,100%{transform:scale(1);} 50%{transform:scale(1.045);} }
+
+  @media (max-width:520px){
+    .keyboard{width:130px;height:38px;}
+    .column{width:18px;}
+    #radar{width:120px;height:120px;}
+  }
+
+  /* Accessibility: visible focus states for keyboard nav */
+  button:focus-visible{ outline:3px solid #7ec8ff; outline-offset:2px; }
+
+  /* Accessibility: respect reduced-motion preference */
+  @media (prefers-reduced-motion: reduce){
+    #radarSweep{ animation:none; }
+    .aura-ring{ animation:none; opacity:0.5; }
+    #startBtn{ animation:none; }
+    .vid-progress-fill{ animation:none; width:60%; }
+    #monitorRig.shake{ animation:none; }
+    #bossFaceCard.calm #bossFaceSvgWrap, #bossFaceCard.alert #bossFaceSvgWrap, #bossFaceCard.angry #bossFaceSvgWrap{ animation:none; }
+    #catchPopup.pop, #safePopup.pop{ animation:popFeedbackReduced 0.9s ease-out forwards; }
+    #flash.hit{ animation:none; opacity:0; }
+  }
+  @keyframes popFeedbackReduced{
+    0%{ opacity:0; } 15%{ opacity:1; } 80%{ opacity:1; } 100%{ opacity:0; }
+  }
+
+  /* ---------- Just-in-time coachmark (shown once, exactly when the mechanic first matters) ---------- */
+  #coachmark{
+    position:absolute; z-index:38; left:50%; bottom:96px; transform:translateX(-50%) translateY(6px);
+    display:flex; flex-direction:column; align-items:center; gap:2px;
+    opacity:0; pointer-events:none; transition:opacity 0.25s, transform 0.25s;
+  }
+  #coachmark.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+  #coachmarkArrow{ font-size:22px; animation:coachBounce 1s ease-in-out infinite; }
+  @keyframes coachBounce{ 0%,100%{transform:translateY(0);} 50%{transform:translateY(5px);} }
+  #coachmarkText{
+    background:#fff; color:#2b2620; font-family:var(--body); font-weight:700; font-size:13px;
+    padding:8px 14px; border-radius:12px; box-shadow:0 8px 22px rgba(0,0,0,0.35); text-align:center; max-width:240px;
+  }
+  @media (prefers-reduced-motion: reduce){ #coachmarkArrow{ animation:none; } }
+</style>
+</head>
+<body>
+<div id="stage">
+
+  <div id="introScreen">
+    <div id="introCard">
+      <h1>🙈 Trốn Sếp, Xem Phim Vui!</h1>
+      <p class="introLead">Canh chừng Sếp, đừng để bị bắt gặp đang xem phim nhé 👀</p>
+      <div id="nameInputWrap">
+        <label for="nameInput">Đặt tên cho bạn (chỉ hỏi 1 lần, hiện trên bảng xếp hạng)</label>
+        <input type="text" id="nameInput" maxlength="18" placeholder="VD: Heo Mập Mập">
+        <div id="nameSuggestions"></div>
+      </div>
+      <div id="recordLine"></div>
+      <button id="startBtn">▶️ Bắt Đầu Chơi</button>
+      <button id="howToPlayToggle">❓ Xem cách chơi chi tiết</button>
+      <div class="introSteps" id="introSteps">
+        <div class="introStep"><div class="stepNum">1</div><div class="stepIcon">📺</div><div class="stepText">Màn hình của bạn đang chiếu <b>phim vui</b>. Càng xem lâu, bạn càng được điểm cao!</div></div>
+        <div class="introStep"><div class="stepNum">2</div><div class="stepIcon">🎯</div><div class="stepText">Nhìn vào <b>vòng tròn</b> góc trên bên phải: chấm đỏ chính là <b>Sếp</b> đang đi tới gần bạn.</div></div>
+        <div class="introStep"><div class="stepNum">3</div><div class="stepIcon">🖐️</div><div class="stepText">Khi số bên dưới vòng tròn nhỏ hơn <b>1 mét</b> — Sếp SẮP TỚI RỒI! Bạn bấm thật nhanh nút to <b>⇆ TAB</b> để đổi màn hình thành bài làm việc.</div></div>
+        <div class="introStep"><div class="stepNum">4</div><div class="stepIcon">🏆</div><div class="stepText">Đoán đúng lúc thì được điểm. Bị bắt gặp thì mất ❤️. Hết 3 tim là thua, xem đủ giờ là bạn <b>thắng</b>!</div></div>
+      </div>
+      <div style="font-size:10px; color:#aaa; margin-top:10px;">Game ghi nhận ẩn danh thời gian chơi &amp; thao tác để cải thiện trải nghiệm.</div>
+    </div>
+  </div>
+
+  <div id="coachmark">
+    <div id="coachmarkArrow">⬆️</div>
+    <div id="coachmarkText"></div>
+  </div>
+
+  <div id="hud">
+    <div id="title">Ca Làm Việc Của Minh</div>
+    <button id="hudTrophyBtn" title="Bảng xếp hạng">🏆</button>
+    <div class="hud-block">
+      <div class="hud-label">MẠNG</div>
+      <div class="hud-value" id="lives">❤️❤️❤️</div>
+    </div>
+    <div id="progressWrap">
+      <div class="hud-label">VIỆC RIÊNG <span id="progressText">0 / 60s</span></div>
+      <div id="progressTrack"><div id="progressFill"></div></div>
+    </div>
+    <div class="hud-block">
+      <div class="hud-label">CÒN LẠI</div>
+      <div class="hud-value" id="clock2">2:00</div>
+    </div>
+  </div>
+
+  <div id="scene">
+    <div id="colLeft" class="column"></div>
+    <div id="colRight" class="column"></div>
+    <div class="window-daylight"><div class="tree" style="left:10%;"></div><div class="tree" style="left:55%;"></div></div>
+    <div class="pendant-big" style="left:14%;"><div class="wire"></div><div class="shade"></div><div class="glow"></div></div>
+    <div class="pendant-big" style="left:40%;"><div class="wire"></div><div class="shade"></div><div class="glow"></div></div>
+    <div class="pendant-big" style="left:66%;"><div class="wire"></div><div class="shade"></div><div class="glow"></div></div>
+    <div class="pendant-big" style="left:88%;"><div class="wire"></div><div class="shade"></div><div class="glow"></div></div>
+
+    <div class="plantbig">
+      <svg viewBox="0 0 60 70" width="56" height="44"><ellipse cx="30" cy="20" rx="26" ry="18" fill="#4d9e4d"/><ellipse cx="16" cy="26" rx="13" ry="10" fill="#5db35d"/><ellipse cx="44" cy="26" rx="13" ry="10" fill="#5db35d"/></svg>
+      <div class="pot"></div>
+    </div>
+    <div class="plantbig right">
+      <svg viewBox="0 0 60 70" width="56" height="44"><ellipse cx="30" cy="20" rx="26" ry="18" fill="#4d9e4d"/><ellipse cx="16" cy="26" rx="13" ry="10" fill="#5db35d"/><ellipse cx="44" cy="26" rx="13" ry="10" fill="#5db35d"/></svg>
+      <div class="pot"></div>
+    </div>
+
+    <div class="coworkers">
+      <div class="co-desk"><div class="silhouette"></div><div class="headsil"></div><div class="glow"></div><div class="drawer"></div></div>
+      <div class="co-desk"><div class="silhouette"></div><div class="headsil"></div><div class="glow"></div><div class="drawer"></div></div>
+      <div class="co-desk"><div class="silhouette"></div><div class="headsil"></div><div class="glow"></div><div class="drawer"></div></div>
+      <div class="co-desk"><div class="silhouette"></div><div class="headsil"></div><div class="glow"></div><div class="drawer"></div></div>
+      <div class="co-desk"><div class="silhouette"></div><div class="headsil"></div><div class="glow"></div><div class="drawer"></div></div>
+    </div>
+
+    <div id="radarWrap">
+      <div id="radar">
+        <div class="radar-ring" style="width:30%;height:30%;"></div>
+        <div class="radar-ring" style="width:62%;height:62%;"></div>
+        <div class="radar-ring" style="width:94%;height:94%;"></div>
+        <div id="radarSweep"></div>
+        <div id="radarCenter"></div>
+        <div id="radarBoss"></div>
+      </div>
+      <div id="radarDist">Sếp: -- m</div>
+      <div id="radarAlert">🚨 SẾP ĐANG LẠI GẦN!</div>
+      <div id="bossFaceCard">
+        <div id="bossFaceSvgWrap"></div>
+        <div id="bossLabel">SẾP TÙNG</div>
+        <div id="bossBubble"></div>
+      </div>
+    </div>
+
+    <div id="vignette"></div>
+
+    <div id="desk">
+      <div id="monitorRig">
+        <div id="monitor"><div id="screen"></div></div>
+        <div class="arm-horiz"></div>
+        <div class="arm-joint"></div>
+        <div class="arm-pole"></div>
+        <div class="arm-clamp"></div>
+      </div>
+      <div id="deskSurface">
+        <div class="keyboard"></div>
+        <div class="mouse"></div>
+        <div class="mug"></div>
+        <div class="notepad"></div>
+        <svg class="succulent" viewBox="0 0 22 22"><rect x="4" y="14" width="14" height="8" rx="2" fill="#a8532f"/><circle cx="11" cy="10" r="8" fill="#4d8f4d"/></svg>
+      </div>
+    </div>
+
+    <div id="switcherOverlay"><div id="switcherCard">⇆ Đang chuyển cửa sổ…</div></div>
+    <div id="catchPopup">😱 BỊ BẮT RỒI!</div>
+    <div id="safePopup">✓ Né đẹp!</div>
+    <div id="flash"></div>
+  </div>
+
+  <div id="controls">
+    <button id="tabBtn">⇆ Đổi màn hình (phím Tab)</button>
+    <div id="hint">Theo dõi radar — chuyển sang "Work" TRƯỚC khi chấm đỏ (sếp) cách bạn ≤ 1m!</div>
+  </div>
+
+  <div id="modal">
+    <div id="modalCard">
+      <button id="modalCloseX" class="modalCloseX" aria-label="Đóng">✕</button>
+      <h2 id="modalTitle">Kết quả</h2>
+      <p id="modalText"></p>
+      <div id="modalStats"></div>
+      <div style="margin-top:14px; font-size:12.5px; font-weight:700; color:#3a3327; text-align:center;">📤 Rủ bạn bè đấu lại</div>
+      <div id="modalInviteRow" class="lbInviteRowSmall">
+        <button class="shareBtn fb" id="mShareFb"><span class="ic">📘</span>Facebook</button>
+        <button class="shareBtn zalo" id="mShareZalo"><span class="ic">💬</span>Zalo</button>
+        <button class="shareBtn" id="mShareCopy"><span class="ic">🔗</span>IG/TikTok</button>
+        <button class="shareBtn" id="mShareNative"><span class="ic">📱</span>Khác</button>
+      </div>
+      <div id="mShareToast" style="text-align:center; font-size:11px; color:#8a6d1f; margin-top:6px; min-height:14px;"></div>
+      <button id="modalBtn">Chơi lại</button>
+    </div>
+  </div>
+
+  <button id="replayFab" title="Chơi lại">▶️</button>
+
+  <div id="lbModal">
+    <div id="lbCard">
+      <button id="lbCloseX" class="modalCloseX" aria-label="Đóng">✕</button>
+      <h2>🏆 Bảng Xếp Hạng</h2>
+      <div id="lbTabs">
+        <button class="lbTabBtn active" data-tab="top">Top người chơi</button>
+        <button class="lbTabBtn" data-tab="me">Hạng của tôi</button>
+      </div>
+      <div id="lbBody"><div id="lbLoading">Đang tải...</div></div>
+      <div style="margin-top:14px; font-size:13px; font-weight:700; color:#3a3327; text-align:center;">📤 Mời bạn bè cùng thi đấu</div>
+      <div id="lbInviteRow">
+        <button class="shareBtn fb" id="shareFb"><span class="ic">📘</span>Facebook</button>
+        <button class="shareBtn zalo" id="shareZalo"><span class="ic">💬</span>Zalo</button>
+        <button class="shareBtn" id="shareCopy"><span class="ic">🔗</span>IG/TikTok</button>
+        <button class="shareBtn" id="shareNative"><span class="ic">📱</span>Khác</button>
+      </div>
+      <div id="shareToast" style="text-align:center; font-size:11.5px; color:#8a6d1f; margin-top:6px; min-height:14px;"></div>
+      <button id="lbCloseBtn">Đóng</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+(function(){
+  const CONFIG = {
+    targetPersonalTime: 60, matchDuration: 120, maxLives: 3,
+    catchRadius: 1.0, rearmRadius: 1.8, radarRangeMeters: 6,
+    ambientBoundsMin: 2.5, ambientBoundsMax: 6.5,
+    ambientNearBiasProbStart: 0.15, ambientNearBiasProbEnd: 0.28,
+    ambientNearMin: 1.2, ambientNearMax: 3.2,
+    speedAmbientStart: [0.5, 1.3], speedAmbientEnd: [0.8, 1.9],
+    speedCheckStart: [0.6, 2.0], speedCheckEnd: [1.2, 3.4],
+    checkGapStart: [5.0, 7.0], checkGapEnd: [1.4, 2.4],
+    checkTargetMin: 0.15, checkTargetMax: 0.85,
+    difficultyRampSeconds: 80
+  };
+
+  const el = id => document.getElementById(id);
+  const livesEl = el('lives'), progressFill = el('progressFill'), progressText = el('progressText'),
+        clockEl = el('clock2'), tabBtn = el('tabBtn'), switcherOverlay = el('switcherOverlay'),
+        flashEl = el('flash'), modal = el('modal'), modalTitle = el('modalTitle'),
+        modalText = el('modalText'), modalStats = el('modalStats'), modalBtn = el('modalBtn'),
+        radarBoss = el('radarBoss'), radarDist = el('radarDist'), radar = el('radar'),
+        radarAlert = el('radarAlert'), vignette = el('vignette'), screenEl = el('screen'),
+        monitorEl = el('monitor'), monitorRig = el('monitorRig'), introScreen = el('introScreen'),
+        startBtn = el('startBtn'), recordLine = el('recordLine'),
+        catchPopup = el('catchPopup'), safePopup = el('safePopup'), sceneEl = el('scene'),
+        bossFaceCard = el('bossFaceCard'), bossFaceSvgWrap = el('bossFaceSvgWrap'), bossBubble = el('bossBubble'),
+        nameInput = el('nameInput'), nameInputWrap = el('nameInputWrap'), nameSuggestions = el('nameSuggestions'), hudTrophyBtn = el('hudTrophyBtn'),
+        lbModal = el('lbModal'), lbBody = el('lbBody'), lbCloseBtn = el('lbCloseBtn'),
+        shareFb = el('shareFb'), shareZalo = el('shareZalo'), shareCopy = el('shareCopy'), shareNative = el('shareNative'), shareToast = el('shareToast'),
+        modalCloseX = el('modalCloseX'), lbCloseX = el('lbCloseX');
+
+  let audioCtx = null;
+  function beep(freq, dur, type, vol){
+    try{
+      if(!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+      const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o.type = type||'square'; o.frequency.value = freq;
+      g.gain.value = vol||0.06;
+      o.connect(g); g.connect(audioCtx.destination);
+      o.start();
+      g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + dur);
+      o.stop(audioCtx.currentTime + dur);
+    }catch(e){}
+  }
+  let lastStep = 0;
+  function maybeFootstep(dist, now){
+    if(dist > 5) return;
+    const interval = Math.max(0.16, dist * 0.13);
+    if(now - lastStep > interval){
+      lastStep = now;
+      const vol = Math.max(0.01, 0.06 * (1 - dist/5));
+      beep(90 + Math.random()*20, 0.05, 'square', vol);
+    }
+  }
+
+  function rand(a,b){ return a + Math.random()*(b-a); }
+  function lerp(a,b,t){ return a+(b-a)*t; }
+  function pick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+
+  /* ---------- Just-in-time coaching (Invisible Design: teach only at the
+     exact moment a mechanic first matters, then get out of the way forever).
+     Two one-shot hints, each remembered permanently via localStorage so a
+     returning player is never taught the same thing twice: */
+  const HINT_APPROACH = 'atd_hintApproachSeen';
+  const HINT_CATCH = 'atd_hintCatchSeen';
+  function hasSeenHint(key){ try{ return localStorage.getItem(key) === '1'; }catch(e){ return true; } }
+  function markHintSeen(key){ try{ localStorage.setItem(key, '1'); }catch(e){} }
+  const coachmarkEl = document.getElementById('coachmark');
+  const coachmarkTextEl = document.getElementById('coachmarkText');
+  let coachmarkHideTimer = null;
+  function showCoachmark(text, durationMs){
+    coachmarkTextEl.textContent = text;
+    coachmarkEl.classList.add('show');
+    clearTimeout(coachmarkHideTimer);
+    coachmarkHideTimer = setTimeout(()=> coachmarkEl.classList.remove('show'), durationMs);
+  }
+  function hideCoachmark(){
+    coachmarkEl.classList.remove('show');
+    clearTimeout(coachmarkHideTimer);
+  }
+
+  /* ---------- Boss face expressions ---------- */
+  const FACE_HEAD = '<rect x="0" y="0" width="100" height="100" fill="#2a2118"/><circle cx="50" cy="55" r="36" fill="#e6b98d"/><path d="M14 42 Q18 10 50 10 Q82 10 86 42 Q72 22 50 22 Q28 22 14 42 Z" fill="#241a10"/><ellipse cx="50" cy="88" rx="30" ry="14" fill="#2f5aa8"/>';
+  function bossFace(state){
+    if(state === 'angry'){
+      return '<svg viewBox="0 0 100 100">'+FACE_HEAD
+        + '<path d="M40 30 L20 55 M60 30 L80 55 M50 24 L50 40" stroke="#c0392b" stroke-width="3" stroke-linecap="round" opacity="0.85"/>'
+        + '<rect x="25" y="44" width="50" height="13" rx="2" fill="#1a1a1a" opacity="0.9"/>'
+        + '<path d="M28 42 L46 49" stroke="#1a1a1a" stroke-width="5" stroke-linecap="round"/>'
+        + '<path d="M72 42 L54 49" stroke="#1a1a1a" stroke-width="5" stroke-linecap="round"/>'
+        + '<circle cx="37" cy="53" r="3" fill="#fff"/><circle cx="63" cy="53" r="3" fill="#fff"/>'
+        + '<ellipse cx="27" cy="66" rx="6" ry="4" fill="#c0392b" opacity="0.5"/><ellipse cx="73" cy="66" rx="6" ry="4" fill="#c0392b" opacity="0.5"/>'
+        + '<ellipse cx="50" cy="76" rx="15" ry="12" fill="#7a1010"/>'
+        + '<ellipse cx="50" cy="79" rx="9" ry="6" fill="#2a0303"/>'
+        + '<path d="M40 76 L60 76" stroke="#fff" stroke-width="2"/>'
+        + '</svg>';
+    }
+    if(state === 'alert'){
+      return '<svg viewBox="0 0 100 100">'+FACE_HEAD
+        + '<rect x="26" y="45" width="48" height="12" rx="2" fill="#1a1a1a" opacity="0.85"/>'
+        + '<path d="M29 40 Q38 34 47 40" stroke="#1a1a1a" stroke-width="3.5" fill="none" stroke-linecap="round"/>'
+        + '<path d="M71 40 Q62 34 53 40" stroke="#1a1a1a" stroke-width="3.5" fill="none" stroke-linecap="round"/>'
+        + '<ellipse cx="37" cy="53" rx="4.5" ry="3.5" fill="#1a1a1a"/>'
+        + '<ellipse cx="63" cy="53" rx="4.5" ry="3.5" fill="#1a1a1a"/>'
+        + '<circle cx="35.5" cy="52" r="1.3" fill="#fff"/><circle cx="61.5" cy="52" r="1.3" fill="#fff"/>'
+        + '<ellipse cx="72" cy="34" rx="4" ry="6" fill="#a8d4f0" opacity="0.85"/>'
+        + '<path d="M42 76 L58 76" stroke="#7a4a2a" stroke-width="3.5" stroke-linecap="round"/>'
+        + '</svg>';
+    }
+    return '<svg viewBox="0 0 100 100">'+FACE_HEAD
+      + '<rect x="26" y="45" width="48" height="12" rx="2" fill="#1a1a1a" opacity="0.85"/>'
+      + '<path d="M30 39 Q38 34 46 39" stroke="#1a1a1a" stroke-width="3.5" fill="none" stroke-linecap="round"/>'
+      + '<path d="M70 39 Q62 34 54 39" stroke="#1a1a1a" stroke-width="3.5" fill="none" stroke-linecap="round"/>'
+      + '<circle cx="37" cy="53" r="4" fill="#1a1a1a"/><circle cx="63" cy="53" r="4" fill="#1a1a1a"/>'
+      + '<circle cx="35.5" cy="51.5" r="1.3" fill="#fff"/><circle cx="61.5" cy="51.5" r="1.3" fill="#fff"/>'
+      + '<ellipse cx="27" cy="63" rx="5" ry="3" fill="#e8a87c" opacity="0.6"/><ellipse cx="73" cy="63" rx="5" ry="3" fill="#e8a87c" opacity="0.6"/>'
+      + '<path d="M37 74 Q50 84 63 74" stroke="#7a4a2a" stroke-width="3.5" fill="none" stroke-linecap="round"/>'
+      + '</svg>';
+  }
+  let bossAngryUntil = 0;
+  function setBossFace(state){
+    bossFaceSvgWrap.innerHTML = bossFace(state);
+    bossFaceCard.classList.toggle('angry', state==='angry');
+    bossFaceCard.classList.toggle('alert', state==='alert');
+  }
+
+  const SCOLD_LINES = [
+    'Làm gì đó?? Xem phim giờ làm à?!',
+    'Ủa, deadline đâu rồi ta?',
+    'Trời đất, giờ này còn coi TikTok?',
+    'Bảng lương tháng này coi lại nha!!',
+    'Họp 5 phút nữa, còn ngồi xem hả?',
+    'Cái gì đang chạy trên màn hình vậy ba?',
+    'Ơ hay, tăng ca mà xem hài à ku?!',
+    'Nay hết KPI rồi hả mà rảnh dữ?',
+    'Con này, để ý công việc chút coi!'
+  ];
+  const PRAISE_LINES = ['✓ Né đẹp!', '✓ Sát nút!', '✓ Auto né chuyên nghiệp!', '✓ Sếp đi qua luôn!'];
+  let bossBubbleTimeout = null;
+  function showBossBubble(text, duration){
+    bossBubble.textContent = text;
+    bossBubble.classList.add('show');
+    clearTimeout(bossBubbleTimeout);
+    bossBubbleTimeout = setTimeout(()=>bossBubble.classList.remove('show'), duration);
+  }
+
+  /* ---------- Content themes ---------- */
+  const WORK_THEMES = ['excel','dashboard','stock'];
+  const PERSONAL_THEMES = ['dbz1','dbz2','memeCat','memeDog'];
+
+  function genWorkData(theme){
+    if(theme === 'excel'){
+      const rev = (rand(80,240)).toFixed(1);
+      const cost = (rev*rand(0.4,0.7)).toFixed(1);
+      const profit = (rev-cost).toFixed(1);
+      const bars = Array.from({length:7}, ()=> rand(20,100));
+      return { rev, cost, profit, p1:(rand(2,18)).toFixed(1), p2:(rand(1,9)).toFixed(1), p3:(rand(5,25)).toFixed(1), q4:(rand(10,60)).toFixed(1), q5:(rand(1,15)).toFixed(1), bars };
+    }
+    if(theme === 'dashboard'){
+      const pts = Array.from({length:10}, ()=> rand(5,30));
+      const bars = Array.from({length:8}, ()=> rand(10,100));
+      const donutPct = Math.floor(rand(35,88));
+      return { kpi1: Math.floor(rand(120,980)), kpi2: (rand(2,18)).toFixed(1), kpi3: Math.floor(rand(40,600)), kpi4: (rand(90,99.9)).toFixed(1), pts, bars, donutPct };
+    }
+    if(theme === 'stock'){
+      let p = rand(40,120); const pts=[p];
+      for(let i=0;i<11;i++){ p += rand(-6,6); p=Math.max(5,p); pts.push(p); }
+      const pct = ((pts[pts.length-1]-pts[0])/pts[0]*100);
+      const vol = Array.from({length:14}, ()=> rand(10,100));
+      const allTickers = ['VNM','FPT','HPG','MWG','VIC','VCB','MSN','GAS'];
+      const main = pick(allTickers);
+      const others = allTickers.filter(t=>t!==main).sort(()=>Math.random()-0.5).slice(0,3).map(t=>({ t, pct:(rand(-4,4)).toFixed(2) }));
+      return { ticker: main, price: pts[pts.length-1].toFixed(2), pct: pct.toFixed(2), up: pct>=0, pts, vol, watchlist: others };
+    }
+    return {};
+  }
+
+  function sparkPoints(pts, w, h){
+    const max = Math.max(...pts), min = Math.min(...pts);
+    return pts.map((v,i)=>{
+      const x = (i/(pts.length-1))*w;
+      const y = h - ((v-min)/Math.max(0.0001,(max-min)))*h;
+      return x.toFixed(1)+','+y.toFixed(1);
+    }).join(' ');
+  }
+  function bars(values, cls){
+    const max = Math.max(...values);
+    return values.map(v=>'<div style="height:'+Math.max(6,(v/max*100)).toFixed(0)+'%"></div>').join('');
+  }
+
+  function buildWorkHTML(theme, data){
+    if(theme === 'excel'){
+      return '<div class="work-content excel-theme">'
+        + '<div class="xl-topbar">📊 BaoCao_Quy_ThatSu_FINAL_v2.xlsx</div>'
+        + '<div class="xl-formula">fx  =SUM(B2:B8)</div>'
+        + '<div class="xl-body">'
+        + '<div class="xl-grid">'
+        + '<div class="xl-row xl-header"><div>Khoản mục</div><div>Giá trị</div><div>%</div></div>'
+        + '<div class="xl-row"><div>Doanh thu</div><div>'+data.rev+'</div><div>+'+data.p1+'%</div></div>'
+        + '<div class="xl-row"><div>Chi phí</div><div>'+data.cost+'</div><div>-'+data.p2+'%</div></div>'
+        + '<div class="xl-row xl-selected"><div>Lợi nhuận</div><div>'+data.profit+'</div><div>+'+data.p3+'%</div></div>'
+        + '<div class="xl-row"><div>Marketing</div><div>'+data.q4+'</div><div>-'+data.q5+'%</div></div>'
+        + '</div>'
+        + '<div class="xl-chartbox"><div class="xl-chart-title">Doanh thu theo tuần</div><div class="xl-bars">'+bars(data.bars)+'</div></div>'
+        + '</div>'
+        + '<div class="xl-tabs"><span>T1</span><span>T2</span><span class="active">T3</span><span>T4</span></div>'
+        + '</div>';
+    }
+    if(theme === 'dashboard'){
+      return '<div class="work-content dash-theme">'
+        + '<div class="dash-title"><span>📈 Dashboard Vận Hành</span><span style="color:#4ade80;">● Realtime</span></div>'
+        + '<div class="dash-cards">'
+        + '<div class="dash-card"><div class="dash-num">'+data.kpi1+'</div><div class="dash-lbl">Khách hàng mới</div></div>'
+        + '<div class="dash-card"><div class="dash-num">'+data.kpi2+'%</div><div class="dash-lbl">Tỉ lệ chuyển đổi</div></div>'
+        + '<div class="dash-card"><div class="dash-num">'+data.kpi3+'</div><div class="dash-lbl">Đơn hàng</div></div>'
+        + '<div class="dash-card"><div class="dash-num">'+data.kpi4+'%</div><div class="dash-lbl">Uptime hệ thống</div></div>'
+        + '</div>'
+        + '<div class="dash-row">'
+        + '<div class="dash-panel"><div class="dash-panel-title">Xu hướng 10 ngày</div><svg class="dash-spark" viewBox="0 0 100 34" preserveAspectRatio="none"><polyline points="'+sparkPoints(data.pts,100,30)+'" fill="none" stroke="#7ec8ff" stroke-width="2"/></svg></div>'
+        + '<div class="dash-panel"><div class="dash-panel-title">Theo kênh</div><div class="dash-donut" style="background:conic-gradient(#7ec8ff 0% '+data.donutPct+'%, #274d6b '+data.donutPct+'% 100%);"></div><div class="dash-donut-lbl">'+data.donutPct+'%</div></div>'
+        + '<div class="dash-panel"><div class="dash-panel-title">Theo khu vực</div><div class="dash-bars-mini">'+bars(data.bars)+'</div></div>'
+        + '</div>'
+        + '</div>';
+    }
+    if(theme === 'stock'){
+      const cls = data.up ? 'up' : 'down';
+      const arrow = data.up ? '▲' : '▼';
+      const stroke = data.up ? '#4ade80' : '#f87171';
+      const watchRows = data.watchlist.map(w=>{
+        const wup = parseFloat(w.pct) >= 0;
+        return '<div class="stock-wrow"><span>'+w.t+'</span><span class="'+(wup?'up':'down')+'">'+(wup?'+':'')+w.pct+'%</span></div>';
+      }).join('');
+      return '<div class="work-content stock-theme">'
+        + '<div class="stock-ticker">'+data.ticker+' <span class="'+cls+'">'+data.price+'k '+arrow+' '+Math.abs(data.pct)+'%</span></div>'
+        + '<svg class="stock-chart" viewBox="0 0 100 40" preserveAspectRatio="none"><polyline points="'+sparkPoints(data.pts,100,36)+'" fill="none" stroke="'+stroke+'" stroke-width="2.4"/></svg>'
+        + '<div class="stock-vol">'+bars(data.vol)+'</div>'
+        + '<div class="stock-watchlist">'+watchRows+'</div>'
+        + '</div>';
+    }
+    return '<div class="work-content"></div>';
+  }
+
+  function heroSVG(colorA, colorB){
+    return '<svg viewBox="0 0 100 100" width="72" height="72">'
+      + '<circle cx="50" cy="42" r="16" fill="#e8b98c"/>'
+      + '<path d="M34 34 L40 10 L46 32 L52 8 L58 32 L66 12 L64 36 Z" fill="#1a1a1a"/>'
+      + '<path d="M32 60 Q50 50 68 60 L64 92 L36 92 Z" fill="'+colorA+'"/>'
+      + '<rect x="40" y="72" width="20" height="6" fill="'+colorB+'"/>'
+      + '</svg>';
+  }
+
+  function buildPersonalHTML(theme){
+    let frameInner='', caption='', likes=Math.floor(rand(200,1800))+'K', comments=Math.floor(rand(80,900));
+    if(theme === 'dbz1'){
+      frameInner = '<div class="aura-ring" style="width:70px;height:70px;left:50%;top:50%;margin:-35px 0 0 -35px;"></div>'
+        + '<div class="aura-ring" style="width:70px;height:70px;left:50%;top:50%;margin:-35px 0 0 -35px;animation-delay:0.5s;"></div>'
+        + heroSVG('#2b6fb0','#f2c14e');
+      caption = '"Đại Chiến Deadline" — Tập 146: Cực Phẩm Tăng Ca Saiyan';
+    } else if(theme === 'dbz2'){
+      frameInner = '<div class="aura-ring" style="width:80px;height:80px;left:50%;top:50%;margin:-40px 0 0 -40px;border-color:rgba(120,200,255,0.6);"></div>'
+        + heroSVG('#3d7a3f','#eee');
+      caption = 'Genki Dama chưa chắc mạnh bằng 1 câu "sếp gọi kìa"';
+    } else if(theme === 'memeCat'){
+      frameInner = '<svg viewBox="0 0 100 100" width="70" height="70">'
+        + '<circle cx="50" cy="55" r="30" fill="#d9a066"/>'
+        + '<path d="M25 35 L35 12 L45 33 Z" fill="#d9a066"/><path d="M75 35 L65 12 L55 33 Z" fill="#d9a066"/>'
+        + '<rect x="28" y="48" width="44" height="12" rx="6" fill="#1a1a1a"/>'
+        + '<path d="M42 70 Q50 78 58 70" stroke="#5a3d10" stroke-width="2" fill="none"/>'
+        + '</svg>';
+      caption = 'Mèo Tổng Giám Đốc phê duyệt: "Cho nghỉ thêm 5 phút"';
+    } else {
+      frameInner = '<svg viewBox="0 0 100 100" width="70" height="70">'
+        + '<ellipse cx="50" cy="55" rx="32" ry="28" fill="#e8c07a"/>'
+        + '<ellipse cx="26" cy="34" rx="10" ry="16" fill="#e8c07a"/><ellipse cx="74" cy="34" rx="10" ry="16" fill="#e8c07a"/>'
+        + '<circle cx="38" cy="52" r="4" fill="#222"/><circle cx="62" cy="52" r="4" fill="#222"/>'
+        + '<ellipse cx="50" cy="68" rx="10" ry="6" fill="#f4a6b8"/>'
+        + '</svg>';
+      caption = '"Vẫn Ổn Thôi" — trong lúc sếp đi vòng vòng sau lưng';
+    }
+    return '<div class="personal-content">'
+      + '<div class="vid-topbar"><span>🔴 LIVE - Kênh Giải Trí Công Sở</span><span>2:41:0'+Math.floor(rand(0,9))+'</span></div>'
+      + '<div class="vid-frame">'+frameInner+'</div>'
+      + '<div class="vid-caption">'+caption+'</div>'
+      + '<div class="vid-stats">👍 '+likes+'  💬 '+comments+'</div>'
+      + '<div class="vid-progress"><div class="vid-progress-fill"></div></div>'
+      + '</div>';
+  }
+
+  /* ---------- Leaderboard (localStorage) ---------- */
+  function loadLeaderboard(){
+    try{
+      const total = parseFloat(localStorage.getItem('atd_total')||'0');
+      const count = parseInt(localStorage.getItem('atd_count')||'0');
+      const top = JSON.parse(localStorage.getItem('atd_top')||'[]');
+      return {total, count, top};
+    }catch(e){ return {total:0, count:0, top:[]}; }
+  }
+  function recordSession(score){
+    try{
+      const lb = loadLeaderboard();
+      lb.total += score; lb.count += 1;
+      lb.top.push({score: score, t: Date.now()});
+      lb.top.sort((a,b)=>b.score-a.score);
+      lb.top = lb.top.slice(0,10);
+      localStorage.setItem('atd_total', String(lb.total));
+      localStorage.setItem('atd_count', String(lb.count));
+      localStorage.setItem('atd_top', JSON.stringify(lb.top));
+      return lb;
+    }catch(e){ return {total:score, count:1, top:[{score:score,t:Date.now()}]}; }
+  }
+  function showRecordLine(){
+    if(dbReady && dbNS){
+      getPlayerRecord(playerId).then(p=>{
+        if(p && p.sessionCount > 0){
+          recordLine.textContent = '🏆 Trung bình của bạn: ' + (p.avgScore||0).toFixed(1) + 's/ván (qua ' + p.sessionCount + ' ván) — xem 🏆 để so với người khác';
+          return;
+        }
+        recordLine.textContent = 'Chưa có ván nào — chơi ván đầu tiên để lập kỷ lục!';
+      }).catch(()=>{});
+      return;
+    }
+    const lb = loadLeaderboard();
+    if(lb.count > 0){
+      recordLine.textContent = '🏆 Trung bình của bạn: ' + (lb.total/lb.count).toFixed(1) + 's/ván (qua ' + lb.count + ' ván)';
+    } else {
+      recordLine.textContent = 'Chưa có ván nào — chơi ván đầu tiên để lập kỷ lục!';
+    }
+  }
+
+  /* ---------- Shared player identity & cross-player leaderboard (db capability) ----------
+     STORAGE MODEL (sharded — Option B):
+     Rather than 1 document per player (which hits the artifact's 5,000-document
+     cap once ~5,000 people have ever opened the game), every player record is
+     stored as a KEY inside one of NUM_SHARDS fixed documents at
+     "players_shard/{0..NUM_SHARDS-1}". Which shard a player lands in is decided
+     by hashing their playerId, so it's always the same shard for that player.
+     A shard document can hold roughly a thousand+ compact player records before
+     nearing the 256KB per-document cap, so NUM_SHARDS shards give headroom for
+     tens of thousands of distinct players while using only NUM_SHARDS documents
+     total — leaving the rest of the 5,000-document budget for everything else
+     (analytics, meta, future features).
+     Trade-off: we lose server-side `orderBy` for ranking (that only works across
+     separate documents, not keys inside one document), so building the
+     leaderboard means reading all NUM_SHARDS shard docs and sorting client-side.
+     That's a bounded, cheap read (NUM_SHARDS reads, not "documents per player"),
+     acceptable for a casual game's scale. */
+  const NUM_SHARDS = 40;
+  function hashStr(s){
+    let h = 5381;
+    for(let i=0;i<s.length;i++){ h = ((h<<5)+h) + s.charCodeAt(i); h = h|0; }
+    return Math.abs(h);
+  }
+  function shardIdFor(id){ return String(hashStr(id) % NUM_SHARDS); }
+  function playerShardRef(id){ return dbNS.doc('players_shard/' + shardIdFor(id)); }
+
+  async function upsertPlayerRecord(id, record){
+    const ref = playerShardRef(id);
+    try{
+      await ref.update({ [id]: record });
+    }catch(e){
+      // Shard document doesn't exist yet for this bucket — create it.
+      try{ await ref.set({ [id]: record }); }catch(e2){ /* best-effort */ }
+    }
+  }
+
+  async function getPlayerRecord(id){
+    try{
+      const snap = await playerShardRef(id).get();
+      if(!snap.exists) return null;
+      return snap.data()[id] || null;
+    }catch(e){ return null; }
+  }
+
+  async function getAllPlayersFlat(){
+    const q = await dbNS.collection('players_shard').get();
+    const all = [];
+    q.docs.forEach(shardDoc=>{
+      const data = shardDoc.data();
+      for(const pid in data){ all.push({ id: pid, data: data[pid] }); }
+    });
+    all.sort((a,b)=> (b.data.avgScore||0) - (a.data.avgScore||0));
+    return all;
+  }
+
+  function getPlayerId(){
+    try{
+      let id = localStorage.getItem('atd_playerId');
+      if(!id){
+        id = (crypto && crypto.randomUUID) ? crypto.randomUUID() : ('p' + Date.now() + Math.random().toString(36).slice(2));
+        localStorage.setItem('atd_playerId', id);
+      }
+      return id;
+    }catch(e){ return 'p' + Date.now(); }
+  }
+  function getPlayerName(){
+    try{ return localStorage.getItem('atd_playerName') || ''; }catch(e){ return ''; }
+  }
+  function savePlayerName(name){
+    try{ localStorage.setItem('atd_playerName', name); }catch(e){}
+  }
+
+  const playerId = getPlayerId();
+  let dbNS = null;
+  let dbReady = false;
+
+  const FAKE_PLAYERS = [
+    {id:'seed_a1', name:'Long Lươn', sessionCount:14, totalCorrectTime:592.2, bestScore:55.2},
+    {id:'seed_a2', name:'Vy Vui Vẻ', sessionCount:9, totalCorrectTime:348.3, bestScore:47.1},
+    {id:'seed_a3', name:'Khánh Đụt', sessionCount:22, totalCorrectTime:1141.8, bestScore:63.4},
+    {id:'seed_a4', name:'Bánh Bèo Vlog', sessionCount:5, totalCorrectTime:147.0, bestScore:34.0},
+    {id:'seed_a5', name:'Sếp Tưởng Em Ngoan', sessionCount:17, totalCorrectTime:765.0, bestScore:58.8},
+    {id:'seed_a6', name:'Chíp Lười Biếng', sessionCount:7, totalCorrectTime:235.2, bestScore:40.2}
+  ];
+
+  async function maybeSeedFakePlayers(){
+    // Fixed ids make this idempotent: every viewer upserting the same 6 keys
+    // just overwrites with the same data, so no lock is needed and edits to
+    // FAKE_PLAYERS above always take effect on the next load.
+    try{
+      for(const f of FAKE_PLAYERS){
+        await upsertPlayerRecord(f.id, {
+          name: f.name, sessionCount: f.sessionCount, totalCorrectTime: f.totalCorrectTime,
+          avgScore: f.totalCorrectTime / f.sessionCount, bestScore: f.bestScore,
+          totalPlayTime: f.totalCorrectTime * 2, createdAt: Date.now(), lastVisit: Date.now(), seed: true
+        });
+      }
+    }catch(e){ /* seeding is best-effort, ignore failures */ }
+  }
+
+  async function ensurePlayerDoc(){
+    try{
+      const existing = await getPlayerRecord(playerId);
+      const name = getPlayerName() || 'Người chơi ẩn danh';
+      if(!existing){
+        await upsertPlayerRecord(playerId, { name, sessionCount:0, totalCorrectTime:0, avgScore:0, bestScore:0, totalPlayTime:0, createdAt: Date.now(), lastVisit: Date.now() });
+      } else {
+        await upsertPlayerRecord(playerId, Object.assign({}, existing, { lastVisit: Date.now(), name }));
+      }
+    }catch(e){ /* ignore */ }
+  }
+
+  async function initSharedDb(){
+    try{
+      if(typeof claude === 'undefined' || !claude.use) return;
+      dbNS = await claude.use('db');
+      if(!dbNS) return;
+      await ensurePlayerDoc();
+      await maybeSeedFakePlayers();
+      dbReady = true;
+      showRecordLine();
+      recordAccessHour();
+    }catch(e){ dbNS = null; }
+  }
+
+  /* ---------- Behaviour analytics (aggregated, privacy-conscious) ----------
+     Design notes (see chat reply for the full write-up):
+     - Never one document per event/click/mousemove — the db capability caps
+       an artifact at 5,000 documents total, so unbounded per-event logging
+       would exhaust that fast. Instead we keep a handful of FIXED aggregate
+       documents and merge counts into them (read-modify-set), the same
+       pattern already used for the leaderboard's avgScore.
+     - analytics/accessHours: which hour of day people open the game.
+     - analytics/screenTime: average time spent on intro / gameplay / result.
+     - analytics/heatmap_intro & analytics/heatmap_game: a coarse 10x10 grid
+       of where the cursor spends time on each screen (mouse position bucketed,
+       not raw coordinates — cheap to store, still useful as a heatmap).
+     - Anonymous: keyed by the same random per-browser playerId already used
+       for the leaderboard, never tied to any real identity beyond the nickname
+       the player typed in themselves. */
+  let screenPhase = 'intro';
+  let phaseStartTs = performance.now();
+  let mouseBuckets = {};
+  let lastMouseSample = 0;
+
+  function sampleMouseAt(clientX, clientY){
+    const now = performance.now();
+    if(now - lastMouseSample < 150) return;
+    lastMouseSample = now;
+    const col = Math.max(0, Math.min(9, Math.floor(clientX / window.innerWidth * 10)));
+    const row = Math.max(0, Math.min(9, Math.floor(clientY / window.innerHeight * 10)));
+    const key = col + '_' + row;
+    mouseBuckets[key] = (mouseBuckets[key]||0) + 1;
+  }
+  document.addEventListener('mousemove', (e)=> sampleMouseAt(e.clientX, e.clientY));
+  document.addEventListener('touchmove', (e)=>{
+    if(e.touches && e.touches[0]) sampleMouseAt(e.touches[0].clientX, e.touches[0].clientY);
+  }, { passive:true });
+
+  async function recordAccessHour(){
+    if(!dbNS) return;
+    try{
+      const ref = dbNS.doc('analytics/accessHours');
+      const snap = await ref.get();
+      const prev = snap.exists ? snap.data() : {};
+      const key = 'h' + new Date().getHours();
+      const merged = Object.assign({}, prev);
+      merged[key] = (merged[key]||0) + 1;
+      merged.total = (merged.total||0) + 1;
+      await ref.set(merged);
+    }catch(e){ /* best-effort */ }
+  }
+
+  async function flushScreenTime(phaseName, durationMs){
+    if(!dbNS || durationMs < 200) return; // ignore near-instant transitions (noise)
+    try{
+      const ref = dbNS.doc('analytics/screenTime');
+      const snap = await ref.get();
+      const prev = snap.exists ? snap.data() : {};
+      const merged = Object.assign({}, prev);
+      merged[phaseName+'Sum'] = (prev[phaseName+'Sum']||0) + durationMs;
+      merged[phaseName+'Count'] = (prev[phaseName+'Count']||0) + 1;
+      await ref.set(merged);
+    }catch(e){ /* best-effort */ }
+  }
+
+  async function flushHeatmap(screenName, buckets){
+    if(!dbNS || Object.keys(buckets).length === 0) return;
+    try{
+      const ref = dbNS.doc('analytics/heatmap_' + screenName);
+      const snap = await ref.get();
+      const prev = snap.exists ? snap.data() : {};
+      const merged = Object.assign({}, prev);
+      for(const k in buckets){ merged[k] = (merged[k]||0) + buckets[k]; }
+      await ref.set(merged);
+    }catch(e){ /* best-effort */ }
+  }
+
+  function transitionPhase(nextPhase){
+    const duration = performance.now() - phaseStartTs;
+    const finishedPhase = screenPhase;
+    const finishedBuckets = mouseBuckets;
+    flushScreenTime(finishedPhase, duration);
+    flushHeatmap(finishedPhase === 'result' ? 'game' : finishedPhase, finishedBuckets);
+    screenPhase = nextPhase;
+    phaseStartTs = performance.now();
+    mouseBuckets = {};
+  }
+  window.addEventListener('beforeunload', ()=>{ transitionPhase(screenPhase); });
+
+  async function recordSharedSession(score, elapsedTime){
+    if(!dbNS) return null;
+    try{
+      const prev = (await getPlayerRecord(playerId)) || { sessionCount:0, totalCorrectTime:0, bestScore:0, totalPlayTime:0 };
+      const sessionCount = (prev.sessionCount||0) + 1;
+      const totalCorrectTime = (prev.totalCorrectTime||0) + score;
+      const totalPlayTime = (prev.totalPlayTime||0) + elapsedTime;
+      const bestScore = Math.max(prev.bestScore||0, score);
+      const avgScore = totalCorrectTime / sessionCount;
+      const name = getPlayerName() || 'Người chơi ẩn danh';
+      await upsertPlayerRecord(playerId, { name, sessionCount, totalCorrectTime, avgScore, bestScore, totalPlayTime, createdAt: prev.createdAt || Date.now(), lastVisit: Date.now() });
+      return { sessionCount, avgScore, bestScore };
+    }catch(e){ return null; }
+  }
+
+  async function fetchLeaderboardRows(){
+    // Read all shards, flatten to one sorted array, locate the current
+    // player's rank, then decide how many rows to show: top 5 if the player
+    // is already near the top, otherwise everyone from #1 down through
+    // (player's rank + 10).
+    const all = await getAllPlayersFlat();
+    const idx = all.findIndex(p => p.id === playerId);
+    const rank = idx >= 0 ? idx + 1 : null;
+    const total = all.length;
+    let displayCount = (rank && rank > 5) ? Math.min(rank + 10, all.length) : Math.min(5, all.length);
+    return { docs: all.slice(0, displayCount), rank, total };
+  }
+
+  function renderLeaderboardRows(docs, rank, total, extraMeta){
+    if(docs.length === 0) return '<div id="lbLoading">Chưa có ai chơi cả, làm người đầu tiên nào!</div>';
+    let html = '<div class="lbScrollWrap">' + docs.map((p,i)=>{
+      const d = p.data; const mine = p.id === playerId;
+      const meta = extraMeta ? (' · tốt nhất ' + (d.bestScore||0).toFixed(1) + 's') : '';
+      return '<div class="lbRow'+(mine?' me':'')+'"><div class="lbRank">#'+(i+1)+'</div>'
+        + '<div><div class="lbName">'+(d.name||'Ẩn danh')+(mine?' (bạn)':'')+'</div><div class="lbMeta">'+(d.sessionCount||0)+' ván'+meta+'</div></div>'
+        + '<div class="lbScore">'+(d.avgScore||0).toFixed(1)+'s</div></div>';
+    }).join('') + '</div>';
+    if(rank && rank > docs.length){
+      html += '<div style="text-align:center;font-size:12px;color:#8a6d1f;margin-top:6px;">📊 Bạn đang xếp hạng #'+rank+' / '+total+' người chơi</div>';
+    }
+    return html;
+  }
+
+  async function buildInlineLeaderboardHTML(){
+    if(!dbNS){
+      return '<div style="text-align:center;color:#999;font-size:12px;margin-top:6px;">Mở link chia sẻ của game để so tài với bạn bè trên bảng xếp hạng chung!</div>';
+    }
+    try{
+      const { docs, rank, total } = await fetchLeaderboardRows();
+      return '<div class="leaderboard-title" style="text-align:center;">🏆 Bảng Xếp Hạng</div>' + renderLeaderboardRows(docs, rank, total, false);
+    }catch(e){
+      return '<div style="text-align:center;color:#999;font-size:12px;margin-top:6px;">Không tải được bảng xếp hạng, thử lại sau nhé.</div>';
+    }
+  }
+
+  function scrollToMyRow(container){
+    const mine = container.querySelector('.lbRow.me');
+    if(mine) mine.scrollIntoView({ block:'center' });
+  }
+
+  async function renderLeaderboardTop(){
+    lbBody.innerHTML = '<div id="lbLoading">Đang tải...</div>';
+    if(!dbNS){
+      lbBody.innerHTML = '<div id="lbLoading">Chưa kết nối bảng xếp hạng chung.<br>Mở link đã chia sẻ của game để xem bảng xếp hạng thật với bạn bè nhé!</div>';
+      return;
+    }
+    try{
+      const { docs, rank, total } = await fetchLeaderboardRows();
+      lbBody.innerHTML = renderLeaderboardRows(docs, rank, total, true);
+      scrollToMyRow(lbBody);
+    }catch(e){
+      lbBody.innerHTML = '<div id="lbLoading">Không tải được bảng xếp hạng, thử lại sau nhé.</div>';
+    }
+  }
+
+  async function renderLeaderboardMe(){
+    lbBody.innerHTML = '<div id="lbLoading">Đang tải...</div>';
+    if(!dbNS){
+      const lb = loadLeaderboard();
+      lbBody.innerHTML = lb.count>0
+        ? '<div class="lbRow me"><div class="lbRank">—</div><div><div class="lbName">Bạn (chỉ trên máy này)</div><div class="lbMeta">'+lb.count+' ván</div></div><div class="lbScore">'+(lb.total/lb.count).toFixed(1)+'s</div></div>'
+        : '<div id="lbLoading">Bạn chưa chơi ván nào.</div>';
+      return;
+    }
+    try{
+      const p = await getPlayerRecord(playerId);
+      if(!p){ lbBody.innerHTML = '<div id="lbLoading">Bạn chưa có dữ liệu — chơi 1 ván để bắt đầu nhé!</div>'; return; }
+      const all = await getAllPlayersFlat();
+      const idx = all.findIndex(x => x.id === playerId);
+      const rank = idx>=0 ? idx+1 : null;
+      const total = all.length;
+      const rankText = rank ? '#'+rank+' / '+total+' người chơi' : 'Chưa xếp hạng';
+      lbBody.innerHTML = '<div class="lbRow me"><div class="lbRank">'+(rank ? '#'+rank : '—')+'</div>'
+        + '<div><div class="lbName">'+(p.name||'Bạn')+'</div><div class="lbMeta">'+rankText+'</div></div>'
+        + '<div class="lbScore">'+(p.avgScore||0).toFixed(1)+'s</div></div>'
+        + '<div class="stats-box" style="margin-top:10px;">'
+        + '<div class="stats-row"><span>Tổng số ván đã chơi:</span><b>'+(p.sessionCount||0)+'</b></div>'
+        + '<div class="stats-row"><span>Điểm tốt nhất:</span><b>'+(p.bestScore||0).toFixed(1)+'s</b></div>'
+        + '<div class="stats-row"><span>Tổng thời gian đã chơi:</span><b>'+Math.floor((p.totalPlayTime||0)/60)+' phút</b></div>'
+        + '</div>';
+    }catch(e){
+      lbBody.innerHTML = '<div id="lbLoading">Không tải được dữ liệu của bạn.</div>';
+    }
+  }
+
+  function openLeaderboard(tab){
+    lbModal.classList.add('show');
+    document.querySelectorAll('.lbTabBtn').forEach(b=>b.classList.toggle('active', b.dataset.tab===tab));
+    if(tab==='me') renderLeaderboardMe(); else renderLeaderboardTop();
+  }
+
+  hudTrophyBtn.addEventListener('click', ()=>openLeaderboard('top'));
+  lbCloseBtn.addEventListener('click', ()=>lbModal.classList.remove('show'));
+  document.querySelectorAll('.lbTabBtn').forEach(b=>{
+    b.addEventListener('click', ()=>openLeaderboard(b.dataset.tab));
+  });
+  const SHARE_TEXT = 'Thử xem bạn né sếp giỏi cỡ nào — đấu điểm với mình nhé! 🕵️';
+  function showToastIn(toastEl, msg){
+    toastEl.textContent = msg;
+    setTimeout(()=>{ if(toastEl.textContent===msg) toastEl.textContent=''; }, 3000);
+  }
+  async function copyShareLink(){
+    try{ await navigator.clipboard.writeText(location.href); return true; }
+    catch(e){ return false; }
+  }
+  function wireShareButtons(fbBtn, zaloBtn, copyBtn, nativeBtn, toastEl){
+    fbBtn.addEventListener('click', async ()=>{
+      // sharer.php is unreliable from a claude.ai artifact preview domain —
+      // Facebook's newer share_channel redirect blocks popups it can't
+      // verify the origin of, regardless of opener/referrer settings. Copy
+      // + open a blank Facebook tab is the one path that always works: no
+      // API call carries our domain as a parameter for Facebook to reject.
+      await copyShareLink();
+      showToastIn(toastEl, '✅ Đã copy link — dán vào bài viết Facebook nhé!');
+      window.open('https://www.facebook.com/', '_blank');
+    });
+    zaloBtn.addEventListener('click', ()=>{
+      const url = 'https://sp.zalo.me/share?u=' + encodeURIComponent(location.href) + '&d=' + encodeURIComponent(SHARE_TEXT);
+      window.open(url, '_blank', 'noopener,width=600,height=500');
+    });
+    copyBtn.addEventListener('click', async ()=>{
+      const ok = await copyShareLink();
+      showToastIn(toastEl, ok ? '✅ Đã copy link — dán vào bio/story Instagram hoặc TikTok nhé!' : 'Không copy được, thử giữ và copy link trên thanh địa chỉ nhé.');
+    });
+    nativeBtn.addEventListener('click', async ()=>{
+      const shareData = { title: 'TAB: Né Sếp', text: SHARE_TEXT, url: location.href };
+      try{
+        if(navigator.share){ await navigator.share(shareData); }
+        else{
+          const ok = await copyShareLink();
+          showToastIn(toastEl, ok ? '✅ Đã copy link! Gửi cho bạn bè nhé' : 'Không copy được link.');
+        }
+      }catch(e){ /* user cancelled share sheet, ignore */ }
+    });
+  }
+  wireShareButtons(shareFb, shareZalo, shareCopy, shareNative, shareToast);
+  wireShareButtons(el('mShareFb'), el('mShareZalo'), el('mShareCopy'), el('mShareNative'), el('mShareToast'));
+
+  /* ---------- Modal dismissal edge cases: X button, backdrop click, Esc key.
+     A result screen isn't mandatory like the intro — a player who doesn't
+     want to replay must be able to leave it with no forced next action.
+     Closing never restarts the game; it just hides the modal and leaves a
+     small floating "▶️" button so the player can start a new round later
+     whenever they want, instead of needing to refresh the page. */
+  const replayFab = el('replayFab');
+  function closeResultModal(){
+    modal.classList.remove('show');
+    replayFab.classList.add('show');
+  }
+  modalCloseX.addEventListener('click', closeResultModal);
+  modal.addEventListener('click', (e)=>{ if(e.target === modal) closeResultModal(); });
+  replayFab.addEventListener('click', ()=>{
+    replayFab.classList.remove('show');
+    resetState();
+    state.gameStarted = true;
+    renderScreen();
+    updateHUD();
+    transitionPhase('game');
+    requestAnimationFrame(tick);
+  });
+  lbCloseX.addEventListener('click', ()=>lbModal.classList.remove('show'));
+  lbModal.addEventListener('click', (e)=>{ if(e.target === lbModal) lbModal.classList.remove('show'); });
+  window.addEventListener('keydown', (e)=>{
+    if(e.key !== 'Escape') return;
+    if(lbModal.classList.contains('show')){ lbModal.classList.remove('show'); }
+    else if(modal.classList.contains('show')){ closeResultModal(); }
+  });
+
+  const howToPlayToggle = el('howToPlayToggle'), introStepsEl = el('introSteps');
+  howToPlayToggle.addEventListener('click', ()=>{
+    const willOpen = !introStepsEl.classList.contains('open');
+    introStepsEl.classList.toggle('open', willOpen);
+    howToPlayToggle.textContent = willOpen ? '🔼 Thu gọn' : '❓ Xem cách chơi chi tiết';
+  });
+
+  nameInput.value = getPlayerName();
+  nameInput.addEventListener('change', ()=> savePlayerName(nameInput.value.trim()));
+
+  const FUNNY_NAME_SUGGESTIONS = [
+    'Heo Mập Mập', 'Rắn 2 Đuôi', 'Gấu Trúc Lười', 'Cú Đêm Văn Phòng',
+    'Vịt Xàm Xí', 'Mèo Béo IT', 'Ninja Trốn Việc', 'Sói Cô Đơn KPI'
+  ];
+  if(getPlayerName()){
+    // Đã có tên từ trước — chỉ hỏi tên lần đầu, các lần sau bỏ qua bước này
+    nameInputWrap.style.display = 'none';
+  } else {
+    const shownNames = FUNNY_NAME_SUGGESTIONS.slice().sort(()=>Math.random()-0.5).slice(0,4);
+    nameInput.placeholder = 'VD: ' + shownNames[0];
+    nameSuggestions.innerHTML = shownNames.map(n=>'<span class="nameChip">🎲 '+n+'</span>').join('');
+    nameSuggestions.querySelectorAll('.nameChip').forEach((chip, i)=>{
+      chip.addEventListener('click', ()=>{ nameInput.value = shownNames[i]; savePlayerName(shownNames[i]); });
+    });
+  }
+
+  initSharedDb();
+
+  let state, boss;
+  function resetState(){
+    state = { mode:'personal', lives: CONFIG.maxLives, personalTime:0, correctTime:0, elapsed:0, running:true, gameStarted:false, lastTick: performance.now(),
+      workTheme: pick(WORK_THEMES), personalTheme: pick(PERSONAL_THEMES) };
+    state.workData = genWorkData(state.workTheme);
+    const ang0 = rand(0, Math.PI*2);
+    boss = { x: Math.cos(ang0)*5, y: Math.sin(ang0)*5, target:{x:0,y:0}, speed:1.0, wasClose:false, forced:false, nextCheckAt: rand(2.5,4.5) };
+    pickAmbientTarget();
+  }
+
+  function difficultyT(){ return Math.min(1, state.elapsed / CONFIG.difficultyRampSeconds); }
+
+  function pickAmbientTarget(){
+    const t = difficultyT();
+    const nearProb = lerp(CONFIG.ambientNearBiasProbStart, CONFIG.ambientNearBiasProbEnd, t);
+    const near = Math.random() < nearProb;
+    const ang = rand(0, Math.PI*2);
+    if(near){
+      const dist = rand(CONFIG.ambientNearMin, CONFIG.ambientNearMax);
+      boss.target = { x: Math.cos(ang)*dist, y: Math.sin(ang)*dist };
+    } else {
+      const dist = rand(CONFIG.ambientBoundsMin, CONFIG.ambientBoundsMax);
+      boss.target = { x: Math.cos(ang)*dist, y: Math.sin(ang)*dist };
+    }
+    const sr = [lerp(CONFIG.speedAmbientStart[0],CONFIG.speedAmbientEnd[0],t), lerp(CONFIG.speedAmbientStart[1],CONFIG.speedAmbientEnd[1],t)];
+    boss.speed = rand(sr[0], sr[1]);
+    boss.forced = false;
+  }
+
+  function forceCloseApproach(){
+    const t = difficultyT();
+    const ang = rand(0, Math.PI*2);
+    const dist = rand(CONFIG.checkTargetMin, CONFIG.checkTargetMax);
+    boss.target = { x: Math.cos(ang)*dist, y: Math.sin(ang)*dist };
+    const sr = [lerp(CONFIG.speedCheckStart[0],CONFIG.speedCheckEnd[0],t), lerp(CONFIG.speedCheckStart[1],CONFIG.speedCheckEnd[1],t)];
+    boss.speed = rand(sr[0], sr[1]);
+    boss.forced = true;
+    if(!hasSeenHint(HINT_APPROACH)){
+      // First close approach this browser has ever seen: go gentle (slowest
+      // speed in the range) so there's real time to notice and react, and
+      // surface the one instruction that matters right now, right where the
+      // action needs to happen — not as a rule read minutes earlier.
+      boss.speed = sr[0];
+      showCoachmark('👀 Sếp lại gần! Bấm Tab ngay khi số dưới ra-đa ≤ 1m', 5000);
+      markHintSeen(HINT_APPROACH);
+    }
+  }
+
+  function scheduleNextCheck(){
+    const t = difficultyT();
+    const gapMin = lerp(CONFIG.checkGapStart[0], CONFIG.checkGapEnd[0], t);
+    const gapMax = lerp(CONFIG.checkGapStart[1], CONFIG.checkGapEnd[1], t);
+    boss.nextCheckAt = state.elapsed + rand(gapMin, gapMax);
+  }
+
+  function renderScreen(){
+    if(state.mode === 'work'){
+      screenEl.innerHTML = buildWorkHTML(state.workTheme, state.workData);
+      monitorEl.classList.add('glow-work'); monitorEl.classList.remove('glow-personal');
+    } else {
+      screenEl.innerHTML = buildPersonalHTML(state.personalTheme);
+      monitorEl.classList.add('glow-personal'); monitorEl.classList.remove('glow-work');
+    }
+  }
+
+  function toggleMode(){
+    if(!state.running || !state.gameStarted) return;
+    state.mode = state.mode === 'work' ? 'personal' : 'work';
+    renderScreen();
+    switcherOverlay.classList.add('show');
+    beep(state.mode==='personal'?520:340, 0.08, 'square', 0.05);
+    setTimeout(()=>switcherOverlay.classList.remove('show'), 140);
+    hideCoachmark();
+  }
+
+  function updateHUD(){
+    livesEl.textContent = '❤️'.repeat(Math.max(0,state.lives)) + '🖤'.repeat(CONFIG.maxLives - Math.max(0,state.lives));
+    const pct = Math.min(100, (state.personalTime / CONFIG.targetPersonalTime) * 100);
+    progressFill.style.width = pct + '%';
+    progressText.textContent = Math.floor(state.personalTime) + ' / ' + CONFIG.targetPersonalTime + 's';
+    const remain = Math.max(0, CONFIG.matchDuration - state.elapsed);
+    const m = Math.floor(remain/60), s = Math.floor(remain%60);
+    clockEl.textContent = m + ':' + String(s).padStart(2,'0');
+  }
+
+  function updateRadar(dist, angle){
+    const radarPx = radar.clientWidth / 2;
+    const scaled = Math.min(dist, CONFIG.radarRangeMeters) / CONFIG.radarRangeMeters * radarPx;
+    const rx = Math.cos(angle) * scaled;
+    const ry = Math.sin(angle) * scaled;
+    radarBoss.style.transform = 'translate(' + (rx-7) + 'px,' + (ry-7) + 'px)';
+    radarDist.textContent = 'Sếp: ' + dist.toFixed(1) + ' m';
+    if(dist <= 1.5){ radarBoss.style.background = 'var(--danger)'; radarDist.style.color = '#ffb4b0'; }
+    else if(dist <= 3){ radarBoss.style.background = '#f59e0b'; radarDist.style.color = '#ffe2a8'; }
+    else { radarBoss.style.background = '#8fbf8a'; radarDist.style.color = '#dfe7dc'; }
+    radarAlert.classList.toggle('show', boss.forced);
+    if(performance.now() > bossAngryUntil){
+      setBossFace(boss.forced ? 'alert' : 'calm');
+    }
+    const vig = dist < 3 ? Math.max(0, (3-dist)/3) : 0;
+    vignette.style.boxShadow = 'inset 0 0 ' + (40+vig*60) + 'px ' + (8+vig*20) + 'px rgba(220,38,38,' + (vig*0.55) + ')';
+    sceneEl.style.filter = 'brightness(' + (1 - vig*0.14) + ')';
+  }
+
+  function endGame(won, reason){
+    state.running = false;
+    modal.classList.add('show');
+    transitionPhase('result');
+    if(won){
+      modalTitle.textContent = '🎉 Hết giờ, về nhà an toàn!';
+      modalText.textContent = 'Bạn đã đạt ' + CONFIG.targetPersonalTime + ' giây làm việc riêng mà không bị bắt quá tay. Tay đổi tab thần sầu!';
+      beep(523,0.12,'sine',0.05); setTimeout(()=>beep(659,0.12,'sine',0.05),120); setTimeout(()=>beep(784,0.18,'sine',0.05),240);
+    } else if(reason === 'caught'){
+      modalTitle.textContent = '😬 Bị sếp bắt tại trận!';
+      modalText.textContent = 'Bạn đã hết mạng vì để sếp lại gần dưới 1m mà chưa kịp chuyển tab. Canh radar sát hơn nhé!';
+    } else {
+      modalTitle.textContent = '⏰ Hết giờ làm';
+      modalText.textContent = 'Bạn mới tích lũy được ' + Math.floor(state.personalTime) + '/' + CONFIG.targetPersonalTime + ' giây việc riêng. Cố né sếp nhiều hơn để đạt chỉ tiêu!';
+    }
+    const lb = recordSession(state.correctTime);
+    const avg = (lb.total/lb.count).toFixed(1);
+    let rows = '<div class="stats-row"><span>Điểm ván này (thời gian chơi đúng):</span><b>'+state.correctTime.toFixed(1)+'s</b></div>';
+    rows += '<div class="stats-row"><span>Trung bình của bạn ('+lb.count+' ván):</span><b>'+avg+'s/ván</b></div>';
+    modalStats.innerHTML = '<div class="stats-box">'+rows+'</div><div id="modalLB">Đang tải bảng xếp hạng...</div>';
+
+    if(dbNS){
+      recordSharedSession(state.correctTime, state.elapsed).then(async ()=>{
+        const html = await buildInlineLeaderboardHTML();
+        const lbEl = el('modalLB');
+        if(lbEl){ lbEl.innerHTML = html; scrollToMyRow(lbEl); }
+      });
+    } else {
+      const lbEl = el('modalLB');
+      if(lbEl) lbEl.innerHTML = '<div style="text-align:center;color:#999;font-size:12px;margin-top:6px;">Mở link chia sẻ của game để so tài với bạn bè trên bảng xếp hạng chung!</div>';
+    }
+  }
+
+  function tick(now){
+    if(!state.gameStarted || !state.running){ requestAnimationFrame(tick); return; }
+    const dt = Math.min(0.05, (now - state.lastTick)/1000);
+    state.lastTick = now;
+    state.elapsed += dt;
+
+    if(state.mode === 'personal') state.personalTime += dt;
+
+    if(!boss.forced && state.elapsed >= boss.nextCheckAt){
+      forceCloseApproach();
+      scheduleNextCheck();
+    }
+
+    const dx = boss.target.x - boss.x, dy = boss.target.y - boss.y;
+    const dToTarget = Math.hypot(dx,dy);
+    if(dToTarget < 0.12){
+      pickAmbientTarget();
+    } else {
+      boss.x += (dx/dToTarget) * boss.speed * dt;
+      boss.y += (dy/dToTarget) * boss.speed * dt;
+    }
+
+    const dist = Math.hypot(boss.x, boss.y);
+    const angle = Math.atan2(boss.y, boss.x);
+    updateRadar(dist, angle);
+    maybeFootstep(dist, state.elapsed);
+
+    const isCorrect = (state.mode === 'work' && dist <= CONFIG.catchRadius) || (state.mode === 'personal' && dist > CONFIG.catchRadius);
+    if(isCorrect) state.correctTime += dt;
+
+    if(dist <= CONFIG.catchRadius && !boss.wasClose){
+      boss.wasClose = true;
+      if(state.mode === 'personal'){
+        state.lives -= 1;
+        state.mode = 'work';
+        renderScreen();
+        flashEl.classList.remove('hit'); void flashEl.offsetWidth; flashEl.classList.add('hit');
+        monitorRig.classList.remove('shake'); void monitorRig.offsetWidth; monitorRig.classList.add('shake');
+        catchPopup.classList.remove('pop'); void catchPopup.offsetWidth; catchPopup.classList.add('pop');
+        setBossFace('angry');
+        bossAngryUntil = performance.now() + 1100;
+        showBossBubble(pick(SCOLD_LINES), 1300);
+        beep(140, 0.3, 'sawtooth', 0.09);
+        if(!hasSeenHint(HINT_CATCH)){
+          showCoachmark('💡 Mẹo: bấm Tab NGAY khi số dưới ra-đa chạm 1m, đừng đợi số về 0', 5500);
+          markHintSeen(HINT_CATCH);
+        }
+        if(state.lives <= 0){ endGame(false, 'caught'); }
+      } else {
+        beep(660, 0.1, 'sine', 0.03);
+        safePopup.textContent = pick(PRAISE_LINES);
+        safePopup.classList.remove('pop'); void safePopup.offsetWidth; safePopup.classList.add('pop');
+      }
+    } else if(dist > CONFIG.rearmRadius){
+      boss.wasClose = false;
+    }
+
+    updateHUD();
+
+    if(state.personalTime >= CONFIG.targetPersonalTime){ endGame(true); }
+    else if(state.elapsed >= CONFIG.matchDuration){ endGame(false, 'timeout'); }
+
+    requestAnimationFrame(tick);
+  }
+
+  window.addEventListener('keydown', (e)=>{
+    if(e.key === 'Tab'){ e.preventDefault(); toggleMode(); }
+  });
+  tabBtn.addEventListener('click', toggleMode);
+
+  startBtn.addEventListener('click', ()=>{
+    const nm = nameInput.value.trim();
+    if(nm) savePlayerName(nm);
+    if(dbNS){ ensurePlayerDoc(); }
+    introScreen.classList.add('hide');
+    state.gameStarted = true;
+    state.lastTick = performance.now();
+    transitionPhase('game');
+    try{ if(!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){}
+  });
+
+  modalBtn.addEventListener('click', ()=>{
+    modal.classList.remove('show');
+    replayFab.classList.remove('show');
+    resetState();
+    state.gameStarted = true;
+    renderScreen();
+    updateHUD();
+    transitionPhase('game');
+    requestAnimationFrame(tick);
+  });
+
+  showRecordLine();
+  resetState();
+  renderScreen();
+  updateHUD();
+  setBossFace('calm');
+  requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>
