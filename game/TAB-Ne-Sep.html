@@ -282,6 +282,21 @@
   #startBtn:active{ transform:scale(0.96); }
   @keyframes pulseBtn{ 0%,100%{transform:scale(1);} 50%{transform:scale(1.045);} }
 
+  /* ---------- Chơi cùng bạn: tạo/vào phòng, màn chờ ---------- */
+  #createRoomBtn{display:block; margin:10px auto 0; font-family:var(--body); font-weight:700; font-size:13px; padding:9px 16px; border-radius:10px; border:1.5px solid #2563eb; background:#fff; color:#2563eb; cursor:pointer;}
+  #roomWaitScreen{position:absolute; inset:0; z-index:80; display:none; align-items:center; justify-content:center; background:rgba(20,18,30,0.86); padding:16px;}
+  #roomWaitScreen.show{display:flex;}
+  #roomWaitCard{background:#fffaf0; color:#2b2620; border-radius:20px; max-width:420px; width:100%; padding:26px 24px 22px; box-shadow:0 24px 70px rgba(0,0,0,0.5); text-align:center; max-height:92vh; overflow-y:auto;}
+  #roomWaitCard h2{font-family:var(--display); font-size:21px; margin:0 0 6px; color:#c1272d;}
+  #roomCodeDisplay{font-family:var(--mono); font-size:26px; font-weight:bold; letter-spacing:0.1em; background:#f3ecd8; border-radius:10px; padding:10px; margin:10px 0; color:#3a3327;}
+  #roomCopyLinkBtn{font-family:var(--body); font-weight:600; font-size:12.5px; padding:8px 14px; border-radius:8px; border:1px solid #ccc; background:#fff; color:#555; cursor:pointer; margin-bottom:14px;}
+  #roomPlayerList{text-align:left; background:#f8f3e6; border-radius:12px; padding:10px 14px; margin-bottom:14px; max-height:180px; overflow-y:auto;}
+  .roomPlayerRow{font-size:13.5px; padding:4px 0; color:#3a3327; display:flex; justify-content:space-between;}
+  .roomPlayerRow .youTag{color:#8a6d1f; font-size:11px;}
+  #roomStartBtn{font-family:var(--mono); font-weight:bold; font-size:15px; padding:12px 30px; border-radius:12px; border:none; background:#c1272d; color:#fff; cursor:pointer; box-shadow:0 8px 20px rgba(193,39,45,0.4);}
+  #roomWaitingForHost{font-size:13px; color:#8a6d1f; padding:10px 0;}
+  #roomLeaveBtn{display:block; margin:12px auto 0; background:none; border:none; font-family:var(--body); font-size:12px; color:#999; text-decoration:underline; cursor:pointer;}
+
   @media (max-width:520px){
     .keyboard{width:130px;height:38px;}
     .column{width:18px;}
@@ -362,6 +377,7 @@
       </div>
       <div id="recordLine"></div>
       <button id="startBtn">▶️ Bắt Đầu Chơi</button>
+      <button id="createRoomBtn">👥 Chơi cùng bạn (tạo phòng)</button>
       <button id="howToPlayToggle">❓ Xem cách chơi chi tiết</button>
       <div class="introSteps" id="introSteps">
         <div class="introStep"><div class="stepNum">1</div><div class="stepIcon">📺</div><div class="stepText">Màn hình của bạn đang chiếu <b>phim vui</b>. Càng xem lâu, bạn càng được điểm cao!</div></div>
@@ -370,6 +386,19 @@
         <div class="introStep"><div class="stepNum">4</div><div class="stepIcon">🏆</div><div class="stepText">Đoán đúng lúc thì được điểm. Bị bắt gặp thì mất ❤️. Hết 3 tim là thua, xem đủ giờ là bạn <b>thắng</b>!</div></div>
       </div>
       <div style="font-size:10px; color:#aaa; margin-top:10px;">Game ghi nhận ẩn danh thời gian chơi &amp; thao tác để cải thiện trải nghiệm.</div>
+    </div>
+  </div>
+
+  <div id="roomWaitScreen">
+    <div id="roomWaitCard">
+      <h2>👥 Phòng chơi cùng bạn</h2>
+      <div id="roomCodeDisplay">------</div>
+      <button id="roomCopyLinkBtn">🔗 Copy link mời bạn vào phòng</button>
+      <div id="roomPlayerList"><div class="roomPlayerRow">Đang tải danh sách...</div></div>
+      <button id="roomStartBtn">▶️ Bắt Đầu (cho cả phòng)</button>
+      <div id="roomWaitingForHost">Đang chờ chủ phòng bấm bắt đầu...</div>
+      <div id="roomToast" style="font-size:11.5px; color:#8a6d1f; min-height:14px; margin-top:6px;"></div>
+      <button id="roomLeaveBtn">Rời phòng, chơi 1 mình</button>
     </div>
   </div>
 
@@ -541,7 +570,10 @@
         nameInput = el('nameInput'), nameInputWrap = el('nameInputWrap'), nameSuggestions = el('nameSuggestions'), hudTrophyBtn = el('hudTrophyBtn'),
         lbModal = el('lbModal'), lbBody = el('lbBody'), lbCloseBtn = el('lbCloseBtn'),
         shareFb = el('shareFb'), shareZalo = el('shareZalo'), shareCopy = el('shareCopy'), shareNative = el('shareNative'), shareToast = el('shareToast'),
-        modalCloseX = el('modalCloseX'), lbCloseX = el('lbCloseX');
+        modalCloseX = el('modalCloseX'), lbCloseX = el('lbCloseX'),
+        createRoomBtn = el('createRoomBtn'), roomWaitScreen = el('roomWaitScreen'), roomCodeDisplay = el('roomCodeDisplay'),
+        roomCopyLinkBtn = el('roomCopyLinkBtn'), roomPlayerList = el('roomPlayerList'), roomStartBtn = el('roomStartBtn'),
+        roomWaitingForHost = el('roomWaitingForHost'), roomLeaveBtn = el('roomLeaveBtn'), roomToast = el('roomToast');
 
   // px-per-meter on the X axis, sized so the outermost ring nearly reaches the
   // side columns. Recomputed on load/resize since it depends on scene width.
@@ -982,6 +1014,176 @@
       recordAccessHour();
     }catch(e){ sb = null; }
   }
+
+  /* ---------- Chơi cùng bạn: tạo/vào phòng, màn chờ (Bước 1 — hạ tầng phòng) ----------
+     Chỉ xử lý vòng đời phòng (tạo/vào/chờ/bắt đầu) ở bước này — CHƯA đụng vào
+     boss AI/game loop. "1 Sếp chung" thật (hệ toạ độ chung, target-selection)
+     sẽ ghép vào tick()/toggleMode() ở bước sau, sau khi hạ tầng phòng này
+     chạy đúng.
+     - Bảng "rooms" (supabase/schema.sql) chỉ lưu host_player_id + status
+       ('waiting'|'playing') — bắt buộc dùng Postgres Changes (không phải
+       Broadcast) để đảm bảo mọi client, kể cả subscribe muộn, đều nhận được
+       đúng 1 lần sự kiện "bắt đầu".
+     - Danh sách "ai đang trong phòng" dùng Supabase Realtime Presence
+       (channel.track()) — không lưu vào DB, vì đây là trạng thái tạm thời
+       (mất khi đóng tab), Presence tự xử lý join/leave qua WebSocket. */
+  let currentRoomId = null;
+  let isRoomHost = false;
+  let roomChannel = null;
+
+  function genRoomCode(){
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // bỏ ký tự dễ nhầm (I/O/0/1)
+    let code = '';
+    for(let i=0;i<6;i++) code += chars[Math.floor(Math.random()*chars.length)];
+    return code;
+  }
+
+  function renderRoomPlayerList(presenceState){
+    const names = [];
+    for(const key in presenceState){
+      const metas = presenceState[key];
+      if(metas && metas[0]) names.push(metas[0]);
+    }
+    if(names.length === 0){
+      roomPlayerList.innerHTML = '<div class="roomPlayerRow">Đang tải danh sách...</div>';
+      return;
+    }
+    roomPlayerList.innerHTML = names.map(p=>{
+      const mine = p.playerId === playerId;
+      const hostTag = p.playerId === (roomChannel && roomChannel._hostPlayerId) ? ' 👑' : '';
+      return '<div class="roomPlayerRow"><span>'+(p.name||'Ẩn danh')+hostTag+'</span>'+(mine?'<span class="youTag">(bạn)</span>':'')+'</div>';
+    }).join('');
+  }
+
+  function updateRoomHostUI(){
+    roomStartBtn.style.display = isRoomHost ? 'block' : 'none';
+    roomWaitingForHost.style.display = isRoomHost ? 'none' : 'block';
+  }
+
+  async function joinRoomChannel(roomId, hostPlayerId){
+    if(!sb) return;
+    if(roomChannel) { try{ await sb.removeChannel(roomChannel); }catch(e){} }
+    roomChannel = sb.channel('room:' + roomId, { config: { presence: { key: playerId } } });
+    roomChannel._hostPlayerId = hostPlayerId;
+
+    roomChannel.on('presence', { event: 'sync' }, () => {
+      renderRoomPlayerList(roomChannel.presenceState());
+    });
+
+    roomChannel.on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'rooms', filter: 'id=eq.' + roomId }, (payload) => {
+      if(payload.new && payload.new.status === 'playing'){
+        startRoomMatchForEveryone();
+      }
+    });
+
+    roomChannel.subscribe(async (status) => {
+      if(status === 'SUBSCRIBED'){
+        await roomChannel.track({ playerId, name: getPlayerName() || 'Người chơi ẩn danh' });
+      }
+    });
+  }
+
+  async function createRoom(){
+    if(!sb){ alert('Chưa kết nối được máy chủ chung, thử lại sau nhé.'); return; }
+    const nm = nameInput.value.trim();
+    if(nm) savePlayerName(nm);
+    await ensurePlayerDoc();
+    const roomId = genRoomCode();
+    const { error } = await sb.from('rooms').insert({ id: roomId, host_player_id: playerId, status: 'waiting' });
+    if(error){ alert('Không tạo được phòng, thử lại nhé.'); return; }
+    currentRoomId = roomId;
+    isRoomHost = true;
+    const url = new URL(location.href);
+    url.searchParams.set('room', roomId);
+    history.replaceState(null, '', url.toString());
+    await joinRoomChannel(roomId, playerId);
+    showRoomWaitScreen(roomId);
+  }
+
+  async function joinExistingRoom(roomId){
+    if(!sb) return;
+    const { data: room, error } = await sb.from('rooms').select('*').eq('id', roomId).maybeSingle();
+    if(error || !room){
+      log_roomJoinFailed();
+      return;
+    }
+    currentRoomId = roomId;
+    isRoomHost = (room.host_player_id === playerId);
+    if(room.status === 'playing'){
+      // Vào muộn, phòng đã chơi rồi — bản đầu chưa hỗ trợ vào giữa trận,
+      // cho vào chơi solo bình thường để không kẹt màn chờ vô nghĩa.
+      currentRoomId = null;
+      return;
+    }
+    await joinRoomChannel(roomId, room.host_player_id);
+    showRoomWaitScreen(roomId);
+  }
+
+  function log_roomJoinFailed(){
+    // Phòng không tồn tại/đã hết hạn — im lặng rơi về màn intro bình thường
+    // (không chặn người chơi bằng lỗi cứng vì link phòng có thể đã cũ).
+    currentRoomId = null;
+  }
+
+  function showRoomWaitScreen(roomId){
+    introScreen.classList.add('hide');
+    roomWaitScreen.classList.add('show');
+    roomCodeDisplay.textContent = roomId;
+    updateRoomHostUI();
+  }
+
+  function hideRoomWaitScreen(){
+    roomWaitScreen.classList.remove('show');
+  }
+
+  async function startRoomMatchForEveryone(){
+    // resetState() (chạy 1 lần lúc load trang, xem cuối file) có thể chưa
+    // kịp chạy nếu host bấm "Bắt đầu" ngay tức khắc sau khi khách vừa mở
+    // link phòng — chờ tối đa vài trăm ms cho state sẵn sàng để tránh lỗi
+    // runtime khi gán state.gameStarted trên object chưa tồn tại.
+    if(typeof state === 'undefined' || !state){ setTimeout(startRoomMatchForEveryone, 100); return; }
+    hideRoomWaitScreen();
+    state.gameStarted = true;
+    state.lastTick = performance.now();
+    introScreen.classList.add('hide');
+    transitionPhase('game');
+    try{ if(!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){}
+  }
+
+  createRoomBtn.addEventListener('click', createRoom);
+
+  roomStartBtn.addEventListener('click', async ()=>{
+    if(!isRoomHost || !currentRoomId) return;
+    await sb.from('rooms').update({ status: 'playing' }).eq('id', currentRoomId);
+    // Host tự chuyển màn ngay — client khác chuyển khi nhận postgres_changes.
+    startRoomMatchForEveryone();
+  });
+
+  roomLeaveBtn.addEventListener('click', async ()=>{
+    if(roomChannel){ try{ await sb.removeChannel(roomChannel); }catch(e){} roomChannel = null; }
+    currentRoomId = null;
+    isRoomHost = false;
+    const url = new URL(location.href);
+    url.searchParams.delete('room');
+    history.replaceState(null, '', url.toString());
+    hideRoomWaitScreen();
+    introScreen.classList.remove('hide');
+  });
+
+  roomCopyLinkBtn.addEventListener('click', async ()=>{
+    try{ await navigator.clipboard.writeText(location.href); showToastIn(roomToast, '✅ Đã copy link phòng!'); }
+    catch(e){}
+  });
+
+  (function checkRoomFromUrl(){
+    const params = new URLSearchParams(location.search);
+    const roomId = params.get('room');
+    if(roomId){
+      // sb có thể chưa init xong (initSharedDb là async) — chờ tối đa vài trăm ms.
+      const tryJoin = ()=>{ if(sb) joinExistingRoom(roomId); else setTimeout(tryJoin, 150); };
+      tryJoin();
+    }
+  })();
 
   /* ---------- Behaviour analytics (aggregated, privacy-conscious) ----------
      Kept as a handful of FIXED aggregate rows (not one row per event) even

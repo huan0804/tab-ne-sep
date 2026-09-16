@@ -84,6 +84,44 @@ drop policy if exists "sessions: ai cũng ghi được" on sessions;
 create policy "sessions: ai cũng ghi được" on sessions for insert with check (true);
 
 -- ============================================================
+-- 2c. Rooms — phòng chơi nhóm, 1 Sếp chung cho cả phòng
+-- ============================================================
+-- Vị trí Sếp KHÔNG lưu ở đây — Host tính và phát (Broadcast) trực tiếp cho
+-- các client trong phòng qua Supabase Realtime, không ghi liên tục vào DB
+-- (tần suất ~20 lần/giây sẽ làm nghẽn database nếu ghi mỗi frame). Bảng này
+-- chỉ giữ thông tin ít thay đổi: ai là host, phòng đang chờ hay đang chơi —
+-- dùng Postgres Changes (không phải Broadcast) để đảm bảo mọi client nhận
+-- được sự kiện "bắt đầu" dù subscribe muộn, khác với vị trí Sếp (mất vài
+-- frame không sao).
+create table if not exists rooms (
+  id text primary key,                 -- room code, 6 ký tự dễ đọc (vd: "AB12CD")
+  host_player_id text not null references players(id),
+  status text not null default 'waiting', -- 'waiting' | 'playing'
+  created_at timestamptz not null default now()
+);
+
+alter table rooms enable row level security;
+drop policy if exists "rooms: ai cũng đọc được" on rooms;
+create policy "rooms: ai cũng đọc được" on rooms for select using (true);
+drop policy if exists "rooms: ai cũng tạo được" on rooms;
+create policy "rooms: ai cũng tạo được" on rooms for insert with check (true);
+drop policy if exists "rooms: ai cũng update được" on rooms;
+create policy "rooms: ai cũng update được" on rooms for update using (true);
+
+-- Postgres Changes (client subscribe sb.channel(...).on('postgres_changes',...))
+-- chỉ nhận được sự kiện nếu bảng được thêm vào publication này. Bọc kiểm tra
+-- tồn tại để chạy lại schema.sql nhiều lần không lỗi "already member of".
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and tablename = 'rooms'
+  ) then
+    alter publication supabase_realtime add table rooms;
+  end if;
+end $$;
+
+-- ============================================================
 -- 3. Row Level Security — cho phép mọi người đọc, và ghi có kiểm soát
 -- ============================================================
 -- Game chạy hoàn toàn phía client (không có backend riêng), nên viewer cần
