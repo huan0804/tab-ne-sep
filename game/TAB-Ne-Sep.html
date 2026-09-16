@@ -1150,15 +1150,9 @@
     catch(e){ return false; }
   }
   function wireShareButtons(fbBtn, zaloBtn, copyBtn, nativeBtn, toastEl){
-    fbBtn.addEventListener('click', async ()=>{
-      // sharer.php is unreliable from a claude.ai artifact preview domain —
-      // Facebook's newer share_channel redirect blocks popups it can't
-      // verify the origin of, regardless of opener/referrer settings. Copy
-      // + open a blank Facebook tab is the one path that always works: no
-      // API call carries our domain as a parameter for Facebook to reject.
-      await copyShareLink();
-      showToastIn(toastEl, '✅ Đã copy link — dán vào bài viết Facebook nhé!');
-      window.open('https://www.facebook.com/', '_blank');
+    fbBtn.addEventListener('click', ()=>{
+      const url = 'https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(location.href);
+      window.open(url, '_blank', 'noopener,width=600,height=500');
     });
     zaloBtn.addEventListener('click', ()=>{
       const url = 'https://sp.zalo.me/share?u=' + encodeURIComponent(location.href) + '&d=' + encodeURIComponent(SHARE_TEXT);
