@@ -60,6 +60,30 @@ create table if not exists analytics_heatmap (
 insert into analytics_heatmap (screen) values ('intro'), ('game') on conflict (screen) do nothing;
 
 -- ============================================================
+-- 2b. Sessions — 1 dòng mỗi ván, để phân tích A/B test theo UI variant
+-- ============================================================
+-- "players" chỉ lưu số liệu TỔNG HỢP (avg/best) nên không thể tách theo
+-- variant UI (radar vs elip) sau khi đã cộng dồn. Bảng này lưu từng ván riêng
+-- lẻ kèm variant, phục vụ so sánh A/B (win rate, avg score theo từng bản UI)
+-- mà không ảnh hưởng logic leaderboard hiện tại (vẫn đọc từ "players").
+create table if not exists sessions (
+  id bigint generated always as identity primary key,
+  player_id text not null references players(id),
+  variant text not null,              -- 'ellipse' (TAB-Ne-Sep.html) hoặc 'radar' (TAB-Ne-Sep_v1-radar.html)
+  score double precision not null,    -- correctTime của ván đó
+  play_time double precision not null,-- elapsedTime của ván đó
+  created_at timestamptz not null default now()
+);
+create index if not exists sessions_variant_idx on sessions (variant);
+create index if not exists sessions_player_id_idx on sessions (player_id);
+
+alter table sessions enable row level security;
+drop policy if exists "sessions: ai cũng đọc được" on sessions;
+create policy "sessions: ai cũng đọc được" on sessions for select using (true);
+drop policy if exists "sessions: ai cũng ghi được" on sessions;
+create policy "sessions: ai cũng ghi được" on sessions for insert with check (true);
+
+-- ============================================================
 -- 3. Row Level Security — cho phép mọi người đọc, và ghi có kiểm soát
 -- ============================================================
 -- Game chạy hoàn toàn phía client (không có backend riêng), nên viewer cần
@@ -73,17 +97,26 @@ alter table analytics_access_hours enable row level security;
 alter table analytics_screen_time enable row level security;
 alter table analytics_heatmap enable row level security;
 
+drop policy if exists "players: ai cũng đọc được" on players;
 create policy "players: ai cũng đọc được" on players for select using (true);
+drop policy if exists "players: ai cũng ghi được (upsert điểm của chính mình)" on players;
 create policy "players: ai cũng ghi được (upsert điểm của chính mình)" on players for insert with check (true);
+drop policy if exists "players: ai cũng update được" on players;
 create policy "players: ai cũng update được" on players for update using (true);
 
+drop policy if exists "access_hours: đọc" on analytics_access_hours;
 create policy "access_hours: đọc" on analytics_access_hours for select using (true);
+drop policy if exists "access_hours: ghi" on analytics_access_hours;
 create policy "access_hours: ghi" on analytics_access_hours for update using (true);
 
+drop policy if exists "screen_time: đọc" on analytics_screen_time;
 create policy "screen_time: đọc" on analytics_screen_time for select using (true);
+drop policy if exists "screen_time: ghi" on analytics_screen_time;
 create policy "screen_time: ghi" on analytics_screen_time for update using (true);
 
+drop policy if exists "heatmap: đọc" on analytics_heatmap;
 create policy "heatmap: đọc" on analytics_heatmap for select using (true);
+drop policy if exists "heatmap: ghi" on analytics_heatmap;
 create policy "heatmap: ghi" on analytics_heatmap for update using (true);
 
 -- ============================================================

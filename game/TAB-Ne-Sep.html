@@ -921,6 +921,7 @@
   // supabase/schema.sql), not in keeping this key secret.
   const SUPABASE_URL = 'https://vznqblibuviqywgvyybg.supabase.co';
   const SUPABASE_KEY = 'sb_publishable_a91I3H0gcOSEZMiyAUGeww_skfkc4l9';
+  const UI_VARIANT = 'ellipse'; // dùng để tách số liệu A/B test trong bảng "sessions"
   let sb = null;
   let dbReady = false;
 
@@ -1041,6 +1042,9 @@
       const avgScore = totalCorrectTime / sessionCount;
       const name = getPlayerName() || 'Người chơi ẩn danh';
       await upsertPlayerRecord(playerId, { name, sessionCount, totalCorrectTime, avgScore, bestScore, totalPlayTime });
+      try{
+        await sb.from('sessions').insert({ player_id: playerId, variant: UI_VARIANT, score, play_time: elapsedTime });
+      }catch(e2){ /* best-effort, không ảnh hưởng leaderboard chính */ }
       return { sessionCount, avgScore, bestScore };
     }catch(e){ return null; }
   }

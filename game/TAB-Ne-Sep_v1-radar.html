@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Be+Vietnam+Pro:ital,wght@0,400;0,500;0,600;0,700;1,500&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
   :root{
     --wall:#f4f6f8; --wall-dark:#e2e6ea; --wood:#ffffff; --wood-dark:#c9ced4;
@@ -784,7 +785,7 @@
     }catch(e){ return {total:score, count:1, top:[{score:score,t:Date.now()}]}; }
   }
   function showRecordLine(){
-    if(dbReady && dbNS){
+    if(dbReady && sb){
       getPlayerRecord(playerId).then(p=>{
         if(p && p.sessionCount > 0){
           recordLine.textContent = '🏆 Trung bình của bạn: ' + (p.avgScore||0).toFixed(1) + 's/ván (qua ' + p.sessionCount + ' ván) — xem 🏆 để so với người khác';
@@ -802,59 +803,56 @@
     }
   }
 
-  /* ---------- Shared player identity & cross-player leaderboard (db capability) ----------
-     STORAGE MODEL (sharded — Option B):
-     Rather than 1 document per player (which hits the artifact's 5,000-document
-     cap once ~5,000 people have ever opened the game), every player record is
-     stored as a KEY inside one of NUM_SHARDS fixed documents at
-     "players_shard/{0..NUM_SHARDS-1}". Which shard a player lands in is decided
-     by hashing their playerId, so it's always the same shard for that player.
-     A shard document can hold roughly a thousand+ compact player records before
-     nearing the 256KB per-document cap, so NUM_SHARDS shards give headroom for
-     tens of thousands of distinct players while using only NUM_SHARDS documents
-     total — leaving the rest of the 5,000-document budget for everything else
-     (analytics, meta, future features).
-     Trade-off: we lose server-side `orderBy` for ranking (that only works across
-     separate documents, not keys inside one document), so building the
-     leaderboard means reading all NUM_SHARDS shard docs and sorting client-side.
-     That's a bounded, cheap read (NUM_SHARDS reads, not "documents per player"),
-     acceptable for a casual game's scale. */
-  const NUM_SHARDS = 40;
-  function hashStr(s){
-    let h = 5381;
-    for(let i=0;i<s.length;i++){ h = ((h<<5)+h) + s.charCodeAt(i); h = h|0; }
-    return Math.abs(h);
+  /* ---------- Shared player identity & cross-player leaderboard (Supabase) ----------
+     STORAGE MODEL: 1 row per player in the "players" table (Postgres has no
+     5,000-document cap like Claude Artifact's db capability had, so the old
+     40-shard workaround is gone — every player is just a real row, and
+     ranking uses a real server-side ORDER BY instead of reading everything
+     and sorting client-side).
+     Column names are snake_case (Postgres convention); helper functions
+     below translate to/from the camelCase shape the rest of the game code
+     already expects, so downstream code barely changed. */
+  function playerRowToRecord(row){
+    if(!row) return null;
+    return {
+      name: row.name, sessionCount: row.session_count, totalCorrectTime: row.total_correct_time,
+      avgScore: row.avg_score, bestScore: row.best_score, totalPlayTime: row.total_play_time,
+      createdAt: row.created_at, lastVisit: row.last_visit
+    };
   }
-  function shardIdFor(id){ return String(hashStr(id) % NUM_SHARDS); }
-  function playerShardRef(id){ return dbNS.doc('players_shard/' + shardIdFor(id)); }
 
   async function upsertPlayerRecord(id, record){
-    const ref = playerShardRef(id);
     try{
-      await ref.update({ [id]: record });
-    }catch(e){
-      // Shard document doesn't exist yet for this bucket — create it.
-      try{ await ref.set({ [id]: record }); }catch(e2){ /* best-effort */ }
-    }
+      await sb.from('players').upsert({
+        id, name: record.name, session_count: record.sessionCount, total_correct_time: record.totalCorrectTime,
+        avg_score: record.avgScore, best_score: record.bestScore, total_play_time: record.totalPlayTime,
+        last_visit: new Date().toISOString()
+      });
+    }catch(e){ /* best-effort */ }
   }
 
   async function getPlayerRecord(id){
     try{
-      const snap = await playerShardRef(id).get();
-      if(!snap.exists) return null;
-      return snap.data()[id] || null;
+      const { data, error } = await sb.from('players').select('*').eq('id', id).maybeSingle();
+      if(error) return null;
+      return playerRowToRecord(data);
     }catch(e){ return null; }
   }
 
-  async function getAllPlayersFlat(){
-    const q = await dbNS.collection('players_shard').get();
-    const all = [];
-    q.docs.forEach(shardDoc=>{
-      const data = shardDoc.data();
-      for(const pid in data){ all.push({ id: pid, data: data[pid] }); }
-    });
-    all.sort((a,b)=> (b.data.avgScore||0) - (a.data.avgScore||0));
-    return all;
+  async function getTopPlayers(limit){
+    const { data, error } = await sb.from('players').select('*').order('avg_score', { ascending:false }).limit(limit);
+    if(error || !data) return [];
+    return data.map(row=>({ id: row.id, data: playerRowToRecord(row) }));
+  }
+
+  async function getPlayerRank(id){
+    // Postgres has no built-in "row number in this order" shortcut over the
+    // JS client, so count how many players rank strictly above this one.
+    const me = await getPlayerRecord(id);
+    if(!me) return { rank: null, total: 0 };
+    const { count: total } = await sb.from('players').select('*', { count:'exact', head:true });
+    const { count: above } = await sb.from('players').select('*', { count:'exact', head:true }).gt('avg_score', me.avgScore||0);
+    return { rank: (above||0) + 1, total: total||0 };
   }
 
   function getPlayerId(){
@@ -875,56 +873,42 @@
   }
 
   const playerId = getPlayerId();
-  let dbNS = null;
+  // ---- Supabase project config ----
+  // Publishable key is safe to ship in client code by design — real access
+  // control lives in the database's Row Level Security policies (see
+  // supabase/schema.sql), not in keeping this key secret.
+  const SUPABASE_URL = 'https://vznqblibuviqywgvyybg.supabase.co';
+  const SUPABASE_KEY = 'sb_publishable_a91I3H0gcOSEZMiyAUGeww_skfkc4l9';
+  const UI_VARIANT = 'radar'; // dùng để tách số liệu A/B test trong bảng "sessions"
+  let sb = null;
   let dbReady = false;
 
-  const FAKE_PLAYERS = [
-    {id:'seed_a1', name:'Long Lươn', sessionCount:14, totalCorrectTime:592.2, bestScore:55.2},
-    {id:'seed_a2', name:'Vy Vui Vẻ', sessionCount:9, totalCorrectTime:348.3, bestScore:47.1},
-    {id:'seed_a3', name:'Khánh Đụt', sessionCount:22, totalCorrectTime:1141.8, bestScore:63.4},
-    {id:'seed_a4', name:'Bánh Bèo Vlog', sessionCount:5, totalCorrectTime:147.0, bestScore:34.0},
-    {id:'seed_a5', name:'Sếp Tưởng Em Ngoan', sessionCount:17, totalCorrectTime:765.0, bestScore:58.8},
-    {id:'seed_a6', name:'Chíp Lười Biếng', sessionCount:7, totalCorrectTime:235.2, bestScore:40.2}
-  ];
-
-  async function maybeSeedFakePlayers(){
-    // Fixed ids make this idempotent: every viewer upserting the same 6 keys
-    // just overwrites with the same data, so no lock is needed and edits to
-    // FAKE_PLAYERS above always take effect on the next load.
-    try{
-      for(const f of FAKE_PLAYERS){
-        await upsertPlayerRecord(f.id, {
-          name: f.name, sessionCount: f.sessionCount, totalCorrectTime: f.totalCorrectTime,
-          avgScore: f.totalCorrectTime / f.sessionCount, bestScore: f.bestScore,
-          totalPlayTime: f.totalCorrectTime * 2, createdAt: Date.now(), lastVisit: Date.now(), seed: true
-        });
-      }
-    }catch(e){ /* seeding is best-effort, ignore failures */ }
-  }
+  // The 6 seed "rival" players are pre-loaded via supabase/schema.sql, not
+  // re-seeded from here on every load — Postgres has no per-artifact
+  // document cap forcing a shard workaround, so there's no upside to
+  // re-upserting them from the client every session.
 
   async function ensurePlayerDoc(){
     try{
       const existing = await getPlayerRecord(playerId);
       const name = getPlayerName() || 'Người chơi ẩn danh';
       if(!existing){
-        await upsertPlayerRecord(playerId, { name, sessionCount:0, totalCorrectTime:0, avgScore:0, bestScore:0, totalPlayTime:0, createdAt: Date.now(), lastVisit: Date.now() });
+        await upsertPlayerRecord(playerId, { name, sessionCount:0, totalCorrectTime:0, avgScore:0, bestScore:0, totalPlayTime:0 });
       } else {
-        await upsertPlayerRecord(playerId, Object.assign({}, existing, { lastVisit: Date.now(), name }));
+        await upsertPlayerRecord(playerId, Object.assign({}, existing, { name }));
       }
     }catch(e){ /* ignore */ }
   }
 
   async function initSharedDb(){
     try{
-      if(typeof claude === 'undefined' || !claude.use) return;
-      dbNS = await claude.use('db');
-      if(!dbNS) return;
+      if(typeof supabase === 'undefined' || !supabase.createClient) return;
+      sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
       await ensurePlayerDoc();
-      await maybeSeedFakePlayers();
       dbReady = true;
       showRecordLine();
       recordAccessHour();
-    }catch(e){ dbNS = null; }
+    }catch(e){ sb = null; }
   }
 
   /* ---------- Behaviour analytics (aggregated, privacy-conscious) ----------
@@ -962,41 +946,34 @@
   }, { passive:true });
 
   async function recordAccessHour(){
-    if(!dbNS) return;
+    if(!sb) return;
     try{
-      const ref = dbNS.doc('analytics/accessHours');
-      const snap = await ref.get();
-      const prev = snap.exists ? snap.data() : {};
       const key = 'h' + new Date().getHours();
-      const merged = Object.assign({}, prev);
-      merged[key] = (merged[key]||0) + 1;
-      merged.total = (merged.total||0) + 1;
-      await ref.set(merged);
+      const { data: prev } = await sb.from('analytics_access_hours').select('*').eq('id', 1).maybeSingle();
+      if(!prev) return;
+      await sb.from('analytics_access_hours').update({ [key]: (prev[key]||0) + 1, total: (prev.total||0) + 1 }).eq('id', 1);
     }catch(e){ /* best-effort */ }
   }
 
   async function flushScreenTime(phaseName, durationMs){
-    if(!dbNS || durationMs < 200) return; // ignore near-instant transitions (noise)
+    if(!sb || durationMs < 200) return; // ignore near-instant transitions (noise)
     try{
-      const ref = dbNS.doc('analytics/screenTime');
-      const snap = await ref.get();
-      const prev = snap.exists ? snap.data() : {};
-      const merged = Object.assign({}, prev);
-      merged[phaseName+'Sum'] = (prev[phaseName+'Sum']||0) + durationMs;
-      merged[phaseName+'Count'] = (prev[phaseName+'Count']||0) + 1;
-      await ref.set(merged);
+      const sumCol = phaseName + '_sum', countCol = phaseName + '_count';
+      const { data: prev } = await sb.from('analytics_screen_time').select('*').eq('id', 1).maybeSingle();
+      if(!prev) return;
+      await sb.from('analytics_screen_time').update({
+        [sumCol]: (prev[sumCol]||0) + durationMs, [countCol]: (prev[countCol]||0) + 1
+      }).eq('id', 1);
     }catch(e){ /* best-effort */ }
   }
 
   async function flushHeatmap(screenName, buckets){
-    if(!dbNS || Object.keys(buckets).length === 0) return;
+    if(!sb || Object.keys(buckets).length === 0) return;
     try{
-      const ref = dbNS.doc('analytics/heatmap_' + screenName);
-      const snap = await ref.get();
-      const prev = snap.exists ? snap.data() : {};
-      const merged = Object.assign({}, prev);
+      const { data: prev } = await sb.from('analytics_heatmap').select('buckets').eq('screen', screenName).maybeSingle();
+      const merged = Object.assign({}, prev ? prev.buckets : {});
       for(const k in buckets){ merged[k] = (merged[k]||0) + buckets[k]; }
-      await ref.set(merged);
+      await sb.from('analytics_heatmap').update({ buckets: merged }).eq('screen', screenName);
     }catch(e){ /* best-effort */ }
   }
 
@@ -1013,7 +990,7 @@
   window.addEventListener('beforeunload', ()=>{ transitionPhase(screenPhase); });
 
   async function recordSharedSession(score, elapsedTime){
-    if(!dbNS) return null;
+    if(!sb) return null;
     try{
       const prev = (await getPlayerRecord(playerId)) || { sessionCount:0, totalCorrectTime:0, bestScore:0, totalPlayTime:0 };
       const sessionCount = (prev.sessionCount||0) + 1;
@@ -1022,22 +999,22 @@
       const bestScore = Math.max(prev.bestScore||0, score);
       const avgScore = totalCorrectTime / sessionCount;
       const name = getPlayerName() || 'Người chơi ẩn danh';
-      await upsertPlayerRecord(playerId, { name, sessionCount, totalCorrectTime, avgScore, bestScore, totalPlayTime, createdAt: prev.createdAt || Date.now(), lastVisit: Date.now() });
+      await upsertPlayerRecord(playerId, { name, sessionCount, totalCorrectTime, avgScore, bestScore, totalPlayTime });
+      try{
+        await sb.from('sessions').insert({ player_id: playerId, variant: UI_VARIANT, score, play_time: elapsedTime });
+      }catch(e2){ /* best-effort, không ảnh hưởng leaderboard chính */ }
       return { sessionCount, avgScore, bestScore };
     }catch(e){ return null; }
   }
 
   async function fetchLeaderboardRows(){
-    // Read all shards, flatten to one sorted array, locate the current
-    // player's rank, then decide how many rows to show: top 5 if the player
-    // is already near the top, otherwise everyone from #1 down through
-    // (player's rank + 10).
-    const all = await getAllPlayersFlat();
-    const idx = all.findIndex(p => p.id === playerId);
-    const rank = idx >= 0 ? idx + 1 : null;
-    const total = all.length;
-    let displayCount = (rank && rank > 5) ? Math.min(rank + 10, all.length) : Math.min(5, all.length);
-    return { docs: all.slice(0, displayCount), rank, total };
+    // Server-side ORDER BY + rank-by-count now that we're on real Postgres —
+    // decide how many rows to show: top 5 if the player is already near the
+    // top, otherwise everyone from #1 down through (player's rank + 10).
+    const { rank, total } = await getPlayerRank(playerId);
+    const displayCount = (rank && rank > 5) ? Math.min(rank + 10, total) : Math.min(5, total);
+    const docs = await getTopPlayers(displayCount);
+    return { docs, rank, total };
   }
 
   function renderLeaderboardRows(docs, rank, total, extraMeta){
@@ -1056,7 +1033,7 @@
   }
 
   async function buildInlineLeaderboardHTML(){
-    if(!dbNS){
+    if(!sb){
       return '<div style="text-align:center;color:#999;font-size:12px;margin-top:6px;">Mở link chia sẻ của game để so tài với bạn bè trên bảng xếp hạng chung!</div>';
     }
     try{
@@ -1074,7 +1051,7 @@
 
   async function renderLeaderboardTop(){
     lbBody.innerHTML = '<div id="lbLoading">Đang tải...</div>';
-    if(!dbNS){
+    if(!sb){
       lbBody.innerHTML = '<div id="lbLoading">Chưa kết nối bảng xếp hạng chung.<br>Mở link đã chia sẻ của game để xem bảng xếp hạng thật với bạn bè nhé!</div>';
       return;
     }
@@ -1089,7 +1066,7 @@
 
   async function renderLeaderboardMe(){
     lbBody.innerHTML = '<div id="lbLoading">Đang tải...</div>';
-    if(!dbNS){
+    if(!sb){
       const lb = loadLeaderboard();
       lbBody.innerHTML = lb.count>0
         ? '<div class="lbRow me"><div class="lbRank">—</div><div><div class="lbName">Bạn (chỉ trên máy này)</div><div class="lbMeta">'+lb.count+' ván</div></div><div class="lbScore">'+(lb.total/lb.count).toFixed(1)+'s</div></div>'
@@ -1099,10 +1076,7 @@
     try{
       const p = await getPlayerRecord(playerId);
       if(!p){ lbBody.innerHTML = '<div id="lbLoading">Bạn chưa có dữ liệu — chơi 1 ván để bắt đầu nhé!</div>'; return; }
-      const all = await getAllPlayersFlat();
-      const idx = all.findIndex(x => x.id === playerId);
-      const rank = idx>=0 ? idx+1 : null;
-      const total = all.length;
+      const { rank, total } = await getPlayerRank(playerId);
       const rankText = rank ? '#'+rank+' / '+total+' người chơi' : 'Chưa xếp hạng';
       lbBody.innerHTML = '<div class="lbRow me"><div class="lbRank">'+(rank ? '#'+rank : '—')+'</div>'
         + '<div><div class="lbName">'+(p.name||'Bạn')+'</div><div class="lbMeta">'+rankText+'</div></div>'
@@ -1138,19 +1112,13 @@
     catch(e){ return false; }
   }
   function wireShareButtons(fbBtn, zaloBtn, copyBtn, nativeBtn, toastEl){
-    fbBtn.addEventListener('click', async ()=>{
-      // sharer.php is unreliable from a claude.ai artifact preview domain —
-      // Facebook's newer share_channel redirect blocks popups it can't
-      // verify the origin of, regardless of opener/referrer settings. Copy
-      // + open a blank Facebook tab is the one path that always works: no
-      // API call carries our domain as a parameter for Facebook to reject.
-      await copyShareLink();
-      showToastIn(toastEl, '✅ Đã copy link — dán vào bài viết Facebook nhé!');
-      window.open('https://www.facebook.com/', '_blank');
+    fbBtn.addEventListener('click', ()=>{
+      const url = 'https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(location.href);
+      window.open(url, '_blank');
     });
     zaloBtn.addEventListener('click', ()=>{
       const url = 'https://sp.zalo.me/share?u=' + encodeURIComponent(location.href) + '&d=' + encodeURIComponent(SHARE_TEXT);
-      window.open(url, '_blank', 'noopener,width=600,height=500');
+      window.open(url, '_blank');
     });
     copyBtn.addEventListener('click', async ()=>{
       const ok = await copyShareLink();
@@ -1353,7 +1321,7 @@
     rows += '<div class="stats-row"><span>Trung bình của bạn ('+lb.count+' ván):</span><b>'+avg+'s/ván</b></div>';
     modalStats.innerHTML = '<div class="stats-box">'+rows+'</div><div id="modalLB">Đang tải bảng xếp hạng...</div>';
 
-    if(dbNS){
+    if(sb){
       recordSharedSession(state.correctTime, state.elapsed).then(async ()=>{
         const html = await buildInlineLeaderboardHTML();
         const lbEl = el('modalLB');
@@ -1438,7 +1406,7 @@
   startBtn.addEventListener('click', ()=>{
     const nm = nameInput.value.trim();
     if(nm) savePlayerName(nm);
-    if(dbNS){ ensurePlayerDoc(); }
+    if(sb){ ensurePlayerDoc(); }
     introScreen.classList.add('hide');
     state.gameStarted = true;
     state.lastTick = performance.now();
