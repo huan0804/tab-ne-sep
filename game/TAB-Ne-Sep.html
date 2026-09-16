@@ -1152,11 +1152,11 @@
   function wireShareButtons(fbBtn, zaloBtn, copyBtn, nativeBtn, toastEl){
     fbBtn.addEventListener('click', ()=>{
       const url = 'https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(location.href);
-      window.open(url, 'fbShare', 'width=600,height=500');
+      window.open(url, '_blank');
     });
     zaloBtn.addEventListener('click', ()=>{
       const url = 'https://sp.zalo.me/share?u=' + encodeURIComponent(location.href) + '&d=' + encodeURIComponent(SHARE_TEXT);
-      window.open(url, 'zaloShare', 'width=600,height=500');
+      window.open(url, '_blank');
     });
     copyBtn.addEventListener('click', async ()=>{
       const ok = await copyShareLink();
