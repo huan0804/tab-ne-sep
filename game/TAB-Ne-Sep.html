@@ -235,6 +235,9 @@
   #introScreen.hide{display:none;}
   #introCard{background:#fffaf0; color:#2b2620; border-radius:20px; max-width:460px; width:100%; padding:26px 24px 22px; box-shadow:0 24px 70px rgba(0,0,0,0.5); text-align:center; max-height:92vh; overflow-y:auto;}
   #introCard h1{font-family:var(--display); font-size:24px; margin:0 0 6px; color:#c1272d;}
+  #challengeBanner{display:none; background:#fff3d6; border:1.5px solid #f2b705; border-radius:12px; padding:10px 14px; margin-bottom:14px; font-size:13px; color:#5a4a1f; text-align:left;}
+  #challengeBanner.show{display:block;}
+  #challengeBanner b{color:#c1272d;}
   .introLead{font-size:14px; color:#5a5142; margin:0 0 16px; line-height:1.5;}
   .introSteps{display:flex; flex-direction:column; gap:10px; text-align:left; margin-bottom:14px; max-height:0; overflow:hidden; opacity:0; transition:max-height 0.3s ease, opacity 0.2s ease, margin 0.3s ease;}
   .introSteps.open{max-height:600px; opacity:1; margin-top:12px;}
@@ -368,6 +371,7 @@
 
   <div id="introScreen">
     <div id="introCard">
+      <div id="challengeBanner"></div>
       <h1>🙈 Trốn Sếp, Xem Phim Vui!</h1>
       <p class="introLead">Canh chừng Sếp, đừng để bị bắt gặp đang xem phim nhé 👀</p>
       <div id="nameInputWrap">
@@ -573,7 +577,8 @@
         modalCloseX = el('modalCloseX'), lbCloseX = el('lbCloseX'),
         createRoomBtn = el('createRoomBtn'), roomWaitScreen = el('roomWaitScreen'), roomCodeDisplay = el('roomCodeDisplay'),
         roomCopyLinkBtn = el('roomCopyLinkBtn'), roomPlayerList = el('roomPlayerList'), roomStartBtn = el('roomStartBtn'),
-        roomWaitingForHost = el('roomWaitingForHost'), roomLeaveBtn = el('roomLeaveBtn'), roomToast = el('roomToast');
+        roomWaitingForHost = el('roomWaitingForHost'), roomLeaveBtn = el('roomLeaveBtn'), roomToast = el('roomToast'),
+        challengeBanner = el('challengeBanner');
 
   // px-per-meter on the X axis, sized so the outermost ring nearly reaches the
   // side columns. Recomputed on load/resize since it depends on scene width.
@@ -892,6 +897,15 @@
     if(dbReady && sb){
       getPlayerRecord(playerId).then(p=>{
         if(p && p.sessionCount > 0){
+          // Đòn bẩy retention chính (không phải con số streak tự thân): nếu
+          // đang giữ chuỗi ≥2 ngày và CHƯA chơi hôm nay, cảnh báo sắp mất
+          // chuỗi thay vì hiện dòng trung bình thường — tâm lý loss-aversion
+          // khiến người chơi mở lại game để giữ chuỗi.
+          const playedToday = p.lastVisit && vnDateKey(p.lastVisit) === vnDateKey(new Date());
+          if((p.currentStreak||0) >= 2 && !playedToday){
+            recordLine.textContent = '⚠️ Chơi 1 ván hôm nay để giữ chuỗi ' + p.currentStreak + ' ngày liên tiếp!';
+            return;
+          }
           recordLine.textContent = '🏆 Trung bình của bạn: ' + (p.avgScore||0).toFixed(1) + 's/ván (qua ' + p.sessionCount + ' ván) — xem 🏆 để so với người khác';
           return;
         }
@@ -921,8 +935,41 @@
     return {
       name: row.name, sessionCount: row.session_count, totalCorrectTime: row.total_correct_time,
       avgScore: row.avg_score, bestScore: row.best_score, totalPlayTime: row.total_play_time,
-      createdAt: row.created_at, lastVisit: row.last_visit
+      createdAt: row.created_at, lastVisit: row.last_visit,
+      currentStreak: row.current_streak || 0, longestStreak: row.longest_streak || 0
     };
+  }
+
+  // Chuỗi ngày chơi liên tiếp — luôn chuẩn hóa "ngày" theo giờ Việt Nam
+  // (UTC+7) bất kể múi giờ máy người chơi, để nhất quán cho 1 game 100%
+  // tiếng Việt/target VN, không phụ thuộc cài đặt hệ thống của từng máy.
+  function vnDateKey(isoOrDate){
+    const ms = (isoOrDate instanceof Date ? isoOrDate : new Date(isoOrDate)).getTime();
+    const vn = new Date(ms + 7*3600*1000);
+    return vn.getUTCFullYear() + '-' + vn.getUTCMonth() + '-' + vn.getUTCDate();
+  }
+  function vnDaysBetween(isoA, isoB){
+    const toVnMidnightMs = (iso)=>{
+      const ms = new Date(iso).getTime() + 7*3600*1000;
+      const vn = new Date(ms);
+      return Date.UTC(vn.getUTCFullYear(), vn.getUTCMonth(), vn.getUTCDate());
+    };
+    return Math.round((toVnMidnightMs(isoB) - toVnMidnightMs(isoA)) / 86400000);
+  }
+  // Trả về { currentStreak, longestStreak } mới, dựa trên lastVisit CŨ (trước
+  // ván này) so với "hôm nay". Gọi 1 lần mỗi khi 1 ván kết thúc, TRƯỚC khi
+  // last_visit bị upsert đè thành thời điểm hiện tại.
+  function computeStreak(prevLastVisitIso, prevCurrentStreak, prevLongestStreak){
+    const now = new Date().toISOString();
+    if(!prevLastVisitIso){
+      return { currentStreak: 1, longestStreak: Math.max(1, prevLongestStreak||0) };
+    }
+    const gapDays = vnDaysBetween(prevLastVisitIso, now);
+    let currentStreak;
+    if(gapDays === 0) currentStreak = Math.max(1, prevCurrentStreak||0); // vẫn trong ngày cũ, giữ nguyên
+    else if(gapDays === 1) currentStreak = (prevCurrentStreak||0) + 1;   // đúng hôm sau, nối chuỗi
+    else currentStreak = 1;                                             // cách xa hơn 1 ngày, reset
+    return { currentStreak, longestStreak: Math.max(currentStreak, prevLongestStreak||0) };
   }
 
   async function upsertPlayerRecord(id, record){
@@ -930,9 +977,20 @@
       await sb.from('players').upsert({
         id, name: record.name, session_count: record.sessionCount, total_correct_time: record.totalCorrectTime,
         avg_score: record.avgScore, best_score: record.bestScore, total_play_time: record.totalPlayTime,
+        current_streak: record.currentStreak||0, longest_streak: record.longestStreak||0,
         last_visit: new Date().toISOString()
       });
     }catch(e){ /* best-effort */ }
+  }
+
+  const STREAK_MILESTONES = {
+    30: '🔥 30 ngày liên tiếp — Sếp còn phải nể bạn!',
+    14: '🔥 14 ngày rồi — thói quen né sếp đỉnh của đỉnh!',
+    7:  '🔥 7 ngày rồi — Sếp còn ngán bạn hơn ngán deadline!',
+    3:  '🔥 3 ngày liên tiếp — giữ vững đà này nhé!'
+  };
+  function streakMilestoneText(currentStreak){
+    return STREAK_MILESTONES[currentStreak] || ('🔥 Chuỗi ' + currentStreak + ' ngày chơi liên tiếp!');
   }
 
   async function getPlayerRecord(id){
@@ -1185,6 +1243,45 @@
     }
   })();
 
+  /* ---------- Thách đấu người quen (?challenge=<playerId>) ----------
+     Lớp mỏng "ngữ cảnh xã hội" phủ lên link chia sẻ đã có — KHÔNG real-time,
+     KHÔNG cần room. Chỉ đọc thẳng bestScore của người đã gửi link qua
+     getPlayerRecord() (đã có, dùng cho leaderboard), hiện ngay ở màn intro
+     để tạo mục tiêu cụ thể ("vượt qua điểm của Khánh") thay vì leaderboard
+     ẩn danh chung. */
+  let challengerId = null;
+  (function checkChallengeFromUrl(){
+    const params = new URLSearchParams(location.search);
+    const id = params.get('challenge');
+    if(!id || id === playerId) return; // không tự thách đấu chính mình
+    challengerId = id;
+    const tryShow = async ()=>{
+      if(!sb){ setTimeout(tryShow, 150); return; }
+      const rec = await getPlayerRecord(id);
+      if(!rec || !rec.bestScore) return; // link cũ/id không có dữ liệu — im lặng bỏ qua
+      challengeBanner.innerHTML = '⚔️ <b>' + (rec.name||'Một người bạn') + '</b> vừa đạt <b>' + rec.bestScore.toFixed(1) + 's</b> — thử vượt qua chưa?';
+      challengeBanner.classList.add('show');
+    };
+    tryShow();
+  })();
+
+  function buildChallengeLink(){
+    const url = new URL(location.href);
+    url.searchParams.set('challenge', playerId);
+    url.searchParams.delete('room');
+    return url.toString();
+  }
+
+  async function maybeShowChallengeBackButton(myBestScore){
+    // Sau khi người được thách đấu chơi xong: nếu họ VƯỢT điểm người đã gửi
+    // link, gợi ý thách đấu ngược lại — vòng lặp xã hội tự nối tiếp, không
+    // cần trạng thái phòng/real-time gì thêm.
+    if(!challengerId || !sb) return null;
+    const opponent = await getPlayerRecord(challengerId);
+    if(opponent && myBestScore > (opponent.bestScore||0)) return opponent;
+    return null;
+  }
+
   /* ---------- Behaviour analytics (aggregated, privacy-conscious) ----------
      Kept as a handful of FIXED aggregate rows (not one row per event) even
      though Postgres has no document cap forcing that — unbounded per-event
@@ -1266,18 +1363,22 @@
   async function recordSharedSession(score, elapsedTime){
     if(!sb) return null;
     try{
-      const prev = (await getPlayerRecord(playerId)) || { sessionCount:0, totalCorrectTime:0, bestScore:0, totalPlayTime:0 };
+      const prev = (await getPlayerRecord(playerId)) || { sessionCount:0, totalCorrectTime:0, bestScore:0, totalPlayTime:0, currentStreak:0, longestStreak:0, lastVisit:null };
       const sessionCount = (prev.sessionCount||0) + 1;
       const totalCorrectTime = (prev.totalCorrectTime||0) + score;
       const totalPlayTime = (prev.totalPlayTime||0) + elapsedTime;
       const bestScore = Math.max(prev.bestScore||0, score);
       const avgScore = totalCorrectTime / sessionCount;
       const name = getPlayerName() || 'Người chơi ẩn danh';
-      await upsertPlayerRecord(playerId, { name, sessionCount, totalCorrectTime, avgScore, bestScore, totalPlayTime });
+      // Tính streak dựa trên lastVisit CŨ — phải tính trước khi upsertPlayerRecord
+      // ghi đè last_visit thành "bây giờ", nếu không sẽ luôn thấy gapDays=0.
+      const wasStreakBefore = prev.currentStreak||0;
+      const { currentStreak, longestStreak } = computeStreak(prev.lastVisit, prev.currentStreak, prev.longestStreak);
+      await upsertPlayerRecord(playerId, { name, sessionCount, totalCorrectTime, avgScore, bestScore, totalPlayTime, currentStreak, longestStreak });
       try{
         await sb.from('sessions').insert({ player_id: playerId, variant: UI_VARIANT, score, play_time: elapsedTime });
       }catch(e2){ /* best-effort, không ảnh hưởng leaderboard chính */ }
-      return { sessionCount, avgScore, bestScore };
+      return { sessionCount, avgScore, bestScore, currentStreak, longestStreak, streakJustIncreased: currentStreak > wasStreakBefore };
     }catch(e){ return null; }
   }
 
@@ -1609,7 +1710,27 @@
     modalStats.innerHTML = '<div class="stats-box">'+rows+'</div><div id="modalLB">Đang tải bảng xếp hạng...</div>';
 
     if(sb){
-      recordSharedSession(state.correctTime, state.elapsed).then(async ()=>{
+      recordSharedSession(state.correctTime, state.elapsed).then(async (result)=>{
+        if(result && result.streakJustIncreased){
+          const streakEl = document.createElement('div');
+          streakEl.style.cssText = 'margin-top:8px; font-size:12.5px; font-weight:700; color:#c1272d; text-align:center;';
+          streakEl.textContent = streakMilestoneText(result.currentStreak);
+          modalStats.appendChild(streakEl);
+        }
+        if(result){
+          const beatenOpponent = await maybeShowChallengeBackButton(result.bestScore);
+          const challengeEl = document.createElement('button');
+          challengeEl.id = 'challengeFriendBtn';
+          challengeEl.style.cssText = 'margin-top:10px; width:100%; font-family:var(--body); font-weight:700; font-size:13px; padding:10px; border-radius:8px; border:1.5px solid #f2b705; background:#fff3d6; color:#5a4a1f; cursor:pointer;';
+          challengeEl.textContent = beatenOpponent
+            ? '⚔️ Bạn vừa vượt qua ' + (beatenOpponent.name||'đối thủ') + '! Thách đấu ngược lại'
+            : '⚔️ Thách đấu bạn bè bằng điểm này';
+          challengeEl.addEventListener('click', async ()=>{
+            try{ await navigator.clipboard.writeText(buildChallengeLink()); challengeEl.textContent = '✅ Đã copy link thách đấu!'; }
+            catch(e){}
+          });
+          modalStats.appendChild(challengeEl);
+        }
         const html = await buildInlineLeaderboardHTML();
         const lbEl = el('modalLB');
         if(lbEl){ lbEl.innerHTML = html; scrollToMyRow(lbEl); }

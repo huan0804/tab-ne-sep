@@ -16,8 +16,15 @@ create table if not exists players (
   total_play_time double precision not null default 0,
   created_at timestamptz not null default now(),
   last_visit timestamptz not null default now(),
-  is_seed boolean not null default false       -- đánh dấu 6 "đối thủ ảo" seed sẵn, để phân biệt với người chơi thật
+  is_seed boolean not null default false,      -- đánh dấu 6 "đối thủ ảo" seed sẵn, để phân biệt với người chơi thật
+  current_streak integer not null default 0,   -- số ngày chơi liên tiếp (giờ VN, UTC+7) tính đến last_visit
+  longest_streak integer not null default 0    -- chuỗi dài nhất từng đạt, để hiện "kỷ lục cá nhân"
 );
+
+-- alter table ... add column if not exists để bảng đã tồn tại trên Supabase
+-- (tạo trước khi có 2 cột streak) cũng nhận được cột mới khi chạy lại file này.
+alter table players add column if not exists current_streak integer not null default 0;
+alter table players add column if not exists longest_streak integer not null default 0;
 
 -- Query chính của leaderboard: ORDER BY avg_score DESC — cần index để nhanh khi nhiều người chơi.
 create index if not exists players_avg_score_idx on players (avg_score desc);
