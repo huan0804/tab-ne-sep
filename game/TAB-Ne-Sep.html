@@ -271,8 +271,10 @@
   .lbMeta{font-size:10.5px; color:#999; margin-top:1px;}
   #lbInviteBtn{margin-top:14px; width:100%; font-family:var(--body); font-weight:700; font-size:14px; padding:11px; border-radius:8px; border:none; background:#2563eb; color:#fff; cursor:pointer;}
   #lbInviteRow{display:grid; grid-template-columns:repeat(4,1fr); gap:7px; margin-top:12px;}
-  .shareBtn{display:flex; flex-direction:column; align-items:center; gap:3px; font-family:var(--body); font-size:10.5px; font-weight:600; padding:9px 4px; border-radius:10px; border:1.5px solid #e0d6c0; background:#fff; color:#3a3327; cursor:pointer;}
+  .shareBtn{display:flex; flex-direction:column; align-items:center; justify-content:flex-start; gap:3px; font-family:var(--body); font-size:10.5px; font-weight:600; padding:9px 4px; border-radius:10px; border:1.5px solid #e0d6c0; background:#fff; color:#3a3327; cursor:pointer; line-height:1.25;}
+  .shareBtn .lbl{min-height:2.5em; display:flex; align-items:flex-start;}
   .shareBtn .ic{font-size:20px;}
+  .shareBtn .ic svg{width:20px;height:20px;display:block;}
   .shareBtn.fb{border-color:#1877f2;} .shareBtn.zalo{border-color:#0068ff;}
   #lbCloseBtn{margin-top:8px; width:100%; font-family:var(--body); font-weight:600; font-size:13px; padding:9px; border-radius:8px; border:1px solid #ccc; background:#fff; color:#555; cursor:pointer;}
   #lbLoading{text-align:center; color:#999; font-size:13px; padding:20px 0;}
@@ -284,6 +286,32 @@
     .keyboard{width:130px;height:38px;}
     .column{width:18px;}
     #bossFaceSvgWrap{width:50px;height:50px;}
+  }
+
+  /* Điện thoại dọc: HUD/nút chạm/vật trang trí bàn dễ vỡ ở màn hẹp (<480px) —
+     .mouse/.succulent dùng left:calc(50% ± px cố định) nên tràn ra ngoài
+     #desk trước tiên khi màn hẹp lại; ẩn 2 item ít quan trọng nhất, giữ
+     .mug/.notepad (offset nhỏ hơn, còn nằm trong khung) để không mất hết
+     chi tiết trang trí bàn làm việc. */
+  @media (max-width:480px){
+    #hud{padding:8px 10px; gap:8px;}
+    .hud-block{min-width:72px;gap:1px;}
+    .hud-label{font-size:9px;}
+    .hud-value{font-size:14px;}
+    #hud #title{font-size:12px;}
+    #progressWrap{min-width:100px;}
+    .mouse, .succulent{display:none;}
+    #tabBtn{padding:13px 20px;font-size:13px;min-height:44px; background:#c1272d; border-color:#e0454b; box-shadow:0 6px 16px rgba(193,39,45,0.4); animation:pulseTabBtn 1.8s ease-in-out infinite;}
+    #tabBtn:active{ background:#a01f24; }
+    @keyframes pulseTabBtn{ 0%,100%{transform:scale(1);} 50%{transform:scale(1.04);} }
+    #hint{font-size:10px;max-width:100%;}
+    #controls{padding:8px;gap:8px;}
+    .shareBtn{font-size:9.5px;padding:8px 3px;}
+    .shareBtn .ic svg{width:18px;height:18px;}
+    /* Sàn cứng 320px của #monitor (xem clamp() gốc) chiếm gần hết chiều
+       ngang màn hẹp, che khuất vòng tròn khoảng cách vẽ cùng khu vực —
+       hạ sàn để 48vw thực sự phát huy, dành chỗ nhìn rõ Sếp tới/đi. */
+    #monitor{width:clamp(200px, 48vw, 660px); height:clamp(130px, 26vh, 420px);}
   }
 
   /* Accessibility: visible focus states for keyboard nav */
@@ -317,6 +345,7 @@
     padding:8px 14px; border-radius:12px; box-shadow:0 8px 22px rgba(0,0,0,0.35); text-align:center; max-width:240px;
   }
   @media (prefers-reduced-motion: reduce){ #coachmarkArrow{ animation:none; } }
+  @media (prefers-reduced-motion: reduce){ #tabBtn{ animation:none; } }
 </style>
 </head>
 <body>
@@ -446,10 +475,10 @@
       <div id="modalStats"></div>
       <div style="margin-top:14px; font-size:12.5px; font-weight:700; color:#3a3327; text-align:center;">📤 Rủ bạn bè đấu lại</div>
       <div id="modalInviteRow" class="lbInviteRowSmall">
-        <button class="shareBtn fb" id="mShareFb"><span class="ic">📘</span>Facebook</button>
-        <button class="shareBtn zalo" id="mShareZalo"><span class="ic">💬</span>Zalo</button>
-        <button class="shareBtn" id="mShareCopy"><span class="ic">🔗</span>IG/TikTok</button>
-        <button class="shareBtn" id="mShareNative"><span class="ic">📱</span>Khác</button>
+        <button class="shareBtn fb" id="mShareFb"><span class="ic"><svg viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg"><circle cx="18" cy="18" r="18" fill="#1877f2"/><path d="M25 18h-4.5v11h-4.5V18h-3v-4h3v-2.8C16 8.1 17.7 6 21.3 6H25v4h-2.5c-1 0-1.5.5-1.5 1.5V14H25l-.6 4z" fill="#fff"/></svg></span><span class="lbl">Facebook</span></button>
+        <button class="shareBtn zalo" id="mShareZalo"><span class="ic"><svg viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg"><rect x="1" y="1" width="34" height="34" rx="9" fill="#0068ff"/><text x="18" y="23" font-family="Arial,Helvetica,sans-serif" font-size="12" font-weight="700" fill="#fff" text-anchor="middle">Zalo</text></svg></span><span class="lbl">Zalo</span></button>
+        <button class="shareBtn" id="mShareCopy"><span class="ic">🔗</span><span class="lbl">Sao chép liên kết</span></button>
+        <button class="shareBtn" id="mShareNative"><span class="ic">📱</span><span class="lbl">Khác</span></button>
       </div>
       <div id="mShareToast" style="text-align:center; font-size:11px; color:#8a6d1f; margin-top:6px; min-height:14px;"></div>
       <button id="modalBtn">Chơi lại</button>
@@ -469,10 +498,10 @@
       <div id="lbBody"><div id="lbLoading">Đang tải...</div></div>
       <div style="margin-top:14px; font-size:13px; font-weight:700; color:#3a3327; text-align:center;">📤 Mời bạn bè cùng thi đấu</div>
       <div id="lbInviteRow">
-        <button class="shareBtn fb" id="shareFb"><span class="ic">📘</span>Facebook</button>
-        <button class="shareBtn zalo" id="shareZalo"><span class="ic">💬</span>Zalo</button>
-        <button class="shareBtn" id="shareCopy"><span class="ic">🔗</span>IG/TikTok</button>
-        <button class="shareBtn" id="shareNative"><span class="ic">📱</span>Khác</button>
+        <button class="shareBtn fb" id="shareFb"><span class="ic"><svg viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg"><circle cx="18" cy="18" r="18" fill="#1877f2"/><path d="M25 18h-4.5v11h-4.5V18h-3v-4h3v-2.8C16 8.1 17.7 6 21.3 6H25v4h-2.5c-1 0-1.5.5-1.5 1.5V14H25l-.6 4z" fill="#fff"/></svg></span><span class="lbl">Facebook</span></button>
+        <button class="shareBtn zalo" id="shareZalo"><span class="ic"><svg viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg"><rect x="1" y="1" width="34" height="34" rx="9" fill="#0068ff"/><text x="18" y="23" font-family="Arial,Helvetica,sans-serif" font-size="12" font-weight="700" fill="#fff" text-anchor="middle">Zalo</text></svg></span><span class="lbl">Zalo</span></button>
+        <button class="shareBtn" id="shareCopy"><span class="ic">🔗</span><span class="lbl">Sao chép liên kết</span></button>
+        <button class="shareBtn" id="shareNative"><span class="ic">📱</span><span class="lbl">Khác</span></button>
       </div>
       <div id="shareToast" style="text-align:center; font-size:11.5px; color:#8a6d1f; margin-top:6px; min-height:14px;"></div>
       <button id="lbCloseBtn">Đóng</button>
@@ -580,6 +609,7 @@
      returning player is never taught the same thing twice: */
   const HINT_APPROACH = 'atd_hintApproachSeen';
   const HINT_CATCH = 'atd_hintCatchSeen';
+  const HINT_TAB_BTN = 'atd_hintTabBtnSeen';
   function hasSeenHint(key){ try{ return localStorage.getItem(key) === '1'; }catch(e){ return true; } }
   function markHintSeen(key){ try{ localStorage.setItem(key, '1'); }catch(e){} }
   const coachmarkEl = document.getElementById('coachmark');
@@ -1239,6 +1269,7 @@
   initSharedDb();
 
   let state, boss;
+  let bossDist = Infinity; // khoảng cách Sếp mới nhất, cập nhật mỗi tick — dùng lại khi toggleMode() cần kiểm tra bắt ngay
   function resetState(){
     state = { mode:'personal', lives: CONFIG.maxLives, personalTime:0, correctTime:0, elapsed:0, running:true, gameStarted:false, lastTick: performance.now(),
       workTheme: pick(WORK_THEMES), personalTheme: pick(PERSONAL_THEMES) };
@@ -1311,6 +1342,15 @@
     beep(state.mode==='personal'?520:340, 0.08, 'square', 0.05);
     setTimeout(()=>switcherOverlay.classList.remove('show'), 140);
     hideCoachmark();
+
+    // Sếp đã đứng trong catchRadius từ trước (boss.wasClose=true nên tick()
+    // không bắt lại) — nếu người chơi CHỦ ĐỘNG đổi sang personal ngay lúc đó,
+    // vẫn phải bị bắt: đây là hành vi mới, không phải "đứng yên trong vùng
+    // nguy hiểm" mà cơ chế rearm (wasClose) được thiết kế để bỏ qua.
+    if(state.mode === 'personal' && bossDist <= CONFIG.catchRadius && state.running){
+      boss.wasClose = true;
+      catchPlayer();
+    }
   }
 
   function updateHUD(){
@@ -1378,6 +1418,28 @@
     }
   }
 
+  // Xử lý bị bắt khi đang "personal" và Sếp đã ở trong catchRadius. Tách riêng
+  // khỏi tick() để toggleMode() cũng gọi được: nếu Sếp đang gần sẵn khi người
+  // chơi CHỦ ĐỘNG bấm Tab sang personal, phải bắt ngay — không phải chỉ bắt
+  // lúc khoảng cách vừa tụt xuống dưới ngưỡng (xem lời gọi trong toggleMode()).
+  function catchPlayer(){
+    state.lives -= 1;
+    state.mode = 'work';
+    renderScreen();
+    flashEl.classList.remove('hit'); void flashEl.offsetWidth; flashEl.classList.add('hit');
+    monitorRig.classList.remove('shake'); void monitorRig.offsetWidth; monitorRig.classList.add('shake');
+    catchPopup.classList.remove('pop'); void catchPopup.offsetWidth; catchPopup.classList.add('pop');
+    setBossFace('angry');
+    bossAngryUntil = performance.now() + 1100;
+    showBossBubble(pick(SCOLD_LINES), 1300);
+    beep(140, 0.3, 'sawtooth', 0.09);
+    if(!hasSeenHint(HINT_CATCH)){
+      showCoachmark('💡 Mẹo: bấm Tab NGAY khi Sếp chạm mốc 1m, đừng đợi số về 0', 5500);
+      markHintSeen(HINT_CATCH);
+    }
+    if(state.lives <= 0){ endGame(false, 'caught'); }
+  }
+
   function tick(now){
     if(!state.gameStarted || !state.running){ requestAnimationFrame(tick); return; }
     const dt = Math.min(0.05, (now - state.lastTick)/1000);
@@ -1404,6 +1466,7 @@
     // so "dist" (used for catch/rearm AND the number shown) always matches
     // exactly which drawn ring the boss visually stands on, in every direction.
     const dist = Math.hypot(boss.x, boss.y * CONFIG.ellipseRatio);
+    bossDist = dist;
     updateBossPosition(dist, boss.x, boss.y);
     maybeFootstep(dist, state.elapsed);
 
@@ -1413,21 +1476,7 @@
     if(dist <= CONFIG.catchRadius && !boss.wasClose){
       boss.wasClose = true;
       if(state.mode === 'personal'){
-        state.lives -= 1;
-        state.mode = 'work';
-        renderScreen();
-        flashEl.classList.remove('hit'); void flashEl.offsetWidth; flashEl.classList.add('hit');
-        monitorRig.classList.remove('shake'); void monitorRig.offsetWidth; monitorRig.classList.add('shake');
-        catchPopup.classList.remove('pop'); void catchPopup.offsetWidth; catchPopup.classList.add('pop');
-        setBossFace('angry');
-        bossAngryUntil = performance.now() + 1100;
-        showBossBubble(pick(SCOLD_LINES), 1300);
-        beep(140, 0.3, 'sawtooth', 0.09);
-        if(!hasSeenHint(HINT_CATCH)){
-          showCoachmark('💡 Mẹo: bấm Tab NGAY khi Sếp chạm mốc 1m, đừng đợi số về 0', 5500);
-          markHintSeen(HINT_CATCH);
-        }
-        if(state.lives <= 0){ endGame(false, 'caught'); }
+        catchPlayer();
       } else {
         beep(660, 0.1, 'sine', 0.03);
         safePopup.textContent = pick(PRAISE_LINES);
@@ -1459,6 +1508,14 @@
     state.lastTick = performance.now();
     transitionPhase('game');
     try{ if(!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){}
+
+    // Màn hẹp (điện thoại) không có phím Tab vật lý — chỉ có nút bấm dưới
+    // màn hình, dễ bị bỏ sót lúc mới vào game. Chỉ dạy 1 lần duy nhất, chỉ
+    // trên màn hẹp, ngay khi bắt đầu ván đầu tiên.
+    if(window.matchMedia('(max-width:480px)').matches && !hasSeenHint(HINT_TAB_BTN)){
+      showCoachmark('👇 Bấm nút này để đổi màn hình làm việc/riêng tư', 4000);
+      markHintSeen(HINT_TAB_BTN);
+    }
   });
 
   modalBtn.addEventListener('click', ()=>{
