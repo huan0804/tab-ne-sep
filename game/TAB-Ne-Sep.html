@@ -267,6 +267,9 @@
   #challengeBanner{display:none; background:#fff3d6; border:1.5px solid #f2b705; border-radius:12px; padding:10px 14px; margin-bottom:14px; font-size:13px; color:#5a4a1f; text-align:left;}
   #challengeBanner.show{display:block;}
   #challengeBanner b{color:#c1272d;}
+  #roomInviteBanner{display:none; background:#e8f0fe; border:1.5px solid #2563eb; border-radius:12px; padding:10px 14px; margin-bottom:14px; font-size:13px; color:#1e3a6d; text-align:left;}
+  #roomInviteBanner.show{display:block;}
+  #roomInviteBanner b{color:#2563eb;}
   .introLead{font-size:14px; color:#5a5142; margin:0 0 16px; line-height:1.5;}
   .introSteps{display:flex; flex-direction:column; gap:10px; text-align:left; margin-bottom:14px; max-height:0; overflow:hidden; opacity:0; transition:max-height 0.3s ease, opacity 0.2s ease, margin 0.3s ease;}
   .introSteps.open{max-height:600px; opacity:1; margin-top:12px;}
@@ -285,6 +288,8 @@
   .nameChip:active{ transform:scale(0.95); }
   #recordLine{font-size:12px; color:#8a6d1f; margin-bottom:12px;}
   #hudTrophyBtn{background:none; border:none; font-size:20px; cursor:pointer; padding:2px 4px;}
+  #hudStopBtn{background:none; border:none; font-size:16px; color:#888; cursor:pointer; padding:2px 6px;}
+  #hudStopBtn:hover{color:#c1272d;}
 
   #lbModal{position:absolute; inset:0; z-index:55; display:none; align-items:center; justify-content:center; background:rgba(10,10,12,0.8);}
   #lbModal.show{display:flex;}
@@ -425,6 +430,7 @@
       <div id="challengeBanner"></div>
       <h1>🙈 Trốn Sếp, Xem Phim Vui!</h1>
       <p class="introLead">Canh chừng Sếp, đừng để bị bắt gặp đang xem phim nhé 👀</p>
+      <div id="roomInviteBanner"></div>
       <div id="nameInputWrap">
         <label for="nameInput">Đặt tên cho bạn (chỉ hỏi 1 lần, hiện trên bảng xếp hạng)</label>
         <input type="text" id="nameInput" maxlength="18" placeholder="VD: Heo Mập Mập">
@@ -464,6 +470,7 @@
 
   <div id="hud">
     <div id="title">Ca Làm Việc Của Minh</div>
+    <button id="hudStopBtn" title="Dừng ván, không tính điểm">⏹</button>
     <button id="hudTrophyBtn" title="Bảng xếp hạng">🏆</button>
     <div class="hud-block">
       <div class="hud-label">MẠNG</div>
@@ -633,14 +640,14 @@
         startBtn = el('startBtn'), recordLine = el('recordLine'),
         catchPopup = el('catchPopup'), safePopup = el('safePopup'), sceneEl = el('scene'),
         bossFaceCard = el('bossFaceCard'), bossFaceSvgWrap = el('bossFaceSvgWrap'), bossBubble = el('bossBubble'),
-        nameInput = el('nameInput'), nameInputWrap = el('nameInputWrap'), nameSuggestions = el('nameSuggestions'), hudTrophyBtn = el('hudTrophyBtn'),
+        nameInput = el('nameInput'), nameInputWrap = el('nameInputWrap'), nameSuggestions = el('nameSuggestions'), hudTrophyBtn = el('hudTrophyBtn'), hudStopBtn = el('hudStopBtn'),
         lbModal = el('lbModal'), lbBody = el('lbBody'), lbCloseBtn = el('lbCloseBtn'),
         shareFb = el('shareFb'), shareZalo = el('shareZalo'), shareCopy = el('shareCopy'), shareNative = el('shareNative'), shareToast = el('shareToast'),
         modalCloseX = el('modalCloseX'), lbCloseX = el('lbCloseX'),
         createRoomBtn = el('createRoomBtn'), roomWaitScreen = el('roomWaitScreen'), roomCodeDisplay = el('roomCodeDisplay'),
         roomCopyLinkBtn = el('roomCopyLinkBtn'), roomPlayerList = el('roomPlayerList'), roomStartBtn = el('roomStartBtn'),
         roomWaitingForHost = el('roomWaitingForHost'), roomLeaveBtn = el('roomLeaveBtn'), roomToast = el('roomToast'),
-        challengeBanner = el('challengeBanner'), teammatesLayer = el('teammatesLayer');
+        challengeBanner = el('challengeBanner'), teammatesLayer = el('teammatesLayer'), roomInviteBanner = el('roomInviteBanner');
 
   // px-per-meter on the X axis, sized so the outermost ring nearly reaches the
   // side columns. Recomputed on load/resize since it depends on scene width.
@@ -1212,14 +1219,26 @@
     // ---------- "1 Sếp chung" — nhận layout bàn + vị trí Sếp từ host ----------
     // Đăng ký từ lúc vào phòng chờ (không phải lúc bắt đầu trận) để không lỡ
     // sự kiện match_start nếu nó tới trước khi postgres_changes báo playing.
+    // Cũng là sự kiện DUY NHẤT báo "host vừa bấm Chơi lại cả phòng" — lúc đó
+    // rooms.status vẫn là 'playing' từ trước (không đổi giá trị), nên
+    // postgres_changes KHÔNG fire lại; guest phải tự gọi
+    // startRoomMatchForEveryone() ngay tại đây thay vì đợi postgres_changes.
     roomChannel.on('broadcast', { event: 'match_start' }, ({ payload }) => {
       if(roomMode === 'host') return; // host đã tự dựng layout của chính mình
+      const wasAlreadyInRoom = roomMode === 'guest';
       deskLayout = payload.deskLayout;
       myDesk = deskLayout[playerId] || {x:0, y:0};
       roomPlayerIds = payload.playerIds || Object.keys(deskLayout);
       roomMode = 'guest';
       roomMatchResults = {};
+      console.log('[debug guest match_start]', { payload, myPlayerId: playerId, myDesk, teammatesCount: Object.keys(deskLayout).length - 1 });
       renderTeammates();
+      if(wasAlreadyInRoom && state && !state.gameStarted){
+        // Ván trước đã kết thúc (đang ở modal kết quả) và host vừa bấm chơi
+        // lại — tự đưa mình vào ván mới ngay, không cần chờ postgres_changes.
+        modal.classList.remove('show');
+        startRoomMatchForEveryone();
+      }
     });
 
     roomChannel.on('broadcast', { event: 'boss_state' }, ({ payload }) => {
@@ -1310,6 +1329,28 @@
     showRoomWaitScreen(roomId);
   }
 
+  // ---------- Mời vào phòng qua link (?room=<id>) ----------
+  // KHÔNG tự động join ngay khi mở link (trước đây làm vậy → ẩn luôn màn
+  // hỏi tên, người chơi vào phòng với tên mặc định "Người chơi ẩn danh" dù
+  // họ chưa hề được hỏi/xác nhận). Luôn dừng lại ở màn intro trước, kể cả
+  // khi đã có tên lưu sẵn từ trước (họ có thể muốn đổi tên) — chỉ thực sự
+  // join khi bấm nút xác nhận.
+  let pendingRoomInvite = null; // {roomId, hostName} — chờ user bấm nút xác nhận
+  async function prepareRoomInvite(roomId){
+    if(!sb){ setTimeout(()=>prepareRoomInvite(roomId), 150); return; }
+    const { data: room, error } = await sb.from('rooms').select('*').eq('id', roomId).maybeSingle();
+    if(error || !room || room.status === 'playing'){
+      // Phòng không tồn tại/đã hết hạn/đã chơi rồi — im lặng rơi về intro
+      // bình thường (không chặn bằng lỗi cứng vì link phòng có thể đã cũ).
+      return;
+    }
+    const hostRec = await getPlayerRecord(room.host_player_id);
+    pendingRoomInvite = { roomId, hostName: hostRec ? hostRec.name : 'một người bạn' };
+    roomInviteBanner.innerHTML = '👥 <b>' + pendingRoomInvite.hostName + '</b> mời bạn vào phòng chơi cùng!';
+    roomInviteBanner.classList.add('show');
+    startBtn.textContent = '▶️ Vào phòng của ' + pendingRoomInvite.hostName;
+  }
+
   function log_roomJoinFailed(){
     // Phòng không tồn tại/đã hết hạn — im lặng rơi về màn intro bình thường
     // (không chặn người chơi bằng lỗi cứng vì link phòng có thể đã cũ).
@@ -1327,15 +1368,14 @@
     roomWaitScreen.classList.remove('show');
   }
 
-  // Neo boss ban đầu quanh bàn của target đầu tiên thay vì gốc — dùng khi
-  // resetState() chạy trong roomMode 'host' (xem resetState()).
-  function resetRoomBossForHost(){
+  // Dọn sạch trạng thái "ai đang bị nhắm/vừa bị nhắm" TRƯỚC khi resetState()
+  // tạo boss mới cho ván này — bắt buộc gọi trước resetState() mỗi khi bắt
+  // đầu 1 ván phòng chung (kể cả lần đầu lẫn "Chơi lại cả phòng"), để
+  // bossAnchor() bên trong resetState() không vô tình dùng lại giá trị cũ
+  // từ ván trước (ví dụ currentTargetPlayerId của người đã rời phòng).
+  function resetRoomTargetingForHost(){
     currentTargetPlayerId = null;
     lastAmbientAnchorId = roomPlayerIds[0] || playerId;
-    const anchor = bossAnchor();
-    const ang0 = rand(0, Math.PI*2);
-    boss = { x: anchor.x + Math.cos(ang0)*5, y: anchor.y + Math.sin(ang0)*5, target:{x:0,y:0}, speed:1.0, wasClose:false, forced:false, targetPlayerId:null, nextCheckAt: rand(2.5,4.5) };
-    pickAmbientTarget();
   }
 
   async function startRoomMatchForEveryone(){
@@ -1356,8 +1396,9 @@
       roomMode = 'host';
       roomFinishedPlayerIds = new Set();
       roomMatchResults = {};
+      console.log('[debug host start]', { roomPlayerIds, deskLayout, myDesk, presenceRaw: roomChannel.presenceState() });
       roomChannel.send({ type:'broadcast', event:'match_start', payload:{ deskLayout, playerIds: roomPlayerIds } });
-      resetRoomBossForHost();
+      resetRoomTargetingForHost();
       renderTeammates();
     } else if(roomMode !== 'solo' && !deskLayout){
       // Đã biết mình đang trong phòng (currentRoomId set) nhưng chưa nhận
@@ -1367,6 +1408,14 @@
       return;
     }
 
+    // Bắt buộc reset lại state (lives/personalTime/elapsed/mode...) VÀ boss
+    // mỗi lần hàm này chạy — kể cả lần đầu (state lúc đó vẫn là state mặc
+    // định từ lúc load trang, reset lại vô hại) VÀ đặc biệt là lần "Chơi
+    // lại cả phòng" (state lúc đó là state ĐÃ CHƠI XONG của ván trước —
+    // không reset sẽ vào ván mới với 0 mạng/personalTime đầy, thua ngay lập
+    // tức). resetState() tự đọc roomMode để tạo boss đúng kiểu (host mô
+    // phỏng cục bộ quanh bossAnchor(), guest chờ broadcast).
+    resetState();
     hideRoomWaitScreen();
     state.gameStarted = true;
     state.lastTick = performance.now();
@@ -1461,11 +1510,7 @@
   (function checkRoomFromUrl(){
     const params = new URLSearchParams(location.search);
     const roomId = params.get('room');
-    if(roomId){
-      // sb có thể chưa init xong (initSharedDb là async) — chờ tối đa vài trăm ms.
-      const tryJoin = ()=>{ if(sb) joinExistingRoom(roomId); else setTimeout(tryJoin, 150); };
-      tryJoin();
-    }
+    if(roomId) prepareRoomInvite(roomId);
   })();
 
   /* ---------- Thách đấu người quen (?challenge=<playerId>) ----------
@@ -1696,6 +1741,23 @@
     document.querySelectorAll('.lbTabBtn').forEach(b=>b.classList.toggle('active', b.dataset.tab===tab));
     if(tab==='me') renderLeaderboardMe(); else renderLeaderboardTop();
   }
+
+  // Dừng ván đang chơi dở NGAY, không đợi thắng/thua/hết giờ mới ra được
+  // nút "Chơi lại" — không tính điểm (không gọi endGame()/không ghi
+  // leaderboard), vì đây là người chơi TỰ Ý bỏ ngang, khác với thua cuộc.
+  // Nếu đang trong phòng chung, cũng rời phòng luôn — dừng ván đồng nghĩa
+  // không tiếp tục chơi chung phần còn lại của trận đó nữa.
+  function stopMatchEarly(){
+    if(!state || !state.gameStarted || !state.running) return;
+    if(!confirm('Dừng ván hiện tại? Điểm ván này sẽ KHÔNG được tính.')) return;
+    state.running = false;
+    state.gameStarted = false;
+    if(roomMode !== 'solo') resetRoomModeForReplay();
+    transitionPhase('intro');
+    introScreen.classList.remove('hide');
+    showRecordLine();
+  }
+  hudStopBtn.addEventListener('click', stopMatchEarly);
 
   hudTrophyBtn.addEventListener('click', ()=>openLeaderboard('top'));
   lbCloseBtn.addEventListener('click', ()=>lbModal.classList.remove('show'));
@@ -2147,10 +2209,23 @@
     const avg = (lb.total/lb.count).toFixed(1);
     let rows = '<div class="stats-row"><span>Điểm ván này (thời gian chơi đúng):</span><b>'+state.correctTime.toFixed(1)+'s</b></div>';
     rows += '<div class="stats-row"><span>Trung bình của bạn ('+lb.count+' ván):</span><b>'+avg+'s/ván</b></div>';
-    modalStats.innerHTML = '<div class="stats-box">'+rows+'</div><div id="modalRoomResults"></div><div id="modalLB">Đang tải bảng xếp hạng...</div>';
-    if(roomMode !== 'solo'){
+    modalStats.innerHTML = '<div class="stats-box">'+rows+'</div><div id="modalRoomResults"></div><div id="modalRoomReplay"></div><div id="modalLB">Đang tải bảng xếp hạng...</div>';
+    if(roomMode !== 'solo' && reason !== 'host_left'){
       broadcastMyFinishResult(won, state.correctTime);
       renderRoomMatchResults();
+      const replayEl = el('modalRoomReplay');
+      if(isRoomHost){
+        const btn = document.createElement('button');
+        btn.textContent = '🔁 Chơi lại cả phòng';
+        btn.style.cssText = 'margin-top:10px; width:100%; font-family:var(--body); font-weight:700; font-size:13px; padding:10px; border-radius:8px; border:1.5px solid #2563eb; background:#e8f0fe; color:#1e3a6d; cursor:pointer;';
+        btn.addEventListener('click', ()=>{
+          modal.classList.remove('show');
+          startRoomMatchForEveryone();
+        });
+        replayEl.appendChild(btn);
+      } else {
+        replayEl.innerHTML = '<div style="margin-top:10px; font-size:12px; color:#8a6d1f; text-align:center;">Đang chờ chủ phòng bắt đầu ván mới...</div>';
+      }
     }
 
     if(sb){
@@ -2312,6 +2387,12 @@
     const nm = nameInput.value.trim();
     if(nm) savePlayerName(nm);
     if(sb){ ensurePlayerDoc(); }
+    if(pendingRoomInvite){
+      // Đã có lời mời phòng đang chờ (link ?room=<id>) — nút này giờ đóng
+      // vai trò "Vào phòng của X" thay vì bắt đầu solo, xem prepareRoomInvite().
+      joinExistingRoom(pendingRoomInvite.roomId);
+      return;
+    }
     introScreen.classList.add('hide');
     state.gameStarted = true;
     state.lastTick = performance.now();
