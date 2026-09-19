@@ -1258,9 +1258,23 @@
     roomChannel.on('broadcast', { event: 'boss_state' }, ({ payload }) => {
       if(roomMode === 'host' || !boss) return;
       const wasTargetingMe = boss.targetPlayerId === playerId;
-      boss.x = payload.x; boss.y = payload.y; boss.forced = payload.forced; boss.targetPlayerId = payload.targetPlayerId;
+      // KHÔNG gán thẳng boss.x/y ở đây — broadcast chỉ tới ~15 lần/giây
+      // trong khi tick() chạy ~60fps, nên gán trực tiếp làm Sếp "đứng khựng"
+      // giữa 2 lần nhận rồi giật sang vị trí mới, trông lag hẳn so với host
+      // (host tự mô phỏng mượt mỗi frame). netX/netY là vị trí đích THẬT từ
+      // mạng; tick() của guest tự nội suy boss.x/y tiến dần tới đó mỗi frame
+      // (xem khối "Guest: nội suy" trong tick()) để chuyển động mượt như host.
+      if(boss.netX === undefined){
+        // Lần đầu tiên nhận broadcast — snap thẳng thay vì nội suy từ vị trí
+        // placeholder (0,0), tránh cảnh Sếp "trượt" từ giữa màn hình ra vị
+        // trí thật ngay lúc bắt đầu ván.
+        boss.x = payload.x; boss.y = payload.y;
+      }
+      boss.netX = payload.x; boss.netY = payload.y;
+      boss.forced = payload.forced; boss.targetPlayerId = payload.targetPlayerId;
       if(payload.finishedPlayerIds) roomFinishedPlayerIds = new Set(payload.finishedPlayerIds);
       updateTeammateTargetHighlight();
+      if(modal.classList.contains('show')) renderRoomReplayUI();
       if(!wasTargetingMe && boss.targetPlayerId === playerId) maybeShowApproachHint();
     });
 
@@ -1278,7 +1292,9 @@
     // giữa những người cùng phòng (khác với bảng xếp hạng chung toàn game).
     roomChannel.on('broadcast', { event: 'player_finished' }, ({ payload }) => {
       roomMatchResults[payload.playerId] = payload;
+      roomFinishedPlayerIds.add(payload.playerId);
       renderRoomMatchResults();
+      renderRoomReplayUI();
     });
 
     roomChannel.on('presence', { event: 'leave' }, ({ key }) => {
@@ -1947,8 +1963,9 @@
       workTheme: pick(WORK_THEMES), personalTheme: pick(PERSONAL_THEMES) };
     state.workData = genWorkData(state.workTheme);
     if(roomMode === 'guest'){
-      // Chưa nhận boss_state đầu tiên — placeholder trơ, sẽ bị ghi đè ngay
-      // khi broadcast đầu tiên tới (xem listener 'boss_state').
+      // Chưa nhận boss_state đầu tiên — placeholder trơ, không có netX/netY
+      // nên tick() sẽ chưa nội suy gì cho tới khi broadcast đầu tiên tới
+      // (xem listener 'boss_state' set netX/netY, và khối nội suy trong tick()).
       boss = { x:0, y:0, target:{x:0,y:0}, speed:0, wasClose:false, forced:false, targetPlayerId:null, nextCheckAt:Infinity };
     } else {
       // solo hoặc host: mô phỏng cục bộ. Host neo quanh bossAnchor() (gốc khi
@@ -2106,6 +2123,36 @@
       + '</div>';
   }
 
+  // Nút "Chơi lại cả phòng" CHỈ hiện khi TẤT CẢ mọi người trong phòng đã
+  // finish (kể cả host) — nếu host bấm khi người khác còn đang chơi dở,
+  // match_start mới sẽ ghi đè deskLayout/boss của họ trong khi UI vẫn đang
+  // hiển thị ván cũ, gây lệch dữ liệu nghiêm trọng. Gọi lại hàm này mỗi khi
+  // có thêm người finish (broadcast player_finished tới) để tự động hiện
+  // nút đúng lúc, không cần đóng/mở lại modal.
+  function renderRoomReplayUI(){
+    const replayEl = el('modalRoomReplay');
+    if(!replayEl || roomMode === 'solo') return;
+    const allFinished = roomFinishedPlayerIds.size >= roomPlayerIds.length;
+    if(!allFinished){
+      const waiting = roomPlayerIds.length - roomFinishedPlayerIds.size;
+      replayEl.innerHTML = '<div style="margin-top:10px; font-size:12px; color:#8a6d1f; text-align:center;">Đang chờ ' + waiting + ' người chơi khác hoàn thành...</div>';
+      return;
+    }
+    if(isRoomHost){
+      replayEl.innerHTML = '';
+      const btn = document.createElement('button');
+      btn.textContent = '🔁 Chơi lại cả phòng';
+      btn.style.cssText = 'margin-top:10px; width:100%; font-family:var(--body); font-weight:700; font-size:13px; padding:10px; border-radius:8px; border:1.5px solid #2563eb; background:#e8f0fe; color:#1e3a6d; cursor:pointer;';
+      btn.addEventListener('click', ()=>{
+        modal.classList.remove('show');
+        startRoomMatchForEveryone();
+      });
+      replayEl.appendChild(btn);
+    } else {
+      replayEl.innerHTML = '<div style="margin-top:10px; font-size:12px; color:#8a6d1f; text-align:center;">Đang chờ chủ phòng bắt đầu ván mới...</div>';
+    }
+  }
+
   /* ---------- "1 Sếp chung": khoảng cách/toạ độ Sếp NHÌN TỪ GÓC CỦA MÌNH ----------
      Dùng chung cho solo/host/guest — điểm mấu chốt để không phải viết 3 bản
      game loop riêng. Solo: myDesk={0,0} nên bx,by = boss.x,boss.y y hệt trước
@@ -2248,19 +2295,7 @@
     if(roomMode !== 'solo' && reason !== 'host_left'){
       broadcastMyFinishResult(won, state.correctTime);
       renderRoomMatchResults();
-      const replayEl = el('modalRoomReplay');
-      if(isRoomHost){
-        const btn = document.createElement('button');
-        btn.textContent = '🔁 Chơi lại cả phòng';
-        btn.style.cssText = 'margin-top:10px; width:100%; font-family:var(--body); font-weight:700; font-size:13px; padding:10px; border-radius:8px; border:1.5px solid #2563eb; background:#e8f0fe; color:#1e3a6d; cursor:pointer;';
-        btn.addEventListener('click', ()=>{
-          modal.classList.remove('show');
-          startRoomMatchForEveryone();
-        });
-        replayEl.appendChild(btn);
-      } else {
-        replayEl.innerHTML = '<div style="margin-top:10px; font-size:12px; color:#8a6d1f; text-align:center;">Đang chờ chủ phòng bắt đầu ván mới...</div>';
-      }
+      renderRoomReplayUI();
     }
 
     if(sb){
@@ -2375,8 +2410,17 @@
         boss.y += (dy/dToTarget) * boss.speed * dt;
       }
     }
-    // Guest: boss.x/y được ghi đè trực tiếp bởi listener 'boss_state', không
-    // tự mô phỏng gì ở đây.
+
+    // Guest: nội suy — boss.netX/netY là vị trí đích mới nhất từ broadcast
+    // (~15Hz), boss.x/y tiến dần tới đó mỗi frame (~60fps) thay vì giật
+    // sang thẳng, để chuyển động mượt tương đương host. Hệ số 12 nghĩa là
+    // "đuổi kịp" phần lớn khoảng cách trong ~1-2 lần broadcast — đủ nhanh để
+    // không bị trễ tay khi Sếp đổi hướng đột ngột, đủ mượt để không giật.
+    if(roomMode === 'guest' && boss.netX !== undefined){
+      const lerpFactor = Math.min(1, dt * 12);
+      boss.x += (boss.netX - boss.x) * lerpFactor;
+      boss.y += (boss.netY - boss.y) * lerpFactor;
+    }
 
     const view = computeMyBossView();
     bossDist = view.dist;
