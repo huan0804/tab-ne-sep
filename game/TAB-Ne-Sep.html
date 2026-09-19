@@ -1183,10 +1183,10 @@
     // Đăng ký từ lúc vào phòng chờ (không phải lúc bắt đầu trận) để không lỡ
     // sự kiện match_start nếu nó tới trước khi postgres_changes báo playing.
     roomChannel.on('broadcast', { event: 'match_start' }, ({ payload }) => {
-      console.log('[debug match_start received]', payload, 'roomMode before=', roomMode);
       if(roomMode === 'host') return; // host đã tự dựng layout của chính mình
       deskLayout = payload.deskLayout;
       myDesk = deskLayout[playerId] || {x:0, y:0};
+      roomPlayerIds = payload.playerIds || Object.keys(deskLayout);
       roomMode = 'guest';
       renderTeammates();
     });
@@ -2010,11 +2010,6 @@
     // Vừa dựng khung xong — báo trạng thái màn hình của MÌNH cho người mới
     // vào/vừa render lại biết ngay, không phải chờ tới lần đổi mode kế tiếp.
     broadcastMyPlayerState();
-    // TẠM THỜI để debug bug "không thấy đồng nghiệp" — xoá sau khi xác định
-    // nguyên nhân. Lộ state ra window vì code chạy trong IIFE, gõ trực tiếp
-    // console.log(roomMode,...) từ DevTools báo "not defined".
-    window.__debug = { roomMode, deskLayout, myDesk, playerId, roomPlayerIds, teammatesLayerChildren: teammatesLayer.children.length };
-    console.log('[debug renderTeammates]', window.__debug);
   }
 
   function updateTeammateTargetHighlight(){
