@@ -1159,6 +1159,7 @@
   let myDesk = {x:0, y:0};
   let roomPlayerIds = [];             // roster tại thời điểm host bấm Bắt đầu
   let roomFinishedPlayerIds = new Set();
+  let roomMatchResults = {};          // { [playerId]: {name, score, won} } — xem endGame()/broadcastMyFinishResult()
   let currentTargetPlayerId = null;   // null = Sếp đang ambient, không nhắm ai
   let lastAmbientAnchorId = null;     // người vừa bị nhắm gần nhất — tâm ambient kế tiếp
   let lastBroadcastAt = 0;
@@ -1217,6 +1218,7 @@
       myDesk = deskLayout[playerId] || {x:0, y:0};
       roomPlayerIds = payload.playerIds || Object.keys(deskLayout);
       roomMode = 'guest';
+      roomMatchResults = {};
       renderTeammates();
     });
 
@@ -1236,6 +1238,14 @@
       if(payload.playerId === playerId) return; // bỏ qua broadcast của chính mình
       teammatePlayerStates[payload.playerId] = payload;
       updateTeammateScreen(payload.playerId);
+    });
+
+    // "Kết quả phòng này" trong modal kết thúc ván — mỗi người tự báo điểm
+    // của mình khi finish, mọi client tích luỹ để hiện bảng so sánh riêng
+    // giữa những người cùng phòng (khác với bảng xếp hạng chung toàn game).
+    roomChannel.on('broadcast', { event: 'player_finished' }, ({ payload }) => {
+      roomMatchResults[payload.playerId] = payload;
+      renderRoomMatchResults();
     });
 
     roomChannel.on('presence', { event: 'leave' }, ({ key }) => {
@@ -1345,6 +1355,7 @@
       myDesk = deskLayout[playerId] || {x:0, y:0};
       roomMode = 'host';
       roomFinishedPlayerIds = new Set();
+      roomMatchResults = {};
       roomChannel.send({ type:'broadcast', event:'match_start', payload:{ deskLayout, playerIds: roomPlayerIds } });
       resetRoomBossForHost();
       renderTeammates();
@@ -1386,6 +1397,7 @@
     currentTargetPlayerId = null;
     lastAmbientAnchorId = null;
     teammatePlayerStates = {};
+    roomMatchResults = {};
     teammatesLayer.innerHTML = '';
     monitorEl.classList.remove('roomShrink');
     try{
@@ -1403,6 +1415,7 @@
     currentRoomId = null;
     isRoomHost = false;
     teammatePlayerStates = {};
+    roomMatchResults = {};
     teammatesLayer.innerHTML = '';
     monitorEl.classList.remove('roomShrink');
   }
@@ -1428,6 +1441,7 @@
     currentTargetPlayerId = null;
     lastAmbientAnchorId = null;
     teammatePlayerStates = {};
+    roomMatchResults = {};
     teammatesLayer.innerHTML = '';
     monitorEl.classList.remove('roomShrink');
     try{
@@ -1965,6 +1979,36 @@
     clockEl.textContent = m + ':' + String(s).padStart(2,'0');
   }
 
+  /* ---------- "1 Sếp chung": "Kết quả phòng này" trong modal kết thúc ván ----------
+     Khác với bảng xếp hạng chung (toàn game, gồm cả 6 seed ảo + người lạ) —
+     đây chỉ so sánh giữa những người vừa chơi cùng phòng, cập nhật dần khi
+     từng người finish (không cần đợi tất cả xong mới hiện). */
+  function broadcastMyFinishResult(won, score){
+    if(roomMode === 'solo' || !roomChannel) return;
+    const payload = { playerId, name: getPlayerName() || 'Người chơi ẩn danh', score, won };
+    roomMatchResults[playerId] = payload;
+    roomChannel.send({ type:'broadcast', event:'player_finished', payload });
+  }
+
+  function renderRoomMatchResults(){
+    const box = el('modalRoomResults');
+    if(!box) return;
+    const ids = Object.keys(roomMatchResults);
+    if(ids.length === 0){ box.innerHTML = ''; return; }
+    const sorted = ids.map(id=>roomMatchResults[id]).sort((a,b)=>b.score-a.score);
+    const rows = sorted.map(r=>{
+      const mine = r.playerId === playerId;
+      const tag = r.won ? '🏆' : '💤';
+      return '<div class="stats-row"' + (mine?' style="font-weight:700;color:#c1272d;"':'') + '>'
+        + '<span>' + tag + ' ' + r.name + (mine?' (bạn)':'') + '</span><b>' + r.score.toFixed(1) + 's</b></div>';
+    }).join('');
+    const waiting = roomPlayerIds.length - ids.length;
+    box.innerHTML = '<div class="stats-box"><div style="font-weight:700;font-size:12.5px;margin-bottom:4px;">👥 Kết quả phòng này</div>'
+      + rows
+      + (waiting > 0 ? '<div style="font-size:11px;color:#999;margin-top:4px;">Đang chờ ' + waiting + ' người chơi xong...</div>' : '')
+      + '</div>';
+  }
+
   /* ---------- "1 Sếp chung": khoảng cách/toạ độ Sếp NHÌN TỪ GÓC CỦA MÌNH ----------
      Dùng chung cho solo/host/guest — điểm mấu chốt để không phải viết 3 bản
      game loop riêng. Solo: myDesk={0,0} nên bx,by = boss.x,boss.y y hệt trước
@@ -2103,7 +2147,11 @@
     const avg = (lb.total/lb.count).toFixed(1);
     let rows = '<div class="stats-row"><span>Điểm ván này (thời gian chơi đúng):</span><b>'+state.correctTime.toFixed(1)+'s</b></div>';
     rows += '<div class="stats-row"><span>Trung bình của bạn ('+lb.count+' ván):</span><b>'+avg+'s/ván</b></div>';
-    modalStats.innerHTML = '<div class="stats-box">'+rows+'</div><div id="modalLB">Đang tải bảng xếp hạng...</div>';
+    modalStats.innerHTML = '<div class="stats-box">'+rows+'</div><div id="modalRoomResults"></div><div id="modalLB">Đang tải bảng xếp hạng...</div>';
+    if(roomMode !== 'solo'){
+      broadcastMyFinishResult(won, state.correctTime);
+      renderRoomMatchResults();
+    }
 
     if(sb){
       recordSharedSession(state.correctTime, state.elapsed).then(async (result)=>{
