@@ -75,6 +75,25 @@
   #bossUnit .bossBody{position:absolute; bottom:0; left:50%; transform:translateX(-50%); width:38px; height:46px; background:#2f6fd6; border-radius:16px 16px 6px 6px;}
   #bossUnit .bossBody::after{content:'';position:absolute; left:50%; top:6px; transform:translateX(-50%); width:14px; height:10px; background:#e7ecf5; border-radius:2px;}
   #bossUnit .bossTie{position:absolute; bottom:14px; left:50%; transform:translateX(-50%); width:6px; height:20px; background:#c1272d; clip-path:polygon(50% 0,100% 20%,70% 100%,30% 100%,0 20%);}
+
+  /* ---------- Đồng đội trong phòng "1 Sếp chung": bàn làm việc mini + tên,
+     đặt trên cùng hệ vòng tròn elip đang dùng cho Sếp (dịch toạ độ theo bàn
+     của mình). Monitor mini tái dùng chính buildWorkHTML/buildPersonalHTML
+     của màn hình chính (thu nhỏ bằng scale), không phải hình vẽ riêng. ---------- */
+  #teammatesLayer{position:absolute; left:50%; top:50%; width:0; height:0; z-index:9; pointer-events:none;}
+  .teammateUnit{position:absolute; left:0; top:0; transform:translate(-50%,-50%); display:flex; flex-direction:column; align-items:center; gap:4px; transition:opacity 0.25s;}
+  .teammateUnit .tmMonitor{width:120px; height:78px; background:var(--bezel); border-radius:8px; padding:5px; box-shadow:0 8px 18px rgba(0,0,0,0.4); border:2px solid #fff;}
+  .teammateUnit.targeted .tmMonitor{border-color:#c1272d; box-shadow:0 0 0 4px rgba(193,39,45,0.3), 0 8px 18px rgba(0,0,0,0.4);}
+  .teammateUnit .tmScreen{width:100%; height:100%; border-radius:4px; overflow:hidden; position:relative; background:#0a0a0a;}
+  /* Khung ảo 660x420 (kích thước tối đa của #screen thật) rồi scale nguyên
+     khối xuống vừa khung mini — work-content/personal-content vốn dùng
+     position:absolute;inset:0 nên cần 1 cha position:relative đúng kích
+     thước gốc để căn đúng, không thể co giãn bằng % trực tiếp. */
+  .teammateUnit .tmScreenInner{position:relative; width:660px; height:420px; transform:scale(0.182); transform-origin:top left;}
+  .teammateUnit .tmName{font-family:var(--body); font-size:11px; font-weight:700; color:#fff; background:rgba(37,99,235,0.9); padding:2px 8px; border-radius:8px; white-space:nowrap; max-width:120px; overflow:hidden; text-overflow:ellipsis; box-shadow:0 2px 6px rgba(0,0,0,0.25);}
+  .teammateUnit.targeted .tmName{background:rgba(193,39,45,0.9);}
+  .teammateUnit.finished{opacity:0.35;}
+
   #bossFaceCard{position:absolute; bottom:40px; left:50%; transform:translateX(-50%); display:flex; flex-direction:column; align-items:center; gap:3px;}
   #bossFaceSvgWrap{width:64px; height:64px; border-radius:50%; background:#2a2118; border:3px solid #55483a; overflow:hidden; box-shadow:0 6px 16px rgba(0,0,0,0.45); transition:box-shadow 0.2s, border-color 0.2s;}
   #bossFaceSvgWrap svg{width:100%;height:100%;display:block;}
@@ -103,7 +122,10 @@
   .arm-pole{width:9px; height:64px; background:linear-gradient(90deg,#2a2a2c,#111);}
   .arm-joint{width:16px; height:16px; border-radius:50%; background:#2a2a2c; margin:-2px 0;}
   .arm-horiz{width:100px; height:10px; background:linear-gradient(180deg,#2a2a2c,#111); border-radius:3px; align-self:flex-start; margin-left:-4px;}
-  #monitor{width:clamp(320px, 48vw, 660px); height:clamp(200px, 33vh, 420px); background:var(--bezel); border-radius:14px; padding:12px; box-shadow:0 20px 44px rgba(0,0,0,0.55); position:relative;}
+  #monitor{width:clamp(320px, 48vw, 660px); height:clamp(200px, 33vh, 420px); background:var(--bezel); border-radius:14px; padding:12px; box-shadow:0 20px 44px rgba(0,0,0,0.55); position:relative; transition:width 0.3s, height 0.3s;}
+  /* Đang trong phòng chung: nhường chỗ để thấy bàn đồng nghiệp trên vòng
+     tròn khoảng cách, không che khuất bởi màn hình chính quá lớn. */
+  #monitor.roomShrink{width:clamp(220px, 32vw, 440px); height:clamp(140px, 22vh, 280px);}
   #screen{width:100%; height:100%; border-radius:6px; overflow:hidden; position:relative; background:#0a0a0a;}
   .glow-work{ box-shadow:0 0 46px 10px rgba(37,99,235,0.55); }
   .glow-personal{ box-shadow:0 0 46px 10px rgba(217,119,6,0.6); }
@@ -458,6 +480,8 @@
 
     <div id="proxField"></div>
 
+    <div id="teammatesLayer"></div>
+
     <div id="bossUnit">
       <div class="bossShadow"></div>
       <div class="bossBody"></div>
@@ -557,7 +581,16 @@
     checkTargetMin: 0.15, checkTargetMax: 0.85,
     difficultyRampSeconds: 80,
     fieldRangeMeters: 3, // outermost distance ellipse drawn = this many meters
-    ellipseRatio: 1.4 // X:Y — how flattened the proximity field is (floor-plan tilt)
+    ellipseRatio: 1.4, // X:Y — how flattened the proximity field is (floor-plan tilt)
+    // ---- Chơi cùng bạn: 1 Sếp chung (Bước 2) ----
+    // Giới hạn trong đúng phạm vi vòng tròn hiển thị (fieldRangeMeters=3) —
+    // nếu random ra xa hơn, bàn đồng nghiệp sẽ nằm ngoài khung nhìn/gần mép
+    // màn hình, trông như biến mất (bug đã gặp khi test: "không thấy đồng
+    // nghiệp" thực ra là do bàn bị random quá xa khỏi khung hiển thị được).
+    roomDeskBoundsMin: -2.6, roomDeskBoundsMax: 2.6, // sơ đồ phòng (mét), vị trí bàn random trong khoảng này
+    roomDeskMinSpacing: 1.6, // khoảng cách tối thiểu giữa 2 bàn, tránh chồng lấn
+    roomDeskMaxAttempts: 200, // số lần thử lại rejection-sampling trước khi chấp nhận chồng lấn
+    roomBroadcastHz: 15 // tần suất host gửi vị trí Sếp cho cả phòng
   };
 
   const el = id => document.getElementById(id);
@@ -578,7 +611,7 @@
         createRoomBtn = el('createRoomBtn'), roomWaitScreen = el('roomWaitScreen'), roomCodeDisplay = el('roomCodeDisplay'),
         roomCopyLinkBtn = el('roomCopyLinkBtn'), roomPlayerList = el('roomPlayerList'), roomStartBtn = el('roomStartBtn'),
         roomWaitingForHost = el('roomWaitingForHost'), roomLeaveBtn = el('roomLeaveBtn'), roomToast = el('roomToast'),
-        challengeBanner = el('challengeBanner');
+        challengeBanner = el('challengeBanner'), teammatesLayer = el('teammatesLayer');
 
   // px-per-meter on the X axis, sized so the outermost ring nearly reaches the
   // side columns. Recomputed on load/resize since it depends on scene width.
@@ -610,7 +643,7 @@
   }
   recomputeFieldScale();
   buildProxRings();
-  window.addEventListener('resize', ()=>{ recomputeFieldScale(); buildProxRings(); });
+  window.addEventListener('resize', ()=>{ recomputeFieldScale(); buildProxRings(); if(roomMode !== 'solo') renderTeammates(); });
 
   let audioCtx = null;
   function beep(freq, dur, type, vol){
@@ -1073,11 +1106,10 @@
     }catch(e){ sb = null; }
   }
 
-  /* ---------- Chơi cùng bạn: tạo/vào phòng, màn chờ (Bước 1 — hạ tầng phòng) ----------
-     Chỉ xử lý vòng đời phòng (tạo/vào/chờ/bắt đầu) ở bước này — CHƯA đụng vào
-     boss AI/game loop. "1 Sếp chung" thật (hệ toạ độ chung, target-selection)
-     sẽ ghép vào tick()/toggleMode() ở bước sau, sau khi hạ tầng phòng này
-     chạy đúng.
+  /* ---------- Chơi cùng bạn: tạo/vào phòng, màn chờ ----------
+     Vòng đời phòng (tạo/vào/chờ/bắt đầu) — "1 Sếp chung" thật (hệ toạ độ
+     chung, target-selection, xem khối "1 Sếp chung" ngay dưới đây và trong
+     tick()) ghép vào phần này qua startRoomMatchForEveryone().
      - Bảng "rooms" (supabase/schema.sql) chỉ lưu host_player_id + status
        ('waiting'|'playing') — bắt buộc dùng Postgres Changes (không phải
        Broadcast) để đảm bảo mọi client, kể cả subscribe muộn, đều nhận được
@@ -1088,6 +1120,19 @@
   let currentRoomId = null;
   let isRoomHost = false;
   let roomChannel = null;
+
+  /* ---------- "1 Sếp chung" — trạng thái phòng đang chơi (Bước 2) ----------
+     roomMode phân biệt 3 chế độ boss AI chạy ở đâu: 'solo' (mặc định, y hệt
+     hành vi cũ), 'host' (mình mô phỏng Sếp và Broadcast cho cả phòng), 'guest'
+     (chỉ nhận Broadcast, không tự mô phỏng gì). */
+  let roomMode = 'solo';
+  let deskLayout = null;              // { [playerId]: {x,y} }, cố định suốt 1 trận
+  let myDesk = {x:0, y:0};
+  let roomPlayerIds = [];             // roster tại thời điểm host bấm Bắt đầu
+  let roomFinishedPlayerIds = new Set();
+  let currentTargetPlayerId = null;   // null = Sếp đang ambient, không nhắm ai
+  let lastAmbientAnchorId = null;     // người vừa bị nhắm gần nhất — tâm ambient kế tiếp
+  let lastBroadcastAt = 0;
 
   function genRoomCode(){
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // bỏ ký tự dễ nhầm (I/O/0/1)
@@ -1134,6 +1179,47 @@
       }
     });
 
+    // ---------- "1 Sếp chung" — nhận layout bàn + vị trí Sếp từ host ----------
+    // Đăng ký từ lúc vào phòng chờ (không phải lúc bắt đầu trận) để không lỡ
+    // sự kiện match_start nếu nó tới trước khi postgres_changes báo playing.
+    roomChannel.on('broadcast', { event: 'match_start' }, ({ payload }) => {
+      if(roomMode === 'host') return; // host đã tự dựng layout của chính mình
+      deskLayout = payload.deskLayout;
+      myDesk = deskLayout[playerId] || {x:0, y:0};
+      roomMode = 'guest';
+      renderTeammates();
+    });
+
+    roomChannel.on('broadcast', { event: 'boss_state' }, ({ payload }) => {
+      if(roomMode === 'host' || !boss) return;
+      const wasTargetingMe = boss.targetPlayerId === playerId;
+      boss.x = payload.x; boss.y = payload.y; boss.forced = payload.forced; boss.targetPlayerId = payload.targetPlayerId;
+      if(payload.finishedPlayerIds) roomFinishedPlayerIds = new Set(payload.finishedPlayerIds);
+      updateTeammateTargetHighlight();
+      if(!wasTargetingMe && boss.targetPlayerId === playerId) maybeShowApproachHint();
+    });
+
+    // Trạng thái màn hình (mode/theme) của TỪNG người — mỗi client tự gửi
+    // của riêng mình khi đổi mode (xem broadcastMyPlayerState()), không phải
+    // chỉ host, vì mỗi người điều khiển mode của chính họ.
+    roomChannel.on('broadcast', { event: 'player_state' }, ({ payload }) => {
+      if(payload.playerId === playerId) return; // bỏ qua broadcast của chính mình
+      teammatePlayerStates[payload.playerId] = payload;
+      updateTeammateScreen(payload.playerId);
+    });
+
+    roomChannel.on('presence', { event: 'leave' }, ({ key }) => {
+      if(roomMode === 'host'){
+        // Khách rời giữa trận — coi như đã xong để Sếp không kẹt nhắm người
+        // không còn ở đó nữa.
+        roomFinishedPlayerIds.add(key);
+        return;
+      }
+      if(roomMode === 'guest' && key === roomChannel._hostPlayerId){
+        handleHostDisconnected();
+      }
+    });
+
     roomChannel.subscribe(async (status) => {
       if(status === 'SUBSCRIBED'){
         await roomChannel.track({ playerId, name: getPlayerName() || 'Người chơi ẩn danh' });
@@ -1151,9 +1237,16 @@
     if(error){ alert('Không tạo được phòng, thử lại nhé.'); return; }
     currentRoomId = roomId;
     isRoomHost = true;
-    const url = new URL(location.href);
-    url.searchParams.set('room', roomId);
-    history.replaceState(null, '', url.toString());
+    // Trên file:// (test cục bộ), Chromium chặn replaceState kèm URL tuyệt
+    // đối với lỗi "unsafe attempt to load URL" — vô hại (chỉ ảnh hưởng việc
+    // link trên thanh địa chỉ có tự cập nhật ?room= hay không), không xảy ra
+    // khi deploy thật qua https://. Bọc try/catch để không log lỗi đỏ gây
+    // nhiễu khi debug các lỗi khác lúc test local.
+    try{
+      const url = new URL(location.href);
+      url.searchParams.set('room', roomId);
+      history.replaceState(null, '', url.toString());
+    }catch(e){}
     await joinRoomChannel(roomId, playerId);
     showRoomWaitScreen(roomId);
   }
@@ -1194,18 +1287,94 @@
     roomWaitScreen.classList.remove('show');
   }
 
+  // Neo boss ban đầu quanh bàn của target đầu tiên thay vì gốc — dùng khi
+  // resetState() chạy trong roomMode 'host' (xem resetState()).
+  function resetRoomBossForHost(){
+    currentTargetPlayerId = null;
+    lastAmbientAnchorId = roomPlayerIds[0] || playerId;
+    const anchor = bossAnchor();
+    const ang0 = rand(0, Math.PI*2);
+    boss = { x: anchor.x + Math.cos(ang0)*5, y: anchor.y + Math.sin(ang0)*5, target:{x:0,y:0}, speed:1.0, wasClose:false, forced:false, targetPlayerId:null, nextCheckAt: rand(2.5,4.5) };
+    pickAmbientTarget();
+  }
+
   async function startRoomMatchForEveryone(){
     // resetState() (chạy 1 lần lúc load trang, xem cuối file) có thể chưa
     // kịp chạy nếu host bấm "Bắt đầu" ngay tức khắc sau khi khách vừa mở
     // link phòng — chờ tối đa vài trăm ms cho state sẵn sàng để tránh lỗi
     // runtime khi gán state.gameStarted trên object chưa tồn tại.
     if(typeof state === 'undefined' || !state){ setTimeout(startRoomMatchForEveryone, 100); return; }
+
+    if(isRoomHost){
+      roomPlayerIds = Object.keys(roomChannel.presenceState()).map(key => {
+        const meta = roomChannel.presenceState()[key][0];
+        return meta ? meta.playerId : key;
+      });
+      if(!roomPlayerIds.includes(playerId)) roomPlayerIds.push(playerId);
+      deskLayout = generateDeskLayout(roomPlayerIds);
+      myDesk = deskLayout[playerId] || {x:0, y:0};
+      roomMode = 'host';
+      roomFinishedPlayerIds = new Set();
+      roomChannel.send({ type:'broadcast', event:'match_start', payload:{ deskLayout, playerIds: roomPlayerIds } });
+      resetRoomBossForHost();
+      renderTeammates();
+    } else if(roomMode !== 'solo' && !deskLayout){
+      // Đã biết mình đang trong phòng (currentRoomId set) nhưng chưa nhận
+      // match_start broadcast (khác kênh với postgres_changes vừa báo
+      // playing, không đảm bảo thứ tự tới) — chờ tối đa vài trăm ms.
+      setTimeout(startRoomMatchForEveryone, 100);
+      return;
+    }
+
     hideRoomWaitScreen();
     state.gameStarted = true;
     state.lastTick = performance.now();
     introScreen.classList.add('hide');
     transitionPhase('game');
+    monitorEl.classList.add('roomShrink'); // nhường chỗ thấy bàn đồng nghiệp
     try{ if(!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){}
+  }
+
+  // Chủ phòng rời đi giữa trận — không có host-migration ở bước này (giới
+  // hạn đã biết, chấp nhận được cho quy mô 1 file HTML không backend riêng).
+  // Kết thúc trận nhẹ nhàng cho người còn lại thay vì để họ kẹt màn hình chờ
+  // broadcast không bao giờ tới nữa.
+  // "Chơi lại" sau 1 ván trong phòng chung → về chơi solo. Phòng chung không
+  // hỗ trợ replay-cùng-phòng ở bước này (đã dùng xong vòng đời: host dừng
+  // broadcast khi mọi người finish, layout bàn không còn ý nghĩa cho ván mới)
+  // — muốn chơi chung lại thì tạo/vào phòng mới từ màn intro như bình thường.
+  function resetRoomModeForReplay(){
+    if(roomMode === 'solo') return;
+    if(roomChannel){ try{ sb.removeChannel(roomChannel); }catch(e){} roomChannel = null; }
+    roomMode = 'solo';
+    currentRoomId = null;
+    isRoomHost = false;
+    deskLayout = null;
+    myDesk = {x:0, y:0};
+    roomPlayerIds = [];
+    roomFinishedPlayerIds = new Set();
+    currentTargetPlayerId = null;
+    lastAmbientAnchorId = null;
+    teammatePlayerStates = {};
+    teammatesLayer.innerHTML = '';
+    monitorEl.classList.remove('roomShrink');
+    try{
+      const url = new URL(location.href);
+      url.searchParams.delete('room');
+      history.replaceState(null, '', url.toString());
+    }catch(e){}
+  }
+
+  async function handleHostDisconnected(){
+    if(!state || !state.running) return;
+    endGame(false, 'host_left');
+    if(roomChannel){ try{ await sb.removeChannel(roomChannel); }catch(e){} roomChannel = null; }
+    roomMode = 'solo';
+    currentRoomId = null;
+    isRoomHost = false;
+    teammatePlayerStates = {};
+    teammatesLayer.innerHTML = '';
+    monitorEl.classList.remove('roomShrink');
   }
 
   createRoomBtn.addEventListener('click', createRoom);
@@ -1221,9 +1390,21 @@
     if(roomChannel){ try{ await sb.removeChannel(roomChannel); }catch(e){} roomChannel = null; }
     currentRoomId = null;
     isRoomHost = false;
-    const url = new URL(location.href);
-    url.searchParams.delete('room');
-    history.replaceState(null, '', url.toString());
+    roomMode = 'solo';
+    deskLayout = null;
+    myDesk = {x:0, y:0};
+    roomPlayerIds = [];
+    roomFinishedPlayerIds = new Set();
+    currentTargetPlayerId = null;
+    lastAmbientAnchorId = null;
+    teammatePlayerStates = {};
+    teammatesLayer.innerHTML = '';
+    monitorEl.classList.remove('roomShrink');
+    try{
+      const url = new URL(location.href);
+      url.searchParams.delete('room');
+      history.replaceState(null, '', url.toString());
+    }catch(e){}
     hideRoomWaitScreen();
     introScreen.classList.remove('hide');
   });
@@ -1528,6 +1709,7 @@
   modal.addEventListener('click', (e)=>{ if(e.target === modal) closeResultModal(); });
   replayFab.addEventListener('click', ()=>{
     replayFab.classList.remove('show');
+    resetRoomModeForReplay();
     resetState();
     state.gameStarted = true;
     renderScreen();
@@ -1573,50 +1755,132 @@
 
   let state, boss;
   let bossDist = Infinity; // khoảng cách Sếp mới nhất, cập nhật mỗi tick — dùng lại khi toggleMode() cần kiểm tra bắt ngay
+  let isMyTurnToBeAtRisk = true; // xem computeMyBossView() — solo luôn true, phòng chung chỉ true khi mình là target
+
+  /* ---------- "1 Sếp chung": tâm quy chiếu cho AI Sếp ----------
+     Solo: luôn {0,0} (người chơi = gốc), công thức AI dưới đây không đổi so
+     với trước. Host: neo theo bàn của người đang/ vừa bị nhắm — xem quyết
+     định "ambient lượn quanh người vừa bị nhắm gần nhất". Guest không gọi
+     hàm này (không tự mô phỏng AI). */
+  function bossAnchor(){
+    if(roomMode !== 'host') return {x:0, y:0};
+    const anchorId = currentTargetPlayerId || lastAmbientAnchorId || roomPlayerIds[0];
+    return (deskLayout && deskLayout[anchorId]) || {x:0, y:0};
+  }
+
+  /* ---------- "1 Sếp chung": ai đang là mục tiêu kế tiếp của Sếp ----------
+     Chỉ host gọi. Loại người đã xong ván/đã rời phòng, tránh lặp lại đúng
+     người vừa nhắm liền trước nếu còn người khác để chọn. */
+  function pickNextTargetPlayerId(){
+    const candidates = roomPlayerIds.filter(id => !roomFinishedPlayerIds.has(id));
+    if(candidates.length === 0) return null;
+    if(candidates.length === 1) return candidates[0];
+    const pool = candidates.filter(id => id !== currentTargetPlayerId);
+    const from = pool.length > 0 ? pool : candidates;
+    return from[Math.floor(Math.random()*from.length)];
+  }
+
+  /* ---------- "1 Sếp chung": rải vị trí bàn ngẫu nhiên, không chồng lấn ----------
+     Chỉ host gọi, 1 lần duy nhất lúc bấm "Bắt đầu" — kết quả Broadcast cho cả
+     phòng dùng chung, không tính lại giữa trận. Rejection sampling đơn giản:
+     random rồi thử lại nếu quá gần bàn đã đặt, chấp nhận chồng lấn nếu hết
+     lượt thử (hiếm, không đáng chặn trận đấu vì việc này). */
+  function generateDeskLayout(playerIds){
+    const layout = {};
+    const placed = [];
+    playerIds.forEach(id => {
+      let x, y, ok = false;
+      for(let attempt=0; attempt<CONFIG.roomDeskMaxAttempts && !ok; attempt++){
+        x = rand(CONFIG.roomDeskBoundsMin, CONFIG.roomDeskBoundsMax);
+        y = rand(CONFIG.roomDeskBoundsMin, CONFIG.roomDeskBoundsMax);
+        ok = placed.every(p => Math.hypot(x-p.x, y-p.y) >= CONFIG.roomDeskMinSpacing);
+      }
+      layout[id] = {x, y};
+      placed.push({x, y});
+    });
+    return layout;
+  }
+
   function resetState(){
     state = { mode:'personal', lives: CONFIG.maxLives, personalTime:0, correctTime:0, elapsed:0, running:true, gameStarted:false, lastTick: performance.now(),
       workTheme: pick(WORK_THEMES), personalTheme: pick(PERSONAL_THEMES) };
     state.workData = genWorkData(state.workTheme);
-    const ang0 = rand(0, Math.PI*2);
-    boss = { x: Math.cos(ang0)*5, y: Math.sin(ang0)*5, target:{x:0,y:0}, speed:1.0, wasClose:false, forced:false, nextCheckAt: rand(2.5,4.5) };
-    pickAmbientTarget();
+    if(roomMode === 'guest'){
+      // Chưa nhận boss_state đầu tiên — placeholder trơ, sẽ bị ghi đè ngay
+      // khi broadcast đầu tiên tới (xem listener 'boss_state').
+      boss = { x:0, y:0, target:{x:0,y:0}, speed:0, wasClose:false, forced:false, targetPlayerId:null, nextCheckAt:Infinity };
+    } else {
+      // solo hoặc host: mô phỏng cục bộ. Host neo quanh bossAnchor() (gốc khi
+      // roomMode !== 'host' nên công thức solo không đổi).
+      const anchor = bossAnchor();
+      const ang0 = rand(0, Math.PI*2);
+      boss = { x: anchor.x + Math.cos(ang0)*5, y: anchor.y + Math.sin(ang0)*5, target:{x:0,y:0}, speed:1.0, wasClose:false, forced:false, targetPlayerId:null, nextCheckAt: rand(2.5,4.5) };
+      pickAmbientTarget();
+    }
   }
 
   function difficultyT(){ return Math.min(1, state.elapsed / CONFIG.difficultyRampSeconds); }
 
   function pickAmbientTarget(){
+    if(roomMode === 'host' && currentTargetPlayerId){
+      // Vừa kết thúc 1 lần forced-approach — người đó trở thành tâm ambient
+      // kế tiếp (quyết định: "lượn quanh người vừa bị nhắm gần nhất").
+      lastAmbientAnchorId = currentTargetPlayerId;
+    }
+    currentTargetPlayerId = null;
+    if(boss) boss.targetPlayerId = null;
+    const anchor = bossAnchor();
     const t = difficultyT();
     const nearProb = lerp(CONFIG.ambientNearBiasProbStart, CONFIG.ambientNearBiasProbEnd, t);
     const near = Math.random() < nearProb;
     const ang = rand(0, Math.PI*2);
     if(near){
       const dist = rand(CONFIG.ambientNearMin, CONFIG.ambientNearMax);
-      boss.target = { x: Math.cos(ang)*dist, y: Math.sin(ang)*dist };
+      boss.target = { x: anchor.x + Math.cos(ang)*dist, y: anchor.y + Math.sin(ang)*dist };
     } else {
       const dist = rand(CONFIG.ambientBoundsMin, CONFIG.ambientBoundsMax);
-      boss.target = { x: Math.cos(ang)*dist, y: Math.sin(ang)*dist };
+      boss.target = { x: anchor.x + Math.cos(ang)*dist, y: anchor.y + Math.sin(ang)*dist };
     }
     const sr = [lerp(CONFIG.speedAmbientStart[0],CONFIG.speedAmbientEnd[0],t), lerp(CONFIG.speedAmbientStart[1],CONFIG.speedAmbientEnd[1],t)];
     boss.speed = rand(sr[0], sr[1]);
     boss.forced = false;
   }
 
+  // Hint "Sếp lại gần!" chỉ nên hiện cho ĐÚNG người đang bị nhắm — tách khỏi
+  // forceCloseApproach() vì hàm đó chỉ chạy trên máy host, còn hint phải hiện
+  // trên máy của người đang là target (có thể là 1 guest khác). Gọi từ solo's
+  // forceCloseApproach() trực tiếp, và từ guest's boss_state handler khi phát
+  // hiện mình vừa trở thành target (xem joinRoomChannel()).
+  function maybeShowApproachHint(gentleSpeed){
+    if(!hasSeenHint(HINT_APPROACH)){
+      if(gentleSpeed !== undefined) boss.speed = gentleSpeed;
+      showCoachmark('👀 Sếp lại gần! Bấm Tab ngay khi Sếp còn ≤ 1m', 5000);
+      markHintSeen(HINT_APPROACH);
+    }
+  }
+
   function forceCloseApproach(){
+    let anchor = {x:0, y:0};
+    if(roomMode === 'host'){
+      currentTargetPlayerId = pickNextTargetPlayerId();
+      if(currentTargetPlayerId === null) return; // không còn ai để nhắm — bỏ qua, vẫn ambient
+      boss.targetPlayerId = currentTargetPlayerId;
+      anchor = bossAnchor();
+    }
     const t = difficultyT();
     const ang = rand(0, Math.PI*2);
     const dist = rand(CONFIG.checkTargetMin, CONFIG.checkTargetMax);
-    boss.target = { x: Math.cos(ang)*dist, y: Math.sin(ang)*dist };
+    boss.target = { x: anchor.x + Math.cos(ang)*dist, y: anchor.y + Math.sin(ang)*dist };
     const sr = [lerp(CONFIG.speedCheckStart[0],CONFIG.speedCheckEnd[0],t), lerp(CONFIG.speedCheckStart[1],CONFIG.speedCheckEnd[1],t)];
     boss.speed = rand(sr[0], sr[1]);
     boss.forced = true;
-    if(!hasSeenHint(HINT_APPROACH)){
+    if(roomMode === 'solo'){
       // First close approach this browser has ever seen: go gentle (slowest
-      // speed in the range) so there's real time to notice and react, and
-      // surface the one instruction that matters right now, right where the
-      // action needs to happen — not as a rule read minutes earlier.
-      boss.speed = sr[0];
-      showCoachmark('👀 Sếp lại gần! Bấm Tab ngay khi Sếp còn ≤ 1m', 5000);
-      markHintSeen(HINT_APPROACH);
+      // speed in the range) so there's real time to notice and react.
+      maybeShowApproachHint(sr[0]);
+    } else if(roomMode === 'host' && currentTargetPlayerId === playerId){
+      // Host tự là target của chính mình — hint áp dụng y hệt solo.
+      maybeShowApproachHint(sr[0]);
     }
   }
 
@@ -1635,6 +1899,9 @@
       screenEl.innerHTML = buildPersonalHTML(state.personalTheme);
       monitorEl.classList.add('glow-personal'); monitorEl.classList.remove('glow-work');
     }
+    // Trong phòng chung: mỗi lần màn hình CỦA MÌNH đổi nội dung (đổi mode/ván
+    // mới), báo cho đồng nghiệp biết để họ cập nhật màn hình mini của mình.
+    broadcastMyPlayerState();
   }
 
   function toggleMode(){
@@ -1650,7 +1917,9 @@
     // không bắt lại) — nếu người chơi CHỦ ĐỘNG đổi sang personal ngay lúc đó,
     // vẫn phải bị bắt: đây là hành vi mới, không phải "đứng yên trong vùng
     // nguy hiểm" mà cơ chế rearm (wasClose) được thiết kế để bỏ qua.
-    if(state.mode === 'personal' && bossDist <= CONFIG.catchRadius && state.running){
+    // Trong phòng chung: chỉ áp dụng nếu mình đang thực sự là target của Sếp
+    // (người khác tuyệt đối an toàn dù Sếp đứng gần bàn họ trên màn hình).
+    if(state.mode === 'personal' && bossDist <= CONFIG.catchRadius && state.running && isMyTurnToBeAtRisk){
       boss.wasClose = true;
       catchPlayer();
     }
@@ -1664,6 +1933,90 @@
     const remain = Math.max(0, CONFIG.matchDuration - state.elapsed);
     const m = Math.floor(remain/60), s = Math.floor(remain%60);
     clockEl.textContent = m + ':' + String(s).padStart(2,'0');
+  }
+
+  /* ---------- "1 Sếp chung": khoảng cách/toạ độ Sếp NHÌN TỪ GÓC CỦA MÌNH ----------
+     Dùng chung cho solo/host/guest — điểm mấu chốt để không phải viết 3 bản
+     game loop riêng. Solo: myDesk={0,0} nên bx,by = boss.x,boss.y y hệt trước
+     đây (không đổi hành vi solo). Phòng chung: dịch toạ độ tuyệt đối của Sếp
+     (boss.x/y, chung cho cả phòng) về hệ quy chiếu "mình đứng ở tâm" — đúng
+     framing mà toàn bộ code render/catch-check phía dưới đã giả định sẵn. */
+  function computeMyBossView(){
+    const bx = boss.x - myDesk.x, by = boss.y - myDesk.y;
+    const dist = Math.hypot(bx, by * CONFIG.ellipseRatio);
+    const atRisk = roomMode === 'solo' || boss.targetPlayerId === playerId;
+    return { dist, bx, by, isMyTurnToBeAtRisk: atRisk };
+  }
+
+  /* ---------- "1 Sếp chung": trạng thái màn hình của TỪNG đồng nghiệp ----------
+     Khác với boss_state (chỉ host gửi, tần suất cao) — mode/theme là của
+     riêng từng người nên MỌI client tự Broadcast trạng thái màn hình của
+     chính mình, chỉ khi nó thực sự đổi (bấm Tab hoặc bắt đầu ván), không
+     theo tick — rất nhẹ vì mode không đổi liên tục. */
+  let teammatePlayerStates = {}; // { [playerId]: {mode, workTheme, workData, personalTheme} }
+
+  function broadcastMyPlayerState(){
+    if(roomMode === 'solo' || !roomChannel || !state) return;
+    roomChannel.send({ type:'broadcast', event:'player_state', payload:{
+      playerId, mode: state.mode, workTheme: state.workTheme, workData: state.workData, personalTheme: state.personalTheme
+    }});
+  }
+
+  // Xây khung monitor mini rỗng — nội dung bên trong (work/personal) được
+  // updateTeammateScreen() đổ vào .tmScreenInner mỗi khi player_state tới,
+  // tái dùng nguyên buildWorkHTML/buildPersonalHTML của màn hình chính.
+  function updateTeammateScreen(id){
+    const unit = teammatesLayer.querySelector('.teammateUnit[data-player-id="'+id+'"]');
+    if(!unit) return;
+    const inner = unit.querySelector('.tmScreenInner');
+    const st = teammatePlayerStates[id];
+    if(!inner || !st) return;
+    inner.innerHTML = st.mode === 'work'
+      ? buildWorkHTML(st.workTheme, st.workData || {})
+      : buildPersonalHTML(st.personalTheme);
+  }
+
+  /* ---------- "1 Sếp chung": vẽ bàn đồng đội trên cùng hệ vòng tròn elip ----------
+     Vị trí bàn cố định suốt trận (deskLayout không đổi) nên chỉ cần dựng DOM
+     1 lần khi nhận match_start; mỗi khi target đổi chỉ toggle class, không
+     rebuild — tránh động vào DOM ở tần suất broadcast boss_state (~15Hz).
+     Nội dung màn hình mini cập nhật riêng qua player_state (xem listener). */
+  function renderTeammates(){
+    teammatesLayer.innerHTML = '';
+    if(!deskLayout) return;
+    const presence = roomChannel ? roomChannel.presenceState() : {};
+    const nameOf = id => {
+      for(const key in presence){
+        const meta = presence[key] && presence[key][0];
+        if(meta && meta.playerId === id) return meta.name || 'Ẩn danh';
+      }
+      return 'Ẩn danh';
+    };
+    Object.keys(deskLayout).forEach(id => {
+      if(id === playerId) return;
+      const desk = deskLayout[id];
+      const px = (desk.x - myDesk.x) * metersToPxX;
+      const py = (desk.y - myDesk.y) * metersToPxY;
+      const unit = document.createElement('div');
+      unit.className = 'teammateUnit';
+      unit.dataset.playerId = id;
+      unit.style.transform = 'translate(calc(-50% + ' + px + 'px), calc(-50% + ' + py + 'px))';
+      unit.innerHTML = '<div class="tmMonitor"><div class="tmScreen"><div class="tmScreenInner"></div></div></div><div class="tmName">' + nameOf(id) + '</div>';
+      teammatesLayer.appendChild(unit);
+      if(teammatePlayerStates[id]) updateTeammateScreen(id);
+    });
+    updateTeammateTargetHighlight();
+    // Vừa dựng khung xong — báo trạng thái màn hình của MÌNH cho người mới
+    // vào/vừa render lại biết ngay, không phải chờ tới lần đổi mode kế tiếp.
+    broadcastMyPlayerState();
+  }
+
+  function updateTeammateTargetHighlight(){
+    teammatesLayer.querySelectorAll('.teammateUnit').forEach(unit => {
+      const id = unit.dataset.playerId;
+      unit.classList.toggle('targeted', roomMode !== 'solo' && boss.targetPlayerId === id);
+      unit.classList.toggle('finished', roomFinishedPlayerIds.has(id));
+    });
   }
 
   /* ---------- Position the boss unit physically inside the proximity field.
@@ -1690,6 +2043,7 @@
 
   function endGame(won, reason){
     state.running = false;
+    if(roomMode !== 'solo') roomFinishedPlayerIds.add(playerId);
     modal.classList.add('show');
     transitionPhase('result');
     if(won){
@@ -1699,6 +2053,11 @@
     } else if(reason === 'caught'){
       modalTitle.textContent = '😬 Bị sếp bắt tại trận!';
       modalText.textContent = 'Bạn đã hết mạng vì để sếp lại gần dưới 1m mà chưa kịp chuyển tab. Canh sếp sát hơn nhé!';
+    } else if(reason === 'host_left'){
+      // Không có host-migration ở bước này — phòng mất nguồn điều khiển Sếp
+      // chung thì kết thúc nhẹ nhàng cho người còn lại thay vì treo màn hình.
+      modalTitle.textContent = '📡 Phòng đã ngắt kết nối';
+      modalText.textContent = 'Chủ phòng đã rời đi nên ván chơi chung dừng lại. Bạn có thể tạo phòng mới hoặc chơi 1 mình.';
     } else {
       modalTitle.textContent = '⏰ Hết giờ làm';
       modalText.textContent = 'Bạn mới tích lũy được ' + Math.floor(state.personalTime) + '/' + CONFIG.targetPersonalTime + ' giây việc riêng. Cố né sếp nhiều hơn để đạt chỉ tiêu!';
@@ -1764,6 +2123,41 @@
   }
 
   function tick(now){
+    // "1 Sếp chung": host phải tiếp tục mô phỏng + Broadcast Sếp cho cả phòng
+    // NGAY CẢ SAU KHI chính host đã endGame() (state.running=false) — người
+    // khác trong phòng có thể vẫn đang chơi dở. Vì vậy khối này chạy TRƯỚC
+    // guard "!state.running" bên dưới, độc lập với vòng đời state của host.
+    if(roomMode === 'host' && boss){
+      const hostDt = Math.min(0.05, (now - (tick._lastHostTick || now))/1000);
+      tick._lastHostTick = now;
+      const hostElapsedForDifficulty = state ? state.elapsed : 0;
+
+      if(!boss.forced && hostElapsedForDifficulty >= boss.nextCheckAt){
+        forceCloseApproach();
+        scheduleNextCheck();
+      }
+      const dx = boss.target.x - boss.x, dy = boss.target.y - boss.y;
+      const dToTarget = Math.hypot(dx,dy);
+      if(dToTarget < 0.12){
+        pickAmbientTarget();
+      } else {
+        boss.x += (dx/dToTarget) * boss.speed * hostDt;
+        boss.y += (dy/dToTarget) * boss.speed * hostDt;
+      }
+
+      const allFinished = roomFinishedPlayerIds.size >= roomPlayerIds.length;
+      if(!allFinished){
+        const nowMs = performance.now();
+        if(nowMs - lastBroadcastAt >= 1000/CONFIG.roomBroadcastHz){
+          lastBroadcastAt = nowMs;
+          roomChannel.send({ type:'broadcast', event:'boss_state', payload:{
+            x: boss.x, y: boss.y, forced: boss.forced, targetPlayerId: currentTargetPlayerId,
+            finishedPlayerIds: Array.from(roomFinishedPlayerIds)
+          }});
+        }
+      }
+    }
+
     if(!state.gameStarted || !state.running){ requestAnimationFrame(tick); return; }
     const dt = Math.min(0.05, (now - state.lastTick)/1000);
     state.lastTick = now;
@@ -1771,42 +2165,49 @@
 
     if(state.mode === 'personal') state.personalTime += dt;
 
-    if(!boss.forced && state.elapsed >= boss.nextCheckAt){
-      forceCloseApproach();
-      scheduleNextCheck();
+    if(roomMode !== 'guest' && roomMode !== 'host'){
+      // Solo: mô phỏng y hệt trước đây (host đã tự chạy khối riêng ở trên).
+      if(!boss.forced && state.elapsed >= boss.nextCheckAt){
+        forceCloseApproach();
+        scheduleNextCheck();
+      }
+      const dx = boss.target.x - boss.x, dy = boss.target.y - boss.y;
+      const dToTarget = Math.hypot(dx,dy);
+      if(dToTarget < 0.12){
+        pickAmbientTarget();
+      } else {
+        boss.x += (dx/dToTarget) * boss.speed * dt;
+        boss.y += (dy/dToTarget) * boss.speed * dt;
+      }
     }
+    // Guest: boss.x/y được ghi đè trực tiếp bởi listener 'boss_state', không
+    // tự mô phỏng gì ở đây.
 
-    const dx = boss.target.x - boss.x, dy = boss.target.y - boss.y;
-    const dToTarget = Math.hypot(dx,dy);
-    if(dToTarget < 0.12){
-      pickAmbientTarget();
-    } else {
-      boss.x += (dx/dToTarget) * boss.speed * dt;
-      boss.y += (dy/dToTarget) * boss.speed * dt;
-    }
+    const view = computeMyBossView();
+    bossDist = view.dist;
+    isMyTurnToBeAtRisk = view.isMyTurnToBeAtRisk;
+    updateBossPosition(view.dist, view.bx, view.by);
+    maybeFootstep(view.dist, state.elapsed);
 
-    // Elliptical distance: stretch Y back to circular scale before measuring,
-    // so "dist" (used for catch/rearm AND the number shown) always matches
-    // exactly which drawn ring the boss visually stands on, in every direction.
-    const dist = Math.hypot(boss.x, boss.y * CONFIG.ellipseRatio);
-    bossDist = dist;
-    updateBossPosition(dist, boss.x, boss.y);
-    maybeFootstep(dist, state.elapsed);
-
-    const isCorrect = (state.mode === 'work' && dist <= CONFIG.catchRadius) || (state.mode === 'personal' && dist > CONFIG.catchRadius);
+    // Điểm "thời gian chơi đúng" vẫn cộng dồn không điều kiện dù đang an toàn
+    // tuyệt đối hay không — để so sánh ngang hàng với điểm chơi solo (quyết
+    // định: không gate correctTime theo việc có đang bị nhắm hay không).
+    const isCorrect = (state.mode === 'work' && view.dist <= CONFIG.catchRadius) || (state.mode === 'personal' && view.dist > CONFIG.catchRadius);
     if(isCorrect) state.correctTime += dt;
 
-    if(dist <= CONFIG.catchRadius && !boss.wasClose){
-      boss.wasClose = true;
-      if(state.mode === 'personal'){
-        catchPlayer();
-      } else {
-        beep(660, 0.1, 'sine', 0.03);
-        safePopup.textContent = pick(PRAISE_LINES);
-        safePopup.classList.remove('pop'); void safePopup.offsetWidth; safePopup.classList.add('pop');
+    if(view.isMyTurnToBeAtRisk){
+      if(view.dist <= CONFIG.catchRadius && !boss.wasClose){
+        boss.wasClose = true;
+        if(state.mode === 'personal'){
+          catchPlayer();
+        } else {
+          beep(660, 0.1, 'sine', 0.03);
+          safePopup.textContent = pick(PRAISE_LINES);
+          safePopup.classList.remove('pop'); void safePopup.offsetWidth; safePopup.classList.add('pop');
+        }
+      } else if(view.dist > CONFIG.rearmRadius){
+        boss.wasClose = false;
       }
-    } else if(dist > CONFIG.rearmRadius){
-      boss.wasClose = false;
     }
 
     updateHUD();
@@ -1844,6 +2245,7 @@
   modalBtn.addEventListener('click', ()=>{
     modal.classList.remove('show');
     replayFab.classList.remove('show');
+    resetRoomModeForReplay();
     resetState();
     state.gameStarted = true;
     renderScreen();
