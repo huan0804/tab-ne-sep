@@ -1239,7 +1239,6 @@
     // postgres_changes KHÔNG fire lại; guest phải tự gọi
     // startRoomMatchForEveryone() ngay tại đây thay vì đợi postgres_changes.
     roomChannel.on('broadcast', { event: 'match_start' }, ({ payload }) => {
-      console.log('[debug guest received match_start]', { roomModeBefore: roomMode, stateGameStarted: state ? state.gameStarted : 'no-state', modalShown: modal.classList.contains('show') });
       if(roomMode === 'host') return; // host đã tự dựng layout của chính mình
       const wasAlreadyInRoom = roomMode === 'guest';
       deskLayout = payload.deskLayout;
@@ -2256,7 +2255,6 @@
         btn.style.cssText = 'margin-top:10px; width:100%; font-family:var(--body); font-weight:700; font-size:13px; padding:10px; border-radius:8px; border:1.5px solid #2563eb; background:#e8f0fe; color:#1e3a6d; cursor:pointer;';
         btn.addEventListener('click', ()=>{
           modal.classList.remove('show');
-          console.log('[debug host replay click]', { roomChannelState: roomChannel ? roomChannel.state : null, roomMode, currentRoomId, presence: roomChannel ? roomChannel.presenceState() : null });
           startRoomMatchForEveryone();
         });
         replayEl.appendChild(btn);
