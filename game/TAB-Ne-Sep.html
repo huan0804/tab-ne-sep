@@ -619,12 +619,16 @@
     fieldRangeMeters: 3, // outermost distance ellipse drawn = this many meters
     ellipseRatio: 1.4, // X:Y — how flattened the proximity field is (floor-plan tilt)
     // ---- Chơi cùng bạn: 1 Sếp chung (Bước 2) ----
-    // Giới hạn trong đúng phạm vi vòng tròn hiển thị (fieldRangeMeters=3) —
-    // nếu random ra xa hơn, bàn đồng nghiệp sẽ nằm ngoài khung nhìn/gần mép
-    // màn hình, trông như biến mất (bug đã gặp khi test: "không thấy đồng
-    // nghiệp" thực ra là do bàn bị random quá xa khỏi khung hiển thị được).
-    roomDeskBoundsMin: -2.6, roomDeskBoundsMax: 2.6, // sơ đồ phòng (mét), vị trí bàn random trong khoảng này
-    roomDeskMinSpacing: 1.6, // khoảng cách tối thiểu giữa 2 bàn, tránh chồng lấn
+    // roomDeskMaxRadius là bán kính rải bàn quanh 1 tâm chung — mỗi người
+    // luôn là tâm màn hình CỦA CHÍNH HỌ (field 3m quanh họ), nên khoảng cách
+    // xa nhất có thể xảy ra giữa 2 người bất kỳ là 2×roomDeskMaxRadius (2
+    // điểm ở 2 phía đối diện vòng rải). Phải giữ 2×roomDeskMaxRadius ≤
+    // fieldRangeMeters để KHÔNG BAO GIỜ có ai bị đẩy ra ngoài khung nhìn của
+    // người khác — đã từng để bán kính quá lớn (rải theo hình vuông ±2.6m,
+    // đường chéo xa nhất ~7.3m) khiến 1 người trong phòng 3 người biến mất
+    // hoàn toàn khỏi màn hình 2 người kia.
+    roomDeskMaxRadius: 1.4, // 2×1.4=2.8 ≤ fieldRangeMeters(3), còn biên an toàn nhỏ
+    roomDeskMinSpacing: 1.0, // khoảng cách tối thiểu giữa 2 bàn, tránh chồng lấn
     roomDeskMaxAttempts: 200, // số lần thử lại rejection-sampling trước khi chấp nhận chồng lấn
     roomBroadcastHz: 15 // tần suất host gửi vị trí Sếp cho cả phòng
   };
@@ -1231,7 +1235,6 @@
       roomPlayerIds = payload.playerIds || Object.keys(deskLayout);
       roomMode = 'guest';
       roomMatchResults = {};
-      console.log('[debug guest match_start]', { payload, myPlayerId: playerId, myDesk, teammatesCount: Object.keys(deskLayout).length - 1 });
       renderTeammates();
       if(wasAlreadyInRoom && state && !state.gameStarted){
         // Ván trước đã kết thúc (đang ở modal kết quả) và host vừa bấm chơi
@@ -1349,6 +1352,7 @@
     roomInviteBanner.innerHTML = '👥 <b>' + pendingRoomInvite.hostName + '</b> mời bạn vào phòng chơi cùng!';
     roomInviteBanner.classList.add('show');
     startBtn.textContent = '▶️ Vào phòng của ' + pendingRoomInvite.hostName;
+    refreshNameInputVisibility();
   }
 
   function log_roomJoinFailed(){
@@ -1396,7 +1400,6 @@
       roomMode = 'host';
       roomFinishedPlayerIds = new Set();
       roomMatchResults = {};
-      console.log('[debug host start]', { roomPlayerIds, deskLayout, myDesk, presenceRaw: roomChannel.presenceState() });
       roomChannel.send({ type:'broadcast', event:'match_start', payload:{ deskLayout, playerIds: roomPlayerIds } });
       resetRoomTargetingForHost();
       renderTeammates();
@@ -1845,17 +1848,32 @@
     'Heo Mập Mập', 'Rắn 2 Đuôi', 'Gấu Trúc Lười', 'Cú Đêm Văn Phòng',
     'Vịt Xàm Xí', 'Mèo Béo IT', 'Ninja Trốn Việc', 'Sói Cô Đơn KPI'
   ];
-  if(getPlayerName()){
-    // Đã có tên từ trước — chỉ hỏi tên lần đầu, các lần sau bỏ qua bước này
-    nameInputWrap.style.display = 'none';
-  } else {
-    const shownNames = FUNNY_NAME_SUGGESTIONS.slice().sort(()=>Math.random()-0.5).slice(0,4);
-    nameInput.placeholder = 'VD: ' + shownNames[0];
-    nameSuggestions.innerHTML = shownNames.map(n=>'<span class="nameChip">🎲 '+n+'</span>').join('');
-    nameSuggestions.querySelectorAll('.nameChip').forEach((chip, i)=>{
-      chip.addEventListener('click', ()=>{ nameInput.value = shownNames[i]; savePlayerName(shownNames[i]); });
-    });
+  // Tách thành hàm vì cần gọi lại từ prepareRoomInvite() — quyết định "có
+  // hỏi tên hay không" phụ thuộc CẢ VÀO việc đây có phải lời mời phòng hay
+  // không, nhưng checkRoomFromUrl()/prepareRoomInvite() chạy bất đồng bộ
+  // (await query Supabase) nên chưa kịp set pendingRoomInvite tại thời điểm
+  // script chạy tới đây theo thứ tự đồng bộ ban đầu.
+  function refreshNameInputVisibility(){
+    if(pendingRoomInvite){
+      // Được mời vào phòng — LUÔN cho xác nhận/sửa tên trước khi vào, kể cả
+      // đã có tên lưu sẵn (người chơi có thể muốn đổi tên khác cho lần này).
+      nameInputWrap.style.display = '';
+      return;
+    }
+    if(getPlayerName()){
+      // Chơi bình thường (không qua lời mời) — chỉ hỏi tên lần đầu.
+      nameInputWrap.style.display = 'none';
+    } else {
+      nameInputWrap.style.display = '';
+      const shownNames = FUNNY_NAME_SUGGESTIONS.slice().sort(()=>Math.random()-0.5).slice(0,4);
+      nameInput.placeholder = 'VD: ' + shownNames[0];
+      nameSuggestions.innerHTML = shownNames.map(n=>'<span class="nameChip">🎲 '+n+'</span>').join('');
+      nameSuggestions.querySelectorAll('.nameChip').forEach((chip, i)=>{
+        chip.addEventListener('click', ()=>{ nameInput.value = shownNames[i]; savePlayerName(shownNames[i]); });
+      });
+    }
   }
+  refreshNameInputVisibility();
 
   initSharedDb();
 
@@ -1890,15 +1908,21 @@
      Chỉ host gọi, 1 lần duy nhất lúc bấm "Bắt đầu" — kết quả Broadcast cho cả
      phòng dùng chung, không tính lại giữa trận. Rejection sampling đơn giản:
      random rồi thử lại nếu quá gần bàn đã đặt, chấp nhận chồng lấn nếu hết
-     lượt thử (hiếm, không đáng chặn trận đấu vì việc này). */
+     lượt thử (hiếm, không đáng chặn trận đấu vì việc này).
+     Toạ độ cực (góc + bán kính ≤ roomDeskMaxRadius) thay vì random x/y độc
+     lập theo hình vuông — hình vuông tạo khoảng cách đường chéo lớn hơn
+     nhiều so với cạnh, dễ đẩy người ở 2 góc đối diện ra ngoài field nhìn
+     thấy được của nhau (bug đã gặp: 1 người biến mất trong phòng 3 người). */
   function generateDeskLayout(playerIds){
     const layout = {};
     const placed = [];
     playerIds.forEach(id => {
       let x, y, ok = false;
       for(let attempt=0; attempt<CONFIG.roomDeskMaxAttempts && !ok; attempt++){
-        x = rand(CONFIG.roomDeskBoundsMin, CONFIG.roomDeskBoundsMax);
-        y = rand(CONFIG.roomDeskBoundsMin, CONFIG.roomDeskBoundsMax);
+        const ang = rand(0, Math.PI*2);
+        const r = rand(0, CONFIG.roomDeskMaxRadius);
+        x = Math.cos(ang) * r;
+        y = Math.sin(ang) * r;
         ok = placed.every(p => Math.hypot(x-p.x, y-p.y) >= CONFIG.roomDeskMinSpacing);
       }
       layout[id] = {x, y};
