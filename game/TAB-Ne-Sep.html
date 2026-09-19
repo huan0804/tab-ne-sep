@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>TAB: Né Sếp</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🫣</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Be+Vietnam+Pro:ital,wght@0,400;0,500;0,600;0,700;1,500&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
@@ -81,7 +82,13 @@
      của mình). Monitor mini tái dùng chính buildWorkHTML/buildPersonalHTML
      của màn hình chính (thu nhỏ bằng scale), không phải hình vẽ riêng. ---------- */
   #teammatesLayer{position:absolute; left:50%; top:50%; width:0; height:0; z-index:9; pointer-events:none;}
-  .teammateUnit{position:absolute; left:0; top:0; transform:translate(-50%,-50%); display:flex; flex-direction:column; align-items:center; gap:4px; transition:opacity 0.25s;}
+  .teammateUnit{position:absolute; left:0; top:0;}
+  /* .tmScale nhận transform scale() TÍNH RIÊNG theo metersToPxX hiện tại
+     (xem renderTeammates()) — bắt buộc vì kích thước monitor mini là px cố
+     định nhưng khoảng cách giữa các bàn co giãn theo mét/màn hình: không
+     scale theo thì màn hẹp (mobile) sẽ làm 2 monitor mini chồng lên nhau dù
+     khoảng cách "mét" giữa 2 bàn không đổi. */
+  .tmScale{position:absolute; left:0; top:0; transform-origin:center center; display:flex; flex-direction:column; align-items:center; gap:4px; transition:opacity 0.25s;}
   .teammateUnit .tmMonitor{width:120px; height:78px; background:var(--bezel); border-radius:8px; padding:5px; box-shadow:0 8px 18px rgba(0,0,0,0.4); border:2px solid #fff;}
   .teammateUnit.targeted .tmMonitor{border-color:#c1272d; box-shadow:0 0 0 4px rgba(193,39,45,0.3), 0 8px 18px rgba(0,0,0,0.4);}
   .teammateUnit .tmScreen{width:100%; height:100%; border-radius:4px; overflow:hidden; position:relative; background:#0a0a0a;}
@@ -92,7 +99,7 @@
   .teammateUnit .tmScreenInner{position:relative; width:660px; height:420px; transform:scale(0.182); transform-origin:top left;}
   .teammateUnit .tmName{font-family:var(--body); font-size:11px; font-weight:700; color:#fff; background:rgba(37,99,235,0.9); padding:2px 8px; border-radius:8px; white-space:nowrap; max-width:120px; overflow:hidden; text-overflow:ellipsis; box-shadow:0 2px 6px rgba(0,0,0,0.25);}
   .teammateUnit.targeted .tmName{background:rgba(193,39,45,0.9);}
-  .teammateUnit.finished{opacity:0.35;}
+  .teammateUnit.finished .tmScale{opacity:0.35;}
 
   #bossFaceCard{position:absolute; bottom:40px; left:50%; transform:translateX(-50%); display:flex; flex-direction:column; align-items:center; gap:3px;}
   #bossFaceSvgWrap{width:64px; height:64px; border-radius:50%; background:#2a2118; border:3px solid #55483a; overflow:hidden; box-shadow:0 6px 16px rgba(0,0,0,0.45); transition:box-shadow 0.2s, border-color 0.2s;}
@@ -352,6 +359,28 @@
        ngang màn hẹp, che khuất vòng tròn khoảng cách vẽ cùng khu vực —
        hạ sàn để 48vw thực sự phát huy, dành chỗ nhìn rõ Sếp tới/đi. */
     #monitor{width:clamp(200px, 48vw, 660px); height:clamp(130px, 26vh, 420px);}
+  }
+
+  /* Điện thoại cầm dọc (portrait, màn hẹp): game thiết kế cho khung ngang
+     nên xoay #stage 90deg bằng CSS thay vì bắt người chơi tự xoay máy — sau
+     khi rotate(90deg), width/height HIỂN THỊ bị hoán đổi trục nên phải gán
+     ngược 100vh/100vw (không phải 100%/100%) rồi dịch #stage về đúng vị trí
+     bằng transform-origin + translate, JS không cần biết gì về việc này vì
+     toàn bộ code đo kích thước qua #scene.clientWidth vẫn đọc đúng kích
+     thước ĐÃ XOAY (CSS transform không đổi layout box, chỉ đổi hiển thị). */
+  @media (max-width:600px) and (orientation:portrait){
+    html, body{ width:100vw; height:100vh; overflow:hidden; }
+    /* Xoay quanh TÂM viewport (thay vì góc) rồi dịch về đúng chỗ — cách này
+       tránh phải tính tay offset theo hướng rotate (dễ lệch dấu/trục nếu
+       tính từ góc). Với #stage kích thước 100vh×100vw (trục đã hoán đổi so
+       với w/h thật), xoay 90deg quanh tâm của CHÍNH NÓ rồi định vị tâm đó
+       trùng tâm viewport là cách bất biến, không phụ thuộc chiều xoay. */
+    #stage{
+      position:fixed;
+      width:100vh; height:100vw;
+      top:50%; left:50%;
+      transform:translate(-50%,-50%) rotate(90deg);
+    }
   }
 
   /* Accessibility: visible focus states for keyboard nav */
@@ -1993,6 +2022,13 @@
       }
       return 'Ẩn danh';
     };
+    // Monitor mini có kích thước px cố định (thiết kế ở baseline
+    // metersToPxX=90) nhưng khoảng cách giữa các bàn co giãn theo bề rộng
+    // màn hình thật (recomputeFieldScale()) — ở màn hẹp (mobile), khoảng
+    // cách bằng pixel giữa 2 bàn có thể nhỏ hơn cả kích thước monitor mini,
+    // gây chồng lấn. Scale monitor mini theo đúng tỷ lệ đó để khoảng cách
+    // hình học và kích thước UI luôn tỷ lệ thuận, không bao giờ chồng lấn.
+    const tmScale = Math.max(0.4, Math.min(1, metersToPxX / 90));
     Object.keys(deskLayout).forEach(id => {
       if(id === playerId) return;
       const desk = deskLayout[id];
@@ -2002,7 +2038,7 @@
       unit.className = 'teammateUnit';
       unit.dataset.playerId = id;
       unit.style.transform = 'translate(calc(-50% + ' + px + 'px), calc(-50% + ' + py + 'px))';
-      unit.innerHTML = '<div class="tmMonitor"><div class="tmScreen"><div class="tmScreenInner"></div></div></div><div class="tmName">' + nameOf(id) + '</div>';
+      unit.innerHTML = '<div class="tmScale" style="transform:translate(-50%,-50%) scale(' + tmScale + ')"><div class="tmMonitor"><div class="tmScreen"><div class="tmScreenInner"></div></div></div><div class="tmName">' + nameOf(id) + '</div></div>';
       teammatesLayer.appendChild(unit);
       if(teammatePlayerStates[id]) updateTeammateScreen(id);
     });
