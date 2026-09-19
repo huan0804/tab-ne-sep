@@ -1257,6 +1257,14 @@
 
     roomChannel.on('broadcast', { event: 'boss_state' }, ({ payload }) => {
       if(roomMode === 'host' || !boss) return;
+      const nowDbg = performance.now();
+      window.__bossStateGaps = window.__bossStateGaps || [];
+      if(window.__lastBossStateAt) window.__bossStateGaps.push(Math.round(nowDbg - window.__lastBossStateAt));
+      window.__lastBossStateAt = nowDbg;
+      if(window.__bossStateGaps.length % 30 === 0){
+        const gaps = window.__bossStateGaps.slice(-30);
+        console.log('[debug boss_state gaps ms, last 30]', gaps, 'avg=', Math.round(gaps.reduce((a,b)=>a+b,0)/gaps.length));
+      }
       const wasTargetingMe = boss.targetPlayerId === playerId;
       // KHÔNG gán thẳng boss.x/y ở đây — broadcast chỉ tới ~15 lần/giây
       // trong khi tick() chạy ~60fps, nên gán trực tiếp làm Sếp "đứng khựng"
