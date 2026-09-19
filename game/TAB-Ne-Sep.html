@@ -288,8 +288,12 @@
   .nameChip:active{ transform:scale(0.95); }
   #recordLine{font-size:12px; color:#8a6d1f; margin-bottom:12px;}
   #hudTrophyBtn{background:none; border:none; font-size:20px; cursor:pointer; padding:2px 4px;}
-  #hudStopBtn{background:none; border:none; font-size:16px; color:#888; cursor:pointer; padding:2px 6px;}
-  #hudStopBtn:hover{color:#c1272d;}
+  /* Trước đây chỉ 1 icon "⏹" màu xám nhạt trên nền tối — gần như vô hình,
+     không ai nhận ra đó là nút bấm được (thiếu affordance: không có nền,
+     không có label). Sửa lại có khung/nền/viền rõ + chữ, giống các nút
+     hành động khác trong game (vd nút "Đổi màn hình" luôn có icon + text). */
+  #hudStopBtn{display:flex; align-items:center; gap:4px; background:rgba(220,38,38,0.12); border:1.5px solid rgba(220,38,38,0.5); border-radius:8px; font-family:var(--body); font-size:11px; font-weight:600; color:#ff8a8a; cursor:pointer; padding:5px 10px;}
+  #hudStopBtn:hover{background:rgba(220,38,38,0.25); color:#fff;}
 
   #lbModal{position:absolute; inset:0; z-index:55; display:none; align-items:center; justify-content:center; background:rgba(10,10,12,0.8);}
   #lbModal.show{display:flex;}
@@ -351,6 +355,10 @@
     .hud-label{font-size:9px;}
     .hud-value{font-size:14px;}
     #hud #title{font-size:12px;}
+    /* Màn hẹp: giữ khung/màu đỏ (vẫn đủ nhận ra là nút) nhưng bỏ chữ, chỉ
+       icon — nhường chỗ cho các khối HUD khác không bị vỡ dòng. */
+    #hudStopBtn{padding:5px 7px; font-size:13px;}
+    #hudStopBtn .hudStopLabel{display:none;}
     #progressWrap{min-width:100px;}
     .mouse, .succulent{display:none;}
     #tabBtn{padding:13px 20px;font-size:13px;min-height:44px; background:#c1272d; border-color:#e0454b; box-shadow:0 6px 16px rgba(193,39,45,0.4); animation:pulseTabBtn 1.8s ease-in-out infinite;}
@@ -470,14 +478,14 @@
 
   <div id="hud">
     <div id="title">Ca Làm Việc Của Minh</div>
-    <button id="hudStopBtn" title="Dừng ván, không tính điểm">⏹</button>
+    <button id="hudStopBtn" title="Dừng ván, không tính điểm">⏹ <span class="hudStopLabel">Dừng ván</span></button>
     <button id="hudTrophyBtn" title="Bảng xếp hạng">🏆</button>
     <div class="hud-block">
       <div class="hud-label">MẠNG</div>
       <div class="hud-value" id="lives">❤️❤️❤️</div>
     </div>
     <div id="progressWrap">
-      <div class="hud-label">VIỆC RIÊNG <span id="progressText">0 / 60s</span></div>
+      <div class="hud-label">VIỆC RIÊNG <span id="progressText">0 / 30s</span></div>
       <div id="progressTrack"><div id="progressFill"></div></div>
     </div>
     <div class="hud-block">
@@ -606,7 +614,10 @@
 <script>
 (function(){
   const CONFIG = {
-    targetPersonalTime: 60, matchDuration: 120, maxLives: 3,
+    // Rút trận từ 120s→60s (feedback: 120s quá dài) — targetPersonalTime và
+    // difficultyRampSeconds rút theo đúng tỉ lệ cũ (60/120=50%, 80/120≈67%)
+    // để giữ nguyên cảm giác độ khó tương đối, chỉ chơi nhanh hơn.
+    targetPersonalTime: 30, matchDuration: 60, maxLives: 3,
     catchRadius: 1.0, rearmRadius: 1.8,
     ambientBoundsMin: 2.5, ambientBoundsMax: 6.5,
     ambientNearBiasProbStart: 0.15, ambientNearBiasProbEnd: 0.28,
@@ -615,7 +626,7 @@
     speedCheckStart: [0.6, 2.0], speedCheckEnd: [1.2, 3.4],
     checkGapStart: [5.0, 7.0], checkGapEnd: [1.4, 2.4],
     checkTargetMin: 0.15, checkTargetMax: 0.85,
-    difficultyRampSeconds: 80,
+    difficultyRampSeconds: 40,
     fieldRangeMeters: 3, // outermost distance ellipse drawn = this many meters
     ellipseRatio: 1.4, // X:Y — how flattened the proximity field is (floor-plan tilt)
     // ---- Chơi cùng bạn: 1 Sếp chung (Bước 2) ----
@@ -1228,6 +1239,7 @@
     // postgres_changes KHÔNG fire lại; guest phải tự gọi
     // startRoomMatchForEveryone() ngay tại đây thay vì đợi postgres_changes.
     roomChannel.on('broadcast', { event: 'match_start' }, ({ payload }) => {
+      console.log('[debug guest received match_start]', { roomModeBefore: roomMode, stateGameStarted: state ? state.gameStarted : 'no-state', modalShown: modal.classList.contains('show') });
       if(roomMode === 'host') return; // host đã tự dựng layout của chính mình
       const wasAlreadyInRoom = roomMode === 'guest';
       deskLayout = payload.deskLayout;
@@ -2244,6 +2256,7 @@
         btn.style.cssText = 'margin-top:10px; width:100%; font-family:var(--body); font-weight:700; font-size:13px; padding:10px; border-radius:8px; border:1.5px solid #2563eb; background:#e8f0fe; color:#1e3a6d; cursor:pointer;';
         btn.addEventListener('click', ()=>{
           modal.classList.remove('show');
+          console.log('[debug host replay click]', { roomChannelState: roomChannel ? roomChannel.state : null, roomMode, currentRoomId, presence: roomChannel ? roomChannel.presenceState() : null });
           startRoomMatchForEveryone();
         });
         replayEl.appendChild(btn);
