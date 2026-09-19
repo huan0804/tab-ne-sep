@@ -2,6 +2,26 @@
 
 > File này ghi lại trạng thái dự án để tiếp tục ở phiên làm việc sau. Cập nhật mỗi khi có tiến triển lớn.
 
+## Trạng thái hiện tại (2026-09-19)
+
+Phiên này là **research/Q&A để hiểu kiến trúc trước khi fine-tune plan** (không đụng vào các việc CHƯA XONG liệt kê ở phần dưới — schema Supabase, test streak/challenge, room, đo retention **vẫn y nguyên như phiên trước, chưa làm gì thêm**). Chỉ có đúng 1 thay đổi code thật phát sinh ngoài lề, đã deploy xong.
+
+### Việc đã làm xong và deploy (commit `9934caf`, đã push + Vercel tự redeploy)
+
+**Dọn URL game — bỏ đuôi `.html` khỏi link công khai:**
+- Vấn đề phát hiện: link phòng/thách đấu được sinh từ `location.href`. Nếu user mở game bằng double-click file cục bộ thay vì qua domain thật, link share ra sẽ là `file:///D:/...` (chỉ chạy trên đúng máy đó, người khác không mở được). Ngoài ra ngay cả khi mở đúng domain, URL cũ vẫn lộ `/game/TAB-Ne-Sep.html` — trông như source code lộ ra ngoài, giảm cảm giác "sản phẩm thật".
+- Fix: `vercel.json` thêm `rewrites` (`/play` → `/game/TAB-Ne-Sep.html`, giữ nguyên URL trên thanh địa chỉ, khác với `redirects` là sẽ lộ đích cuối) + đổi `redirects` gốc (`/` → `/play` thay vì thẳng vào file `.html`).
+- Domain chính thức xác nhận lại: **`https://tab-ne-sep.vercel.app`** (Vercel team "Han", Hobby plan). Trang tổng quan Vercel gọi là "Overview" (không có nhãn "Dashboard" riêng, dễ gây bối rối khi tìm lại).
+- Đã verify bằng `curl -I` sau khi deploy: `tab-ne-sep.vercel.app/` → 308 redirect đúng sang `/play`. User tự mở trình duyệt xác nhận OK.
+- **Chưa làm:** rút gọn thêm domain (`.com`/`.app` riêng thay vì `.vercel.app`) — mới dừng ở mức research trong hội thoại, chưa quyết định mua domain nào, không phải việc cần làm ngay.
+
+### Đã lưu vào Claude memory (không phải trong repo)
+- `tab-ne-sep.vercel.app` là domain chính thức + cảnh báo pitfall `file://` — lưu tại `project_vercel_domain.md` trong memory Claude, để các phiên sau tự biết domain, khỏi phải tìm lại trong Vercel dashboard mỗi lần.
+
+### Kiến thức nền đã thống nhất trong phiên (để tham chiếu, không phải quyết định mới)
+- `playerId` sinh từ `crypto.randomUUID()`, lưu trong `localStorage` gắn với **từng cặp (trình duyệt, domain)** — đổi trình duyệt (vd Chrome ↔ CocCoc) trên cùng máy = 2 danh tính khác nhau hoàn toàn trên Supabase, dù cùng 1 người. Đây là rủi ro thật cho streak nếu người chơi đổi trình duyệt — **cần cân nhắc đưa vào phần rủi ro khi fine-tune plan retention**, hiện chưa có giải pháp (ví dụ: cho phép nhập lại playerId cũ bằng tay, hoặc chấp nhận giới hạn này).
+- Giới hạn Supabase Free tier ước tính KHÔNG phải điểm nghẽn gần (database 500MB ≈ hàng triệu ván chơi mới chạm) — rủi ro gần nhất thực ra là **project tự pause sau 7 ngày không có traffic** (đặc thù side project ít người chơi giữa các đợt phát triển), cần nhớ vào Vercel/Supabase dashboard resume thủ công nếu gặp lỗi kết nối DB sau thời gian dài không ai mở game.
+
 ## Trạng thái hiện tại (2026-09-16, phiên khuya)
 
 Sau khi làm xong 4 việc kỹ thuật (bug fix, icon, mobile, hạ tầng multiplayer room — xem phần dưới), user yêu cầu chạy skill `personatwin` để phản biện game bằng Mom Test. Kết quả phản biện dẫn tới 1 hướng đi mới: **retention loop** — hiện đang code dở, CHƯA test bằng browser (user đi ngủ giữa lúc đang làm).
