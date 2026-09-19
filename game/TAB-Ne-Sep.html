@@ -2397,6 +2397,15 @@
     }
 
     if(!state.gameStarted || !state.running){ requestAnimationFrame(tick); return; }
+    if(roomMode === 'guest'){
+      window.__tickGaps = window.__tickGaps || [];
+      if(window.__lastTickAt) window.__tickGaps.push(Math.round(now - window.__lastTickAt));
+      window.__lastTickAt = now;
+      if(window.__tickGaps.length % 90 === 0){
+        const g = window.__tickGaps.slice(-90);
+        console.log('[debug tick gaps ms, last 90]', 'avg=', Math.round(g.reduce((a,b)=>a+b,0)/g.length), 'max=', Math.max(...g));
+      }
+    }
     const dt = Math.min(0.05, (now - state.lastTick)/1000);
     state.lastTick = now;
     state.elapsed += dt;
