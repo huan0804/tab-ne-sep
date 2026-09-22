@@ -4,53 +4,19 @@
 
 ## Trạng thái hiện tại (2026-09-22)
 
-**Đã push lên GitHub (2 commit): thuật toán rải bàn phòng đông người (`c7a9739`) + sửa database scalability (`289e410`).**
+**Đã push lên GitHub, tất cả trên production tại `https://tab-ne-sep.vercel.app/play`:**
 
-**Đang giữa vòng sửa mobile UX (lag + tràn màn hình + bàn phím) — CHƯA COMMIT, CHƯA TEST.** Đã sửa xong trong working tree của `game/TAB-Ne-Sep.html`, chờ user test lại bằng điện thoại thật (hôm sau) rồi mới quyết commit/push hay sửa tiếp.
+1. **Rải bàn phòng đông người** — xếp đều vành tròn + bù jitter (verify bằng mô phỏng 5000 lần/N: N=2-6 đạt 0% chồng lấn), trần cứng `roomMaxPlayers: 6` chặn ở `joinRoomChannel()`.
+2. **Database scalability** — 3 RPC `increment_*` nguyên tử thay pattern select-rồi-update cũ (từng có race condition mất dữ liệu khi đông người ghi cùng lúc), tối ưu `getPlayerRank()` dùng `count:'estimated'` cho phần không cần chính xác tuyệt đối. **Đã chạy `schema.sql` trên Supabase production, verify xong** (`select proname from pg_proc where proname like 'increment_%'` → đúng 3 dòng).
+3. **Analytics theo ngày/tuần** — thêm 3 bảng mới (`analytics_access_hours_daily`, `analytics_screen_time_daily`, `analytics_heatmap_weekly`) song song 3 bảng cộng-dồn all-time cũ (giữ nguyên, không xoá). Khoá theo giờ VN cố định (UTC+7), tính sẵn ở client bằng `vnDateKeyPadded()`/`vnWeekKey()`. **⚠️ CẦN CHẠY LẠI `supabase/schema.sql` TRÊN SUPABASE** để 3 bảng + 3 RPC mới này hoạt động — chưa làm, y hệt bước đã làm cho RPC cũ trước đó.
+4. **Mobile UX** — bỏ ép xoay ngang CSS (portrait hiển thị dọc thật), sửa `#monitor` tràn màn hình (đổi `dvw/dvh` → `cqw/cqh` container query), tối ưu render (`will-change`, bỏ `calc()` khỏi hot path), nút "Dừng ván" luôn hiện chữ ở mọi kích thước màn hình, bỏ hẳn banner gợi ý xoay ngang (test thật: nghiêng máy thật vẫn không xoay được trên 1 số cấu hình Android, banner vô dụng).
+5. **Ad slot trung lập** trong modal kết quả ván (`#adSlot`, hàm `renderAdSlot(html)`) — chưa gắn network nào, sẵn sàng khi chọn AdSense/brand deal.
 
-### ✅ Đã xong + push — Database scalability cho traffic tăng đột biến (commit `289e410`)
+**Đã xác nhận qua test thật trên điện thoại**: không còn tràn màn hình, nút Dừng rõ ràng, banner xoay ngang đã gỡ. **Chưa xác nhận**: lag khi chơi thật (vòng test trước có cải thiện nhưng chưa test lại sau các thay đổi mới nhất), bàn phím ở màn nhập tên.
 
-User yêu cầu đảm bảo game chịu được traffic tăng đột biến + đánh giá khả năng chèn quảng cáo. Rà lại toàn bộ cách client ghi vào Supabase, phát hiện 2 điểm nghẽn thật:
-
-1. **Race condition ở 3 bảng analytics** (`analytics_access_hours`, `analytics_screen_time`, `analytics_heatmap`) — mỗi bảng chỉ có 1-2 dòng CỐ ĐỊNH mà MỌI người chơi cùng ghi đè. Code cũ: client SELECT giá trị hiện tại → cộng ở JS → UPDATE giá trị mới. Nhiều người ghi gần đồng thời → người ghi sau đè mất phần cộng của người ghi trước, mất dữ liệu âm thầm không báo lỗi — càng đông người chơi cùng lúc càng mất nhiều. Đã sửa: 3 RPC function Postgres (`increment_access_hour`, `increment_screen_time`, `increment_heatmap`, khai báo `security definer` trong `supabase/schema.sql` mục 2d) làm phép cộng NGAY trong 1 câu `UPDATE` — Postgres tự khoá row, atomic thật sự. Xoá luôn quyền UPDATE trực tiếp public trên 3 bảng này (client giờ chỉ SELECT + gọi RPC).
-2. **`getPlayerRank()` dùng `count:'exact'` cho tổng số người chơi** — quét toàn bảng, chậm dần khi `players` phình to theo traffic. Đổi sang `count:'estimated'` cho phần này (chỉ cần hiển thị gần đúng); giữ `exact` cho phần quyết định thứ hạng thật vì có điều kiện khớp index `players_avg_score_idx` nên vẫn nhanh.
-
-**⚠️ CẦN LÀM THỦ CÔNG TRƯỚC KHI RPC HOẠT ĐỘNG TRÊN PRODUCTION**: chạy lại `supabase/schema.sql` trên Supabase SQL Editor thật — nếu không chạy, code gọi `sb.rpc('increment_access_hour', ...)` sẽ lỗi vì function chưa tồn tại trên DB (analytics sẽ ngừng ghi nhưng không crash UI, vì có try/catch best-effort).
-
-**Chưa sửa, cần user quyết định (không phải bug, là chi phí thật):** đang dùng **Supabase Free tier** — giới hạn cứng connection đồng thời, bandwidth 5GB/tháng, DB size 500MB, tự pause sau 7 ngày không traffic. Game có sẵn tính năng chia sẻ mạng xã hội nên traffic viral tăng đột biến là rủi ro thật. Nếu traffic tăng thật, cần nâng **Pro tier** ($25/tháng).
-
-**Quảng cáo — đánh giá, chưa làm gì:** hiện chưa có tích hợp ad network nào (không AdSense, không SDK). Kiến trúc 1-file-HTML + Vercel thuận lợi để chèn — có sẵn điểm chuyển màn hình tự nhiên (`#introScreen`, `#modal` kết quả ván, `#lbModal` bảng xếp hạng) phù hợp cho interstitial/banner kiểu game casual. Cần thiết kế riêng (chọn network, luồng UX, đo hiệu quả) khi user muốn triển khai thật.
-
-### ⏳ PENDING ƯU TIÊN NHẤT — test lại trên điện thoại thật, báo kết quả theo từng mục
-
-Bối cảnh: user test bằng thiết bị thật riêng biệt (điện thoại làm guest, máy tính làm host) → xác nhận giật thật (không phải do throttle đa-tab như nghi vấn cũ), đồng thời phát hiện thêm 2 bug UI mới qua ảnh chụp thực tế: (1) bàn phím ảo lệch trục dọc trong khi trang bị CSS ép xoay ngang lúc nhập tên, (2) `#monitor` (màn hình giả lập) tràn gần hết bề ngang màn hình lúc đang chơi ở portrait.
-
-Đã sửa (chưa verify bằng thiết bị thật):
-1. `will-change:transform` cho `#bossUnit`/`#stage` + bỏ `calc()` khỏi transform mỗi frame của boss (dòng ~2270) — nhắm vào chi phí render/composite trên mobile yếu.
-2. **Bỏ hẳn CSS ép `rotate(90deg)`** ở portrait (từng ở khối `@media (max-width:600px) and (orientation:portrait)`) — portrait giờ hiển thị dọc thật, không giả lập ngang nữa. Thay bằng banner gợi ý `#rotateHint` ("🔄 Xoay ngang máy để chơi mượt hơn"), có nút đóng, tự nhớ lựa chọn qua `localStorage` (dùng lại helper `hasSeenHint`/`markHintSeen` có sẵn), không ép buộc.
-3. `vh`/`vw` → `dvh`/`dvw` ở toàn bộ modal/card (`#monitor`, `#modalCard`, `#introCard`, `#lbCard`, `#roomWaitCard`) — tránh lệch kích thước khi thanh địa chỉ Chrome Android ẩn/hiện.
-4. `#monitor` đổi từ đo theo `dvw`/`dvh` (viewport toàn trang) sang `cqw`/`cqh` (CSS container query units, container = `#scene`, khai báo `container-type:size` ở `#scene` dòng ~43) — sửa đúng gốc bug tràn màn hình: trước đó size monitor tính theo cả trang bao gồm cả phần `#hud`+`#controls` không thuộc scene, nên luôn thổi phồng so với chỗ trống thật.
-
-**Checklist test lại (điện thoại thật, KHÔNG phải nhiều tab 1 máy):**
-- [ ] **Lag**: chơi vài phút ở cả 2 vai (host và guest trên điện thoại) — còn giật/khựng không so với trước.
-- [ ] **Tràn màn hình**: vào màn đang chơi (portrait, không xoay máy) — `#monitor` còn chiếm quá nhiều diện tích, che vòng tròn/Sếp như ảnh cũ không.
-- [ ] **Bàn phím**: màn hình nhập tên (`#nameInput`) — bàn phím ảo hiện đúng chiều, không lệch trục nữa không.
-- [ ] **Banner gợi ý xoay**: portrait có hiện banner không; bấm ✕ đóng, F5 lại — banner phải KHÔNG tự hiện lại (đã lưu lựa chọn).
-- [ ] **Landscape cũ**: xoay ngang máy thật — game vẫn như trước, không đổi gì ở landscape.
-- [ ] Nếu còn chỗ nào rối/chật trên portrait — chụp ảnh cụ thể + mô tả đang ở bước nào (intro/đang chơi/phòng chờ).
-
-Sau khi user xác nhận kết quả từng mục trên mới quyết định: commit + xoá 2 dòng debug log cũ (`[debug boss_state gaps]` ~dòng 1258, `[debug tick gaps]` ~dòng 2399, xem mục dưới), hay cần sửa tiếp.
-
-### ✅ Đã xong bằng mô phỏng số học (KHÔNG cần điện thoại) — sửa thuật toán rải bàn phòng đông người
-
-Phát hiện qua mô phỏng offline (không phải test tay): thuật toán rải bàn cũ (`generateDeskLayout`, random rejection-sampling) có tỷ lệ chồng lấn tăng nhanh theo số người — 0% ở N=4, nhưng 33% số ván có ít nhất 1 cặp chồng bàn ở N=6, 99%+ ở N=8. Đây lẽ ra sẽ là bug thật nếu test tay phòng đông mà không sửa trước.
-
-Đã sửa:
-- **`generateDeskLayout`** đổi từ random rejection-sampling sang **xếp đều trên vành tròn** (góc = i×2π/n + jitter nhỏ), bán kính vành tính động theo N với biên bù jitter — đảm bảo khoảng cách tối thiểu giữa MỌI cặp người bằng hình học, không phải may rủi. Đã verify bằng mô phỏng 5000 lần/N: N=2-6 đạt 0% lỗi, N=7 đã lên 29.56% lỗi (đúng dự đoán, xác nhận giới hạn hình học thật của field 3m/bán kính 1.4m).
-- Thêm **`CONFIG.roomMaxPlayers: 6`** — trần cứng, chặn ở `joinRoomChannel()` (dòng ~1264): kiểm tra `presenceState()` NGAY TRƯỚC khi tự track presence, nếu phòng đã đủ 6 người thì từ chối join (rời channel, `joinExistingRoom` hiện `alert` báo phòng đầy). Chỉ chặn người join SAU khi đã đủ 6, không ảnh hưởng người đã ở trong phòng.
-- `joinRoomChannel()` giờ trả về `Promise<boolean>` (trước đó không trả gì) — `true` = vào thành công, `false` = bị từ chối vì đầy phòng.
-
-**Việc này CHƯA cần test bằng điện thoại thật** — logic core đã verify bằng mô phỏng số học độc lập với thiết bị. Vẫn nên test tay 1 lần cho chắc (mở nhiều tab trình duyệt cùng join 1 link phòng, thử tới người thứ 7 xem có bị chặn đúng như kỳ vọng), nhưng không nằm trong nhóm phụ thuộc "test điện thoại thật" ở trên — có thể làm bất cứ lúc nào kể cả trên máy tính.
+**Việc dở, chưa hoàn thành**:
+- Tích hợp Facebook Share Dialog (menu Messenger/WhatsApp/Nhóm...) — cần Facebook App ID, user bị lỗi xác minh số điện thoại đã gắn tài khoản Facebook chính, quyết định **bỏ qua**, giữ nguyên `sharer.php` hiện tại (vẫn hoạt động bình thường).
+- 2 dòng debug log cũ vẫn còn trong code (`[debug boss_state gaps]` ~dòng 1258, `[debug tick gaps]` ~dòng 2399) — chưa xoá, chờ xác nhận hết lag mới xoá.
 
 ## Trạng thái trước đó (2026-09-19)
 
