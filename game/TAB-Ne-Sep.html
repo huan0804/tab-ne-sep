@@ -231,6 +231,15 @@
   #modalCard h2{ font-family:var(--display); font-size:24px; margin:0 0 8px; }
   #modalCard p{ font-size:13.5px; line-height:1.5; color:#333; }
   #modalBtn{margin-top:14px; font-family:var(--mono); font-weight:bold; font-size:13px; padding:10px 22px; border-radius:6px; border:none; background:var(--ink); color:var(--paper); cursor:pointer;}
+  /* Ad slot trung lập — KHÔNG gắn cứng network nào (AdSense/brand deal đều
+     nạp vào đây qua renderAdSlot(), xem <script>). Rỗng = display:none, để
+     không chiếm chỗ/không hiện khung viền vô nghĩa khi chưa có ai gọi
+     renderAdSlot() — game hiện tại (chưa launch, chưa chọn network) sẽ luôn
+     ở trạng thái này. .has-content chỉ được JS thêm sau khi có nội dung
+     thật, để margin/border không "nhấp nháy" ngay cả lúc rỗng. */
+  #adSlot{display:none;}
+  #adSlot.has-content{display:block; margin-top:12px; padding:8px; border-radius:8px; background:#f3ecd8; text-align:center; min-height:50px;}
+  #adSlot .ad-slot-label{font-size:9px; letter-spacing:0.05em; color:#a89968; text-transform:uppercase; margin-bottom:4px;}
   .stats-box{background:#efe9d8; border-radius:8px; padding:10px 12px; margin-top:10px; text-align:left;}
   .stats-row{display:flex; justify-content:space-between; font-size:12.5px; padding:3px 0; color:#3a3327;}
   .leaderboard-title{font-size:12px; font-weight:bold; margin-top:12px; margin-bottom:4px; color:#8a6d1f;}
@@ -582,6 +591,7 @@
         <button class="shareBtn" id="mShareNative"><span class="ic">📱</span><span class="lbl">Khác</span></button>
       </div>
       <div id="mShareToast" style="text-align:center; font-size:11px; color:#8a6d1f; margin-top:6px; min-height:14px;"></div>
+      <div id="adSlot" class="ad-slot"></div>
       <button id="modalBtn">Chơi lại</button>
     </div>
   </div>
@@ -661,7 +671,7 @@
   const livesEl = el('lives'), progressFill = el('progressFill'), progressText = el('progressText'),
         clockEl = el('clock2'), tabBtn = el('tabBtn'), switcherOverlay = el('switcherOverlay'),
         flashEl = el('flash'), modal = el('modal'), modalTitle = el('modalTitle'),
-        modalText = el('modalText'), modalStats = el('modalStats'), modalBtn = el('modalBtn'),
+        modalText = el('modalText'), modalStats = el('modalStats'), modalBtn = el('modalBtn'), adSlot = el('adSlot'),
         proxField = el('proxField'), bossUnit = el('bossUnit'), bossDistTag = el('bossDistTag'),
         radarAlert = el('radarAlert'), vignette = el('vignette'), screenEl = el('screen'),
         monitorEl = el('monitor'), monitorRig = el('monitorRig'), introScreen = el('introScreen'),
@@ -2315,11 +2325,32 @@
     sceneEl.style.filter = 'brightness(' + (1 - vig*0.14) + ')';
   }
 
+  /* ---------- Ad slot trung lập ----------
+     KHÔNG gắn cứng AdSense/brand deal/network nào — chỉ là hạ tầng chỗ
+     trống + hàm nạp nội dung, để quyết định network cụ thể (khi có traffic
+     thật để quyết định) không phải sửa lại HTML/CSS, chỉ cần gọi hàm này
+     với nội dung tương ứng. Hiện tại không nơi nào trong code gọi
+     renderAdSlot(html) với html khác rỗng, nên #adSlot luôn ẩn — game chạy
+     y hệt như chưa có gì thay đổi cho tới khi ai đó chủ động bật nó lên.
+     Nhãn "Quảng cáo" luôn tự thêm, không thể tắt — minh bạch với người chơi
+     là bắt buộc (và thường là yêu cầu của chính network như AdSense), đặt
+     ở đây một lần để nhánh nào gọi cũng không quên. */
+  function renderAdSlot(html){
+    if(!html){
+      adSlot.classList.remove('has-content');
+      adSlot.innerHTML = '';
+      return;
+    }
+    adSlot.classList.add('has-content');
+    adSlot.innerHTML = '<div class="ad-slot-label">Quảng cáo</div>' + html;
+  }
+
   function endGame(won, reason){
     state.running = false;
     if(roomMode !== 'solo') roomFinishedPlayerIds.add(playerId);
     modal.classList.add('show');
     transitionPhase('result');
+    renderAdSlot(null); // chỗ gọi renderAdSlot(html) khi đã chọn network — xem comment ở định nghĩa hàm
     if(won){
       modalTitle.textContent = '🎉 Hết giờ, về nhà an toàn!';
       modalText.textContent = 'Bạn đã đạt ' + CONFIG.targetPersonalTime + ' giây làm việc riêng mà không bị bắt quá tay. Tay đổi tab thần sầu!';
