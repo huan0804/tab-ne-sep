@@ -36,7 +36,11 @@
   #progressFill{height:100%; width:0%; background:linear-gradient(90deg, var(--personal-glow), #fbbf24); transition:width 0.15s linear;}
   #hud #title{font-family:var(--display); font-style:italic; font-size:15px; color:#c9c4b6;}
 
-  #scene{position:relative; flex:1; overflow:hidden; background:linear-gradient(180deg, #fbfcfd 0%, #f2f4f6 55%, #dfe3e7 55%, #c7ccd2 100%);}
+  /* container-type: kích thước #monitor (xem clamp() dưới) tính theo cqw/cqh
+     — % của CHÍNH #scene (đã trừ #hud/#controls) — thay vì dvw/dvh toàn
+     trang, vốn không phản ánh đúng diện tích thật còn lại cho scene khi HUD
+     trên/dưới chiếm chỗ khác nhau tuỳ màn hình. */
+  #scene{position:relative; flex:1; overflow:hidden; background:linear-gradient(180deg, #fbfcfd 0%, #f2f4f6 55%, #dfe3e7 55%, #c7ccd2 100%); container-type:size;}
   .column{position:absolute; top:0; bottom:0; width:38px; background:linear-gradient(90deg,#e4e7ea,#ffffff,#e4e7ea); box-shadow:0 0 20px rgba(0,0,0,0.08);}
   #colLeft{left:3%;} #colRight{right:3%;}
   .pendant-big{position:absolute; top:0; width:56px; z-index:2;}
@@ -71,7 +75,7 @@
   #radarAlert.show{opacity:1;}
 
   /* ---------- Boss: full silhouette that physically walks between the rings ---------- */
-  #bossUnit{position:absolute; left:50%; top:50%; width:46px; height:0; z-index:8; transform:translate(-50%,-50%);}
+  #bossUnit{position:absolute; left:50%; top:50%; width:46px; height:0; z-index:8; transform:translate(-50%,-50%); will-change:transform;}
   #bossUnit .bossShadow{position:absolute; bottom:-4px; left:50%; transform:translateX(-50%); width:34px; height:8px; background:rgba(0,0,0,0.22); border-radius:50%; filter:blur(1px);}
   #bossUnit .bossBody{position:absolute; bottom:0; left:50%; transform:translateX(-50%); width:38px; height:46px; background:#2f6fd6; border-radius:16px 16px 6px 6px;}
   #bossUnit .bossBody::after{content:'';position:absolute; left:50%; top:6px; transform:translateX(-50%); width:14px; height:10px; background:#e7ecf5; border-radius:2px;}
@@ -129,10 +133,14 @@
   .arm-pole{width:9px; height:64px; background:linear-gradient(90deg,#2a2a2c,#111);}
   .arm-joint{width:16px; height:16px; border-radius:50%; background:#2a2a2c; margin:-2px 0;}
   .arm-horiz{width:100px; height:10px; background:linear-gradient(180deg,#2a2a2c,#111); border-radius:3px; align-self:flex-start; margin-left:-4px;}
-  #monitor{width:clamp(320px, 48vw, 660px); height:clamp(200px, 33vh, 420px); background:var(--bezel); border-radius:14px; padding:12px; box-shadow:0 20px 44px rgba(0,0,0,0.55); position:relative; transition:width 0.3s, height 0.3s;}
+  /* cqw/cqh: % của #scene thật (container-type:size khai báo ở #scene phía
+     trên) — không phải dvw/dvh toàn trang, vốn tính cả phần #hud/#controls
+     nằm ngoài #scene nên luôn thổi phồng kích thước monitor so với chỗ thật
+     sự còn trống để hiển thị. */
+  #monitor{width:clamp(320px, 48cqw, 660px); height:clamp(200px, 33cqh, 420px); background:var(--bezel); border-radius:14px; padding:12px; box-shadow:0 20px 44px rgba(0,0,0,0.55); position:relative; transition:width 0.3s, height 0.3s;}
   /* Đang trong phòng chung: nhường chỗ để thấy bàn đồng nghiệp trên vòng
      tròn khoảng cách, không che khuất bởi màn hình chính quá lớn. */
-  #monitor.roomShrink{width:clamp(220px, 32vw, 440px); height:clamp(140px, 22vh, 280px);}
+  #monitor.roomShrink{width:clamp(220px, 32cqw, 440px); height:clamp(140px, 22cqh, 280px);}
   #screen{width:100%; height:100%; border-radius:6px; overflow:hidden; position:relative; background:#0a0a0a;}
   .glow-work{ box-shadow:0 0 46px 10px rgba(37,99,235,0.55); }
   .glow-personal{ box-shadow:0 0 46px 10px rgba(217,119,6,0.6); }
@@ -222,7 +230,7 @@
 
   #modal{position:absolute; inset:0; z-index:50; display:none; align-items:center; justify-content:center; background:rgba(10,10,12,0.8);}
   #modal.show{display:flex;}
-  #modalCard{background:var(--paper); color:var(--ink); padding:26px 30px; border-radius:10px; max-width:380px; width:92%; text-align:center; box-shadow:0 20px 60px rgba(0,0,0,0.5); max-height:88vh; overflow-y:auto; position:relative;}
+  #modalCard{background:var(--paper); color:var(--ink); padding:26px 30px; border-radius:10px; max-width:380px; width:92%; text-align:center; box-shadow:0 20px 60px rgba(0,0,0,0.5); max-height:88dvh; overflow-y:auto; position:relative;}
   .modalCloseX{position:absolute; top:10px; right:10px; width:30px; height:30px; border-radius:50%; border:none; background:#eee2; background:rgba(0,0,0,0.06); color:#555; font-size:15px; cursor:pointer; display:flex; align-items:center; justify-content:center; line-height:1;}
   .modalCloseX:hover{background:rgba(0,0,0,0.12);}
   .lbInviteRowSmall{display:grid; grid-template-columns:repeat(4,1fr); gap:6px; margin-top:8px;}
@@ -271,7 +279,7 @@
 
   #introScreen{position:absolute; inset:0; z-index:80; display:flex; align-items:center; justify-content:center; background:rgba(20,18,30,0.86); padding:16px;}
   #introScreen.hide{display:none;}
-  #introCard{background:#fffaf0; color:#2b2620; border-radius:20px; max-width:460px; width:100%; padding:26px 24px 22px; box-shadow:0 24px 70px rgba(0,0,0,0.5); text-align:center; max-height:92vh; overflow-y:auto;}
+  #introCard{background:#fffaf0; color:#2b2620; border-radius:20px; max-width:460px; width:100%; padding:26px 24px 22px; box-shadow:0 24px 70px rgba(0,0,0,0.5); text-align:center; max-height:92dvh; overflow-y:auto;}
   #introCard h1{font-family:var(--display); font-size:24px; margin:0 0 6px; color:#c1272d;}
   #challengeBanner{display:none; background:#fff3d6; border:1.5px solid #f2b705; border-radius:12px; padding:10px 14px; margin-bottom:14px; font-size:13px; color:#5a4a1f; text-align:left;}
   #challengeBanner.show{display:block;}
@@ -306,7 +314,7 @@
 
   #lbModal{position:absolute; inset:0; z-index:55; display:none; align-items:center; justify-content:center; background:rgba(10,10,12,0.8);}
   #lbModal.show{display:flex;}
-  #lbCard{background:var(--paper); color:var(--ink); padding:22px 24px; border-radius:12px; max-width:400px; width:92%; max-height:84vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,0.5);}
+  #lbCard{background:var(--paper); color:var(--ink); padding:22px 24px; border-radius:12px; max-width:400px; width:92%; max-height:84dvh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,0.5);}
   #lbCard h2{font-family:var(--display); font-size:22px; margin:0 0 12px; text-align:center;}
   #lbTabs{display:flex; gap:6px; margin-bottom:12px;}
   .lbTabBtn{flex:1; font-family:var(--body); font-weight:700; font-size:13px; padding:9px; border-radius:8px; border:2px solid #ddd; background:#fff; color:#555; cursor:pointer;}
@@ -336,7 +344,7 @@
   #createRoomBtn{display:block; margin:10px auto 0; font-family:var(--body); font-weight:700; font-size:13px; padding:9px 16px; border-radius:10px; border:1.5px solid #2563eb; background:#fff; color:#2563eb; cursor:pointer;}
   #roomWaitScreen{position:absolute; inset:0; z-index:80; display:none; align-items:center; justify-content:center; background:rgba(20,18,30,0.86); padding:16px;}
   #roomWaitScreen.show{display:flex;}
-  #roomWaitCard{background:#fffaf0; color:#2b2620; border-radius:20px; max-width:420px; width:100%; padding:26px 24px 22px; box-shadow:0 24px 70px rgba(0,0,0,0.5); text-align:center; max-height:92vh; overflow-y:auto;}
+  #roomWaitCard{background:#fffaf0; color:#2b2620; border-radius:20px; max-width:420px; width:100%; padding:26px 24px 22px; box-shadow:0 24px 70px rgba(0,0,0,0.5); text-align:center; max-height:92dvh; overflow-y:auto;}
   #roomWaitCard h2{font-family:var(--display); font-size:21px; margin:0 0 6px; color:#c1272d;}
   #roomCodeDisplay{font-family:var(--mono); font-size:26px; font-weight:bold; letter-spacing:0.1em; background:#f3ecd8; border-radius:10px; padding:10px; margin:10px 0; color:#3a3327;}
   #roomCopyLinkBtn{font-family:var(--body); font-weight:600; font-size:12.5px; padding:8px 14px; border-radius:8px; border:1px solid #ccc; background:#fff; color:#555; cursor:pointer; margin-bottom:14px;}
@@ -379,30 +387,33 @@
     .shareBtn .ic svg{width:18px;height:18px;}
     /* Sàn cứng 320px của #monitor (xem clamp() gốc) chiếm gần hết chiều
        ngang màn hẹp, che khuất vòng tròn khoảng cách vẽ cùng khu vực —
-       hạ sàn để 48vw thực sự phát huy, dành chỗ nhìn rõ Sếp tới/đi. */
-    #monitor{width:clamp(200px, 48vw, 660px); height:clamp(130px, 26vh, 420px);}
+       hạ sàn để 48cqw thực sự phát huy, dành chỗ nhìn rõ Sếp tới/đi. */
+    #monitor{width:clamp(200px, 48cqw, 660px); height:clamp(130px, 26cqh, 420px);}
   }
 
-  /* Điện thoại cầm dọc (portrait, màn hẹp): game thiết kế cho khung ngang
-     nên xoay #stage 90deg bằng CSS thay vì bắt người chơi tự xoay máy — sau
-     khi rotate(90deg), width/height HIỂN THỊ bị hoán đổi trục nên phải gán
-     ngược 100vh/100vw (không phải 100%/100%) rồi dịch #stage về đúng vị trí
-     bằng transform-origin + translate, JS không cần biết gì về việc này vì
-     toàn bộ code đo kích thước qua #scene.clientWidth vẫn đọc đúng kích
-     thước ĐÃ XOAY (CSS transform không đổi layout box, chỉ đổi hiển thị). */
+  /* Điện thoại cầm dọc (portrait, màn hẹp): game thiết kế gốc cho khung
+     ngang, TRƯỚC ĐÂY ép rotate(90deg) toàn #stage bằng CSS — bỏ vì (1) bàn
+     phím ảo của hệ điều hành không nằm trong DOM nên không xoay theo, gây
+     lệch trục lúc nhập tên; (2) đo kích thước theo vw/vh trong bối cảnh đã
+     xoay gây sai lệch, góp phần vào bug #monitor tràn màn hình. Giờ portrait
+     hiển thị dọc THẬT, co lại tự nhiên theo #monitor/HUD responsive bên
+     dưới; #rotateHint chỉ là gợi ý, không ép buộc — người chơi tự xoay máy
+     nếu muốn trải nghiệm khung ngang như thiết kế gốc. */
+  #rotateHint{
+    display:none; position:fixed; top:10px; left:50%; transform:translateX(-50%);
+    z-index:60; background:rgba(20,22,26,0.92); color:#f5f1e6; font-family:var(--body);
+    font-size:12px; padding:8px 14px; border-radius:20px; border:1px solid #444;
+    align-items:center; gap:8px; box-shadow:0 6px 16px rgba(0,0,0,0.4);
+  }
+  #rotateHint button{ background:none; border:none; color:#9a9a95; font-size:14px; cursor:pointer; padding:0 2px; }
   @media (max-width:600px) and (orientation:portrait){
-    html, body{ width:100vw; height:100vh; overflow:hidden; }
-    /* Xoay quanh TÂM viewport (thay vì góc) rồi dịch về đúng chỗ — cách này
-       tránh phải tính tay offset theo hướng rotate (dễ lệch dấu/trục nếu
-       tính từ góc). Với #stage kích thước 100vh×100vw (trục đã hoán đổi so
-       với w/h thật), xoay 90deg quanh tâm của CHÍNH NÓ rồi định vị tâm đó
-       trùng tâm viewport là cách bất biến, không phụ thuộc chiều xoay. */
-    #stage{
-      position:fixed;
-      width:100vh; height:100vw;
-      top:50%; left:50%;
-      transform:translate(-50%,-50%) rotate(90deg);
-    }
+    #rotateHint.show{ display:flex; }
+    /* Portrait thật (không rotate): #monitor cần sàn thấp hơn nhiều so với
+       bản gốc/landscape — 60cqw ở đây là % của chiều ngang THẬT của #scene
+       (không phải dvw toàn trang), nên cả clamp min lẫn max phải hạ để
+       không chiếm hết bề ngang và che khuất scene xung quanh. */
+    #monitor{width:clamp(180px, 60cqw, 340px); height:clamp(120px, 22cqh, 220px);}
+    #monitorRig{ bottom:24%; }
   }
 
   /* Accessibility: visible focus states for keyboard nav */
@@ -440,6 +451,10 @@
 </style>
 </head>
 <body>
+<div id="rotateHint">
+  <span>🔄 Xoay ngang máy để chơi mượt hơn</span>
+  <button id="rotateHintClose" aria-label="Đóng gợi ý">✕</button>
+</div>
 <div id="stage">
 
   <div id="introScreen">
@@ -718,6 +733,23 @@
   recomputeFieldScale();
   buildProxRings();
   window.addEventListener('resize', ()=>{ recomputeFieldScale(); buildProxRings(); if(roomMode !== 'solo') renderTeammates(); });
+
+  /* Gợi ý xoay ngang (không ép buộc, xem @media portrait cho lý do bỏ CSS
+     rotate cũ). Chỉ hiện khi đang portrait + màn hẹp + người chơi chưa từng
+     bấm đóng (localStorage) — tự ẩn ngay khi xoay sang ngang, không cần
+     người dùng tự đóng lại mỗi lần xoay tới xoay lui. */
+  const rotateHint = document.getElementById('rotateHint');
+  const rotateHintClose = document.getElementById('rotateHintClose');
+  const portraitMQ = window.matchMedia('(max-width:600px) and (orientation:portrait)');
+  function syncRotateHint(){
+    rotateHint.classList.toggle('show', portraitMQ.matches && !hasSeenHint('rotateHintDismissed'));
+  }
+  rotateHintClose.addEventListener('click', ()=>{
+    markHintSeen('rotateHintDismissed');
+    rotateHint.classList.remove('show');
+  });
+  portraitMQ.addEventListener('change', syncRotateHint);
+  syncRotateHint();
 
   let audioCtx = null;
   function beep(freq, dur, type, vol){
@@ -2310,7 +2342,10 @@
   function updateBossPosition(dist, bx, by){
     const px = bx * metersToPxX;
     const py = by * metersToPxY;
-    bossUnit.style.transform = 'translate(calc(-50% + ' + px + 'px), calc(-50% + ' + py + 'px))';
+    // 2 transform tách riêng thay vì 'calc(-50% + Npx)' gộp chung: offset
+    // -50% cố định giữ nguyên, chỉ phần translate3d(px,py,0) đổi mỗi frame
+    // — tránh buộc trình duyệt parse lại chuỗi calc() 60 lần/giây.
+    bossUnit.style.transform = 'translate(-50%, -50%) translate3d(' + px + 'px, ' + py + 'px, 0)';
 
     bossDistTag.textContent = dist.toFixed(1) + ' m';
     bossDistTag.classList.toggle('danger', dist <= 1.5);
