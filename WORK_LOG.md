@@ -2,7 +2,42 @@
 
 > File này ghi lại trạng thái dự án để tiếp tục ở phiên làm việc sau. Cập nhật mỗi khi có tiến triển lớn, dọn bớt phần đã lỗi thời để tránh phình to.
 
-## Trạng thái hiện tại (2026-09-19)
+## Trạng thái hiện tại (2026-09-22)
+
+**Đang giữa vòng sửa mobile UX (lag + tràn màn hình + bàn phím) — CHƯA COMMIT, CHƯA TEST.** Đã sửa xong trong working tree của `game/TAB-Ne-Sep.html`, chờ user test lại bằng điện thoại thật (hôm sau) rồi mới quyết commit/push hay sửa tiếp.
+
+### ⏳ PENDING ƯU TIÊN NHẤT — test lại trên điện thoại thật, báo kết quả theo từng mục
+
+Bối cảnh: user test bằng thiết bị thật riêng biệt (điện thoại làm guest, máy tính làm host) → xác nhận giật thật (không phải do throttle đa-tab như nghi vấn cũ), đồng thời phát hiện thêm 2 bug UI mới qua ảnh chụp thực tế: (1) bàn phím ảo lệch trục dọc trong khi trang bị CSS ép xoay ngang lúc nhập tên, (2) `#monitor` (màn hình giả lập) tràn gần hết bề ngang màn hình lúc đang chơi ở portrait.
+
+Đã sửa (chưa verify bằng thiết bị thật):
+1. `will-change:transform` cho `#bossUnit`/`#stage` + bỏ `calc()` khỏi transform mỗi frame của boss (dòng ~2270) — nhắm vào chi phí render/composite trên mobile yếu.
+2. **Bỏ hẳn CSS ép `rotate(90deg)`** ở portrait (từng ở khối `@media (max-width:600px) and (orientation:portrait)`) — portrait giờ hiển thị dọc thật, không giả lập ngang nữa. Thay bằng banner gợi ý `#rotateHint` ("🔄 Xoay ngang máy để chơi mượt hơn"), có nút đóng, tự nhớ lựa chọn qua `localStorage` (dùng lại helper `hasSeenHint`/`markHintSeen` có sẵn), không ép buộc.
+3. `vh`/`vw` → `dvh`/`dvw` ở toàn bộ modal/card (`#monitor`, `#modalCard`, `#introCard`, `#lbCard`, `#roomWaitCard`) — tránh lệch kích thước khi thanh địa chỉ Chrome Android ẩn/hiện.
+4. `#monitor` đổi từ đo theo `dvw`/`dvh` (viewport toàn trang) sang `cqw`/`cqh` (CSS container query units, container = `#scene`, khai báo `container-type:size` ở `#scene` dòng ~43) — sửa đúng gốc bug tràn màn hình: trước đó size monitor tính theo cả trang bao gồm cả phần `#hud`+`#controls` không thuộc scene, nên luôn thổi phồng so với chỗ trống thật.
+
+**Checklist test lại (điện thoại thật, KHÔNG phải nhiều tab 1 máy):**
+- [ ] **Lag**: chơi vài phút ở cả 2 vai (host và guest trên điện thoại) — còn giật/khựng không so với trước.
+- [ ] **Tràn màn hình**: vào màn đang chơi (portrait, không xoay máy) — `#monitor` còn chiếm quá nhiều diện tích, che vòng tròn/Sếp như ảnh cũ không.
+- [ ] **Bàn phím**: màn hình nhập tên (`#nameInput`) — bàn phím ảo hiện đúng chiều, không lệch trục nữa không.
+- [ ] **Banner gợi ý xoay**: portrait có hiện banner không; bấm ✕ đóng, F5 lại — banner phải KHÔNG tự hiện lại (đã lưu lựa chọn).
+- [ ] **Landscape cũ**: xoay ngang máy thật — game vẫn như trước, không đổi gì ở landscape.
+- [ ] Nếu còn chỗ nào rối/chật trên portrait — chụp ảnh cụ thể + mô tả đang ở bước nào (intro/đang chơi/phòng chờ).
+
+Sau khi user xác nhận kết quả từng mục trên mới quyết định: commit + xoá 2 dòng debug log cũ (`[debug boss_state gaps]` ~dòng 1258, `[debug tick gaps]` ~dòng 2399, xem mục dưới), hay cần sửa tiếp.
+
+### ✅ Đã xong bằng mô phỏng số học (KHÔNG cần điện thoại) — sửa thuật toán rải bàn phòng đông người
+
+Phát hiện qua mô phỏng offline (không phải test tay): thuật toán rải bàn cũ (`generateDeskLayout`, random rejection-sampling) có tỷ lệ chồng lấn tăng nhanh theo số người — 0% ở N=4, nhưng 33% số ván có ít nhất 1 cặp chồng bàn ở N=6, 99%+ ở N=8. Đây lẽ ra sẽ là bug thật nếu test tay phòng đông mà không sửa trước.
+
+Đã sửa:
+- **`generateDeskLayout`** đổi từ random rejection-sampling sang **xếp đều trên vành tròn** (góc = i×2π/n + jitter nhỏ), bán kính vành tính động theo N với biên bù jitter — đảm bảo khoảng cách tối thiểu giữa MỌI cặp người bằng hình học, không phải may rủi. Đã verify bằng mô phỏng 5000 lần/N: N=2-6 đạt 0% lỗi, N=7 đã lên 29.56% lỗi (đúng dự đoán, xác nhận giới hạn hình học thật của field 3m/bán kính 1.4m).
+- Thêm **`CONFIG.roomMaxPlayers: 6`** — trần cứng, chặn ở `joinRoomChannel()` (dòng ~1264): kiểm tra `presenceState()` NGAY TRƯỚC khi tự track presence, nếu phòng đã đủ 6 người thì từ chối join (rời channel, `joinExistingRoom` hiện `alert` báo phòng đầy). Chỉ chặn người join SAU khi đã đủ 6, không ảnh hưởng người đã ở trong phòng.
+- `joinRoomChannel()` giờ trả về `Promise<boolean>` (trước đó không trả gì) — `true` = vào thành công, `false` = bị từ chối vì đầy phòng.
+
+**Việc này CHƯA cần test bằng điện thoại thật** — logic core đã verify bằng mô phỏng số học độc lập với thiết bị. Vẫn nên test tay 1 lần cho chắc (mở nhiều tab trình duyệt cùng join 1 link phòng, thử tới người thứ 7 xem có bị chặn đúng như kỳ vọng), nhưng không nằm trong nhóm phụ thuộc "test điện thoại thật" ở trên — có thể làm bất cứ lúc nào kể cả trên máy tính.
+
+## Trạng thái trước đó (2026-09-19)
 
 **Multiplayer room "1 Sếp chung" đã hoàn chỉnh và deploy** (commit `2456ec8` → `14befb2`, domain chính thức **`https://tab-ne-sep.vercel.app/play`** — KHÔNG dùng dạng `/game/TAB-Ne-Sep.html` khi đưa link cho user, dù route đó vẫn chạy).
 
@@ -16,12 +51,11 @@
 - Trận đấu rút còn 60s (từ 120s), mục tiêu personal 30s (từ 60s), độ khó ramp 40s (từ 80s) — theo đúng tỉ lệ cũ.
 - Tự động xoay ngang bằng CSS khi mở trên điện thoại cầm dọc.
 
-### ⏳ PENDING — cần làm tiếp khi mở lại phiên
+### ⏳ PENDING khác — sau khi xong vòng test mobile UX ở trên
 
-1. **Nghi vấn lag ở guest khi test nhiều tab/cửa sổ trên CÙNG 1 máy** — đã thêm interpolation (nội suy vị trí Sếp phía guest, code đã giữ lại) nhưng vẫn thấy giật khi test bằng nhiều cửa sổ trình duyệt trên 1 máy, kể cả khi đặt cạnh nhau. Nghi ngờ chính: đây là do Chrome throttle timer/rAF của cửa sổ không giữ OS focus (hiện tượng này KHÔNG xảy ra ở ứng dụng native như LMHT vì nó không chạy trong tab trình duyệt) — chưa xác nhận 100%, còn 2 dòng debug log tạm thời trong code (`[debug boss_state gaps]` ở dòng ~1258, `[debug tick gaps]` ở dòng ~2399) để đo. **User sẽ test lại bằng thiết bị thật riêng biệt** (điện thoại + máy tính, hoặc nhiều máy khác nhau — không phải nhiều tab/cửa sổ trên 1 máy) để có phép thử phản ánh đúng trải nghiệm người chơi thật. Xoá 2 đoạn debug log sau khi xác nhận xong.
-2. Test phòng ≥4 người (đã test tới 3, chưa test nhiều hơn).
-3. Test guest vào muộn giữa trận (code có fallback về solo, chưa xác nhận qua browser thật).
-4. `docs/GAME_SPEC.md` đã lạc hậu nhiều phiên (không phản ánh streak/challenge/room) — không urgent, chỉ cập nhật nếu cần tài liệu tham chiếu đầy đủ.
+1. ~~Test phòng ≥4 người~~ → đã sửa thuật toán rải bàn + chặn ở 6 người (xem mục "Đã xong bằng mô phỏng số học" ở trên). Còn lại: test tay xác nhận UI chặn đúng khi người thứ 7 cố join (không cần điện thoại, làm trên máy tính bất cứ lúc nào).
+2. Test guest vào muộn giữa trận (code có fallback về solo, chưa xác nhận qua browser thật).
+3. `docs/GAME_SPEC.md` đã lạc hậu nhiều phiên (không phản ánh streak/challenge/room) — không urgent, chỉ cập nhật nếu cần tài liệu tham chiếu đầy đủ.
 
 ### Việc cũ hơn, vẫn treo — CHƯA test trong các phiên gần đây
 - **Việc B (thách đấu bạn bè qua `?challenge=<id>`)**: mở `https://tab-ne-sep.vercel.app/play?challenge=seed_a3`, xác nhận banner + nút thách đấu.

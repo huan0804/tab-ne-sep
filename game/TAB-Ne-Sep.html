@@ -640,7 +640,20 @@
     // hoàn toàn khỏi màn hình 2 người kia.
     roomDeskMaxRadius: 1.4, // 2×1.4=2.8 ≤ fieldRangeMeters(3), còn biên an toàn nhỏ
     roomDeskMinSpacing: 1.0, // khoảng cách tối thiểu giữa 2 bàn, tránh chồng lấn
-    roomDeskMaxAttempts: 200, // số lần thử lại rejection-sampling trước khi chấp nhận chồng lấn
+    // Jitter (lệch ngẫu nhiên nhỏ quanh vị trí lý tưởng trên vành tròn) để
+    // layout không trông "quá đều/máy móc" — xem generateDeskLayout() để
+    // hiểu vì sao bán kính thật sự dùng phải LỚN HƠN mức lý thuyết tối
+    // thiểu một khoảng bù đúng bằng roomDeskJitterRadius.
+    roomDeskJitterAngle: 0.12, // radian, ~6.9°
+    roomDeskJitterRadius: 0.06, // mét
+    // Trần cứng số người/phòng: với roomDeskMaxRadius=1.4 cố định (giới hạn
+    // bởi fieldRangeMeters, xem comment trên), bán kính vành cần thiết để
+    // giữ đủ roomDeskMinSpacing giữa MỌI cặp người (kể cả sau khi bù jitter
+    // 2 chiều) vượt quá 1.4 kể từ 7 người trở lên (đã kiểm chứng bằng mô
+    // phỏng offline) — quá ngưỡng này, dù thuật toán nào cũng phải chấp
+    // nhận chồng lấn vì không đủ diện tích hình học. Chặn ở UI thay vì để
+    // xảy ra bug hiển thị (đã từng gặp: người biến mất khỏi màn hình nhau).
+    roomMaxPlayers: 6,
     roomBroadcastHz: 15 // tần suất host gửi vị trí Sếp cho cả phòng
   };
 
@@ -1215,8 +1228,10 @@
     roomWaitingForHost.style.display = isRoomHost ? 'none' : 'block';
   }
 
+  // Trả về true nếu vào phòng thành công, false nếu bị từ chối vì phòng đã
+  // đủ roomMaxPlayers người (xem comment ở CONFIG.roomMaxPlayers).
   async function joinRoomChannel(roomId, hostPlayerId){
-    if(!sb) return;
+    if(!sb) return false;
     if(roomChannel) { try{ await sb.removeChannel(roomChannel); }catch(e){} }
     roomChannel = sb.channel('room:' + roomId, { config: { presence: { key: playerId } } });
     roomChannel._hostPlayerId = hostPlayerId;
@@ -1317,10 +1332,24 @@
       }
     });
 
-    roomChannel.subscribe(async (status) => {
-      if(status === 'SUBSCRIBED'){
-        await roomChannel.track({ playerId, name: getPlayerName() || 'Người chơi ẩn danh' });
-      }
+    // Chặn phòng quá đông NGAY TRƯỚC khi track() presence của chính mình —
+    // presenceState() lúc này chưa gồm mình nên đếm được đúng số người ĐÃ
+    // ở trong phòng trước khi mình vào. Chỉ chặn người join SAU khi đã đủ
+    // roomMaxPlayers, không ảnh hưởng ai đã ở trong phòng từ trước (xem
+    // comment ở CONFIG.roomMaxPlayers cho lý do hình học của giới hạn này).
+    return new Promise((resolve) => {
+      roomChannel.subscribe(async (status) => {
+        if(status === 'SUBSCRIBED'){
+          const currentCount = Object.keys(roomChannel.presenceState()).length;
+          if(currentCount >= CONFIG.roomMaxPlayers){
+            try{ await sb.removeChannel(roomChannel); }catch(e){}
+            resolve(false);
+            return;
+          }
+          await roomChannel.track({ playerId, name: getPlayerName() || 'Người chơi ẩn danh' });
+          resolve(true);
+        }
+      });
     });
   }
 
@@ -1363,7 +1392,12 @@
       currentRoomId = null;
       return;
     }
-    await joinRoomChannel(roomId, room.host_player_id);
+    const joined = await joinRoomChannel(roomId, room.host_player_id);
+    if(!joined){
+      currentRoomId = null;
+      alert('Phòng đã đủ ' + CONFIG.roomMaxPlayers + ' người, thử tạo phòng mới hoặc vào phòng khác nhé.');
+      return;
+    }
     showRoomWaitScreen(roomId);
   }
 
@@ -1941,27 +1975,36 @@
 
   /* ---------- "1 Sếp chung": rải vị trí bàn ngẫu nhiên, không chồng lấn ----------
      Chỉ host gọi, 1 lần duy nhất lúc bấm "Bắt đầu" — kết quả Broadcast cho cả
-     phòng dùng chung, không tính lại giữa trận. Rejection sampling đơn giản:
-     random rồi thử lại nếu quá gần bàn đã đặt, chấp nhận chồng lấn nếu hết
-     lượt thử (hiếm, không đáng chặn trận đấu vì việc này).
-     Toạ độ cực (góc + bán kính ≤ roomDeskMaxRadius) thay vì random x/y độc
-     lập theo hình vuông — hình vuông tạo khoảng cách đường chéo lớn hơn
-     nhiều so với cạnh, dễ đẩy người ở 2 góc đối diện ra ngoài field nhìn
-     thấy được của nhau (bug đã gặp: 1 người biến mất trong phòng 3 người). */
+     phòng dùng chung, không tính lại giữa trận.
+     Xếp đều trên 1 vành tròn (góc = i × 2π/n) + jitter nhỏ, thay vì random
+     thuần rejection-sampling cũ. Random thuần từng gây ~33% ván có chồng lấn
+     ở 6 người (đo bằng mô phỏng offline) vì với random độc lập, xác suất 2
+     điểm rơi gần nhau tăng nhanh theo N — xếp đều loại bỏ hẳn rủi ro đó vì
+     khoảng cách giữa 2 điểm LIỀN KỀ trên vành được đảm bảo bằng hình học,
+     không phải may rủi.
+     Bán kính vành PHẢI lớn hơn mức lý thuyết tối thiểu (chord = 2R×sin(π/n)
+     ≥ minSpacing) một khoảng bù đúng bằng jitterRadius, và góc mỗi người
+     phải chừa biên 2×jitterAngle — nếu không, jitter có thể kéo 2 điểm liền
+     kề lại gần nhau hơn minSpacing dù công thức "không jitter" tính đủ chỗ
+     (đã kiểm chứng: thiếu bù jitter → tới 52% ván lỗi ở N=6, có bù → 0%).
+     Toạ độ cực (không phải random x/y hình vuông) — hình vuông tạo khoảng
+     cách đường chéo lớn hơn nhiều so với cạnh, dễ đẩy người ở 2 góc đối diện
+     ra ngoài field nhìn thấy được của nhau (bug đã gặp: 1 người biến mất
+     trong phòng 3 người). */
   function generateDeskLayout(playerIds){
     const layout = {};
-    const placed = [];
-    playerIds.forEach(id => {
-      let x, y, ok = false;
-      for(let attempt=0; attempt<CONFIG.roomDeskMaxAttempts && !ok; attempt++){
-        const ang = rand(0, Math.PI*2);
-        const r = rand(0, CONFIG.roomDeskMaxRadius);
-        x = Math.cos(ang) * r;
-        y = Math.sin(ang) * r;
-        ok = placed.every(p => Math.hypot(x-p.x, y-p.y) >= CONFIG.roomDeskMinSpacing);
-      }
-      layout[id] = {x, y};
-      placed.push({x, y});
+    const n = playerIds.length;
+    if(n === 0) return layout;
+    const jitterA = CONFIG.roomDeskJitterAngle, jitterR = CONFIG.roomDeskJitterRadius;
+    const worstAngleGap = (2*Math.PI/n) - 2*jitterA;
+    // n=1: không có cặp nào để so khoảng cách — đặt ngay tâm (r=0), bỏ qua
+    // công thức chord (worstAngleGap sẽ là 2π, vô nghĩa cho n=1).
+    const neededR = n <= 1 ? 0
+      : Math.min(CONFIG.roomDeskMaxRadius, CONFIG.roomDeskMinSpacing / (2*Math.sin(Math.max(worstAngleGap,0.01)/2)) + jitterR);
+    playerIds.forEach((id, i) => {
+      const ang = n <= 1 ? 0 : i * (2*Math.PI/n) + rand(-jitterA, jitterA);
+      const r = n <= 1 ? 0 : neededR + rand(-jitterR, jitterR);
+      layout[id] = { x: Math.cos(ang) * r, y: Math.sin(ang) * r };
     });
     return layout;
   }
