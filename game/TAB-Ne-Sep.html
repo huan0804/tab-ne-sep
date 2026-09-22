@@ -399,17 +399,11 @@
      lệch trục lúc nhập tên; (2) đo kích thước theo vw/vh trong bối cảnh đã
      xoay gây sai lệch, góp phần vào bug #monitor tràn màn hình. Giờ portrait
      hiển thị dọc THẬT, co lại tự nhiên theo #monitor/HUD responsive bên
-     dưới; #rotateHint chỉ là gợi ý, không ép buộc — người chơi tự xoay máy
-     nếu muốn trải nghiệm khung ngang như thiết kế gốc. */
-  #rotateHint{
-    display:none; position:fixed; top:10px; left:50%; transform:translateX(-50%);
-    z-index:60; background:rgba(20,22,26,0.92); color:#f5f1e6; font-family:var(--body);
-    font-size:12px; padding:8px 14px; border-radius:20px; border:1px solid #444;
-    align-items:center; gap:8px; box-shadow:0 6px 16px rgba(0,0,0,0.4);
-  }
-  #rotateHint button{ background:none; border:none; color:#9a9a95; font-size:14px; cursor:pointer; padding:0 2px; }
+     dưới. (Từng có banner gợi ý xoay ngang #rotateHint — bỏ hẳn vì test
+     thật cho thấy 1 số máy/cấu hình Android không xoay theo kể cả sau khi
+     nghiêng máy thật, banner gợi ý vô dụng trong trường hợp đó và portrait
+     tự nó đã chơi được ổn sau khi sửa #monitor bên dưới.) */
   @media (max-width:600px) and (orientation:portrait){
-    #rotateHint.show{ display:flex; }
     /* Portrait thật (không rotate): #monitor cần sàn thấp hơn nhiều so với
        bản gốc/landscape — 60cqw ở đây là % của chiều ngang THẬT của #scene
        (không phải dvw toàn trang), nên cả clamp min lẫn max phải hạ để
@@ -453,10 +447,6 @@
 </style>
 </head>
 <body>
-<div id="rotateHint">
-  <span>🔄 Xoay ngang máy để chơi mượt hơn</span>
-  <button id="rotateHintClose" aria-label="Đóng gợi ý">✕</button>
-</div>
 <div id="stage">
 
   <div id="introScreen">
@@ -735,23 +725,6 @@
   recomputeFieldScale();
   buildProxRings();
   window.addEventListener('resize', ()=>{ recomputeFieldScale(); buildProxRings(); if(roomMode !== 'solo') renderTeammates(); });
-
-  /* Gợi ý xoay ngang (không ép buộc, xem @media portrait cho lý do bỏ CSS
-     rotate cũ). Chỉ hiện khi đang portrait + màn hẹp + người chơi chưa từng
-     bấm đóng (localStorage) — tự ẩn ngay khi xoay sang ngang, không cần
-     người dùng tự đóng lại mỗi lần xoay tới xoay lui. */
-  const rotateHint = document.getElementById('rotateHint');
-  const rotateHintClose = document.getElementById('rotateHintClose');
-  const portraitMQ = window.matchMedia('(max-width:600px) and (orientation:portrait)');
-  function syncRotateHint(){
-    rotateHint.classList.toggle('show', portraitMQ.matches && !hasSeenHint('rotateHintDismissed'));
-  }
-  rotateHintClose.addEventListener('click', ()=>{
-    markHintSeen('rotateHintDismissed');
-    rotateHint.classList.remove('show');
-  });
-  portraitMQ.addEventListener('change', syncRotateHint);
-  syncRotateHint();
 
   let audioCtx = null;
   function beep(freq, dur, type, vol){
