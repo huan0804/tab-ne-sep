@@ -18,6 +18,14 @@
 - Tích hợp Facebook Share Dialog (menu Messenger/WhatsApp/Nhóm...) — cần Facebook App ID, user bị lỗi xác minh số điện thoại đã gắn tài khoản Facebook chính, quyết định **bỏ qua**, giữ nguyên `sharer.php` hiện tại (vẫn hoạt động bình thường).
 - 2 dòng debug log cũ vẫn còn trong code (`[debug boss_state gaps]` ~dòng 1258, `[debug tick gaps]` ~dòng 2399) — chưa xoá, chờ xác nhận hết lag mới xoá.
 
+### Tổng kết phiên 2026-09-22 — 10 commit, toàn bộ đã push lên GitHub
+
+Thứ tự thực hiện trong phiên (mới nhất ở trên): `4bbc4f0` xác nhận analytics RPC → `9bd11e8` gọn WORK_LOG → `8b2c93a` analytics ngày/tuần → `63265e7` bỏ rotate hint → `1f2cbd1` fix nút Dừng → `5307cf8` mobile UX (rotate/lag/tràn màn hình) → `2894dff` ad slot → `9086b77` cập nhật log → `289e410` database race condition → `c7a9739` rải bàn phòng đông.
+
+Bắt đầu từ vấn đề lag multiplayer đã treo từ phiên trước (nghi vấn throttle đa-tab) — test bằng thiết bị thật riêng biệt xác nhận đây là bug render thật, không phải throttle. Trong lúc sửa, phát hiện thêm liên tiếp: bug rải bàn (mô phỏng số học lộ ra 33% ván chồng bàn ở 6 người), rồi theo yêu cầu user chuyển sang rà soát khả năng chịu traffic tăng đột biến + chèn quảng cáo — phát hiện race condition thật ở 3 bảng analytics, thiết kế lại thành phân tích theo ngày/tuần để trả lời được DAU/MAU/cohort/funnel. Xen giữa là loạt fix UX nhỏ phát hiện qua ảnh chụp thực tế từ user (nút Dừng vô hình trên mobile, banner xoay ngang vô dụng).
+
+**Điểm học được, áp dụng lại lần sau**: khi làm việc song song 2 luồng chưa-test (mobile UX) và đã-verify (database/thuật toán), tách commit theo mức độ tin cậy — dùng `git show HEAD:file > scratch`, áp riêng từng phần lên bản HEAD sạch, so diff xác nhận không lẫn, rồi mới commit từng phần — để phần đã verify lên production ngay mà không kéo theo phần chưa test.
+
 ## Trạng thái trước đó (2026-09-19)
 
 **Multiplayer room "1 Sếp chung" đã hoàn chỉnh và deploy** (commit `2456ec8` → `14befb2`, domain chính thức **`https://tab-ne-sep.vercel.app/play`** — KHÔNG dùng dạng `/game/TAB-Ne-Sep.html` khi đưa link cho user, dù route đó vẫn chạy).
@@ -56,8 +64,8 @@
 ## File liên quan
 
 ```
-game/TAB-Ne-Sep.html            — bản chính, có đầy đủ: bug fix + icon + mobile + room "1 Sếp chung" hoàn chỉnh + streak + challenge-link + rotate-mobile
-game/TAB-Ne-Sep_v1-radar.html   — bản radar, CHỈ có bug fix + icon + mobile, lạc hậu so với bản chính
-supabase/schema.sql             — có bảng "rooms" + 2 cột streak, đã verify chạy thành công trên Supabase thật (phiên trước)
+game/TAB-Ne-Sep.html            — bản chính: room "1 Sếp chung" + streak + challenge-link + mobile UX (portrait thật, không rotate) + ad slot trung lập + analytics ngày/tuần
+game/TAB-Ne-Sep_v1-radar.html   — bản radar, CHỈ có bug fix + icon + mobile cũ, lạc hậu nhiều phiên so với bản chính
+supabase/schema.sql             — players/sessions/rooms + 6 RPC increment_* (analytics all-time + theo ngày/tuần) + RLS, đã verify chạy thành công trên Supabase production (2026-09-22)
 vercel.json                     — root "/" redirect → "/play", rewrite "/play" → "/game/TAB-Ne-Sep.html"
 ```
