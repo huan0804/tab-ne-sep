@@ -1062,6 +1062,35 @@
     const vn = new Date(ms + 7*3600*1000);
     return vn.getUTCFullYear() + '-' + vn.getUTCMonth() + '-' + vn.getUTCDate();
   }
+  // Khoá ngày/tuần CHO PHÂN TÍCH THEO THỜI GIAN (analytics_*_daily/_weekly,
+  // xem supabase/schema.sql mục 2e) — khác vnDateKey() ở trên vì cần
+  // zero-pad (YYYY-MM-DD) để sort đúng thứ tự bằng string so sánh trong
+  // SQL (vnDateKey() không zero-pad, chỉ dùng nội bộ để so sánh streak nên
+  // không sao, nhưng sẽ sort sai nếu dùng làm primary key để query
+  // "order by date_key"). Không đổi vnDateKey() cũ để không đụng vào logic
+  // streak đang chạy đúng.
+  function vnDateKeyPadded(isoOrDate){
+    const ms = (isoOrDate instanceof Date ? isoOrDate : new Date(isoOrDate)).getTime();
+    const vn = new Date(ms + 7*3600*1000);
+    const pad = n => String(n).padStart(2, '0');
+    return vn.getUTCFullYear() + '-' + pad(vn.getUTCMonth()+1) + '-' + pad(vn.getUTCDate());
+  }
+  // ISO week (Th 2 là ngày đầu tuần, tuần chứa ngày 4/1 là tuần 1 — chuẩn
+  // ISO 8601) tính trên "ngày VN" (đã dịch UTC+7) chứ không phải ngày UTC
+  // gốc, để nhất quán múi giờ với vnDateKeyPadded() ở trên.
+  function vnWeekKey(isoOrDate){
+    const ms = (isoOrDate instanceof Date ? isoOrDate : new Date(isoOrDate)).getTime();
+    const vn = new Date(ms + 7*3600*1000);
+    const d = new Date(Date.UTC(vn.getUTCFullYear(), vn.getUTCMonth(), vn.getUTCDate()));
+    const dayNum = (d.getUTCDay() + 6) % 7; // Mon=0..Sun=6
+    d.setUTCDate(d.getUTCDate() - dayNum + 3); // gần nhất Thứ 5 cùng tuần ISO
+    const isoYear = d.getUTCFullYear();
+    const jan4 = new Date(Date.UTC(isoYear, 0, 4));
+    const week1Monday = new Date(jan4);
+    week1Monday.setUTCDate(jan4.getUTCDate() - ((jan4.getUTCDay()+6)%7));
+    const weekNum = 1 + Math.round((d - week1Monday) / (7*86400000));
+    return isoYear + '-W' + String(weekNum).padStart(2, '0');
+  }
   function vnDaysBetween(isoA, isoB){
     const toVnMidnightMs = (iso)=>{
       const ms = new Date(iso).getTime() + 7*3600*1000;
@@ -1689,6 +1718,13 @@
     try{
       await sb.rpc('increment_access_hour', { p_hour: new Date().getHours() });
     }catch(e){ /* best-effort */ }
+    try{
+      // Bảng theo ngày (xem schema.sql mục 2e): dùng GIỜ VN cố định (dịch
+      // UTC+7), khác bảng cộng-dồn cũ ở trên vẫn cố ý giữ new Date().getHours()
+      // (giờ local trình duyệt) để không đổi hành vi/dữ liệu tích luỹ đã có.
+      const nowVn = new Date(Date.now() + 7*3600*1000);
+      await sb.rpc('increment_access_hour_daily', { p_date_key: vnDateKeyPadded(new Date()), p_hour: nowVn.getUTCHours() });
+    }catch(e){ /* best-effort */ }
   }
 
   async function flushScreenTime(phaseName, durationMs){
@@ -1696,12 +1732,18 @@
     try{
       await sb.rpc('increment_screen_time', { p_phase: phaseName, p_duration_ms: durationMs });
     }catch(e){ /* best-effort */ }
+    try{
+      await sb.rpc('increment_screen_time_daily', { p_date_key: vnDateKeyPadded(new Date()), p_phase: phaseName, p_duration_ms: durationMs });
+    }catch(e){ /* best-effort */ }
   }
 
   async function flushHeatmap(screenName, buckets){
     if(!sb || Object.keys(buckets).length === 0) return;
     try{
       await sb.rpc('increment_heatmap', { p_screen: screenName, p_buckets: buckets });
+    }catch(e){ /* best-effort */ }
+    try{
+      await sb.rpc('increment_heatmap_weekly', { p_week_key: vnWeekKey(new Date()), p_screen: screenName, p_buckets: buckets });
     }catch(e){ /* best-effort */ }
   }
 

@@ -217,6 +217,137 @@ grant execute on function increment_screen_time(text, double precision) to anon,
 grant execute on function increment_heatmap(text, jsonb) to anon, authenticated;
 
 -- ============================================================
+-- 2e. Analytics THEO NGÀY/TUẦN — bổ sung bên cạnh 3 bảng cộng-dồn-mãi-mãi
+-- ở mục 2, KHÔNG thay thế. 3 bảng analytics_* cũ giữ nguyên nguyên vẹn,
+-- coi như tổng số all-time (đã có dữ liệu tích luỹ từ trước, không nỡ vứt).
+-- ============================================================
+-- Lý do tách bảng mới thay vì sửa bảng cũ: analytics_access_hours/
+-- screen_time chỉ có ĐÚNG 1 dòng, cộng dồn từ lúc tạo tới giờ — không có
+-- chiều thời gian, nên không trả lời được "giờ vàng tuần này có khác tuần
+-- trước không" hay "funnel drop-off có cải thiện sau khi sửa UI không".
+-- Khoá theo ngày/tuần THẬT theo giờ Việt Nam (UTC+7) — tính SẴN Ở CLIENT
+-- bằng vnDateKey()/vnWeekKey() (xem <script>, cùng logic với streak) rồi
+-- truyền vào RPC dưới dạng text, KHÔNG để Postgres tự suy ra từ timestamp
+-- server — tránh lệch múi giờ nếu server Postgres không chạy ở UTC+7.
+create table if not exists analytics_access_hours_daily (
+  date_key text primary key,   -- 'YYYY-MM-DD' theo giờ VN, vd '2026-09-22'
+  h0 integer not null default 0, h1 integer not null default 0, h2 integer not null default 0,
+  h3 integer not null default 0, h4 integer not null default 0, h5 integer not null default 0,
+  h6 integer not null default 0, h7 integer not null default 0, h8 integer not null default 0,
+  h9 integer not null default 0, h10 integer not null default 0, h11 integer not null default 0,
+  h12 integer not null default 0, h13 integer not null default 0, h14 integer not null default 0,
+  h15 integer not null default 0, h16 integer not null default 0, h17 integer not null default 0,
+  h18 integer not null default 0, h19 integer not null default 0, h20 integer not null default 0,
+  h21 integer not null default 0, h22 integer not null default 0, h23 integer not null default 0,
+  total integer not null default 0
+);
+
+create table if not exists analytics_screen_time_daily (
+  date_key text primary key,   -- 'YYYY-MM-DD' theo giờ VN
+  intro_sum double precision not null default 0, intro_count integer not null default 0,
+  game_sum double precision not null default 0, game_count integer not null default 0,
+  result_sum double precision not null default 0, result_count integer not null default 0
+);
+
+-- Heatmap theo TUẦN (không phải ngày) — độ phân giải thô hơn 2 bảng trên có
+-- chủ đích: heatmap chỉ phục vụ tối ưu vị trí UI/ad, xu hướng theo tuần đã
+-- đủ, không cần mịn tới từng ngày (tránh phình số dòng quá nhanh nếu
+-- traffic cao, vì đây là 2 dòng/tuần thay vì 2 dòng/ngày).
+create table if not exists analytics_heatmap_weekly (
+  week_key text not null,      -- 'YYYY-Www' ISO week theo giờ VN, vd '2026-W39'
+  screen text not null,        -- 'intro' hoặc 'game'
+  buckets jsonb not null default '{}'::jsonb,
+  primary key (week_key, screen)
+);
+
+-- RPC tăng nguyên tử, cùng lý do/cơ chế atomic như mục 2d — chỉ khác là tự
+-- tạo dòng mới cho ngày/tuần chưa từng thấy (insert ... on conflict) thay
+-- vì luôn có sẵn 1 dòng cố định để update thẳng.
+create or replace function increment_access_hour_daily(p_date_key text, p_hour int)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  col text := 'h' || p_hour::text;
+begin
+  if p_hour < 0 or p_hour > 23 then
+    raise exception 'invalid hour: %', p_hour;
+  end if;
+  insert into analytics_access_hours_daily (date_key) values (p_date_key)
+  on conflict (date_key) do nothing;
+  execute format(
+    'update analytics_access_hours_daily set %I = %I + 1, total = total + 1 where date_key = $1',
+    col, col
+  ) using p_date_key;
+end;
+$$;
+
+create or replace function increment_screen_time_daily(p_date_key text, p_phase text, p_duration_ms double precision)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  sum_col text := p_phase || '_sum';
+  count_col text := p_phase || '_count';
+begin
+  if p_phase not in ('intro', 'game', 'result') then
+    raise exception 'invalid phase: %', p_phase;
+  end if;
+  insert into analytics_screen_time_daily (date_key) values (p_date_key)
+  on conflict (date_key) do nothing;
+  execute format(
+    'update analytics_screen_time_daily set %I = %I + $1, %I = %I + 1 where date_key = $2',
+    sum_col, sum_col, count_col, count_col
+  ) using p_duration_ms, p_date_key;
+end;
+$$;
+
+create or replace function increment_heatmap_weekly(p_week_key text, p_screen text, p_buckets jsonb)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if p_screen not in ('intro', 'game') then
+    raise exception 'invalid screen: %', p_screen;
+  end if;
+  insert into analytics_heatmap_weekly (week_key, screen) values (p_week_key, p_screen)
+  on conflict (week_key, screen) do nothing;
+  update analytics_heatmap_weekly
+  set buckets = (
+    select jsonb_object_agg(
+      key,
+      coalesce((buckets->key)::int, 0) + coalesce((p_buckets->key)::int, 0)
+    )
+    from jsonb_object_keys(buckets || p_buckets) as key
+  )
+  where week_key = p_week_key and screen = p_screen;
+end;
+$$;
+
+grant execute on function increment_access_hour_daily(text, int) to anon, authenticated;
+grant execute on function increment_screen_time_daily(text, text, double precision) to anon, authenticated;
+grant execute on function increment_heatmap_weekly(text, text, jsonb) to anon, authenticated;
+
+alter table analytics_access_hours_daily enable row level security;
+alter table analytics_screen_time_daily enable row level security;
+alter table analytics_heatmap_weekly enable row level security;
+
+drop policy if exists "access_hours_daily: đọc" on analytics_access_hours_daily;
+create policy "access_hours_daily: đọc" on analytics_access_hours_daily for select using (true);
+
+drop policy if exists "screen_time_daily: đọc" on analytics_screen_time_daily;
+create policy "screen_time_daily: đọc" on analytics_screen_time_daily for select using (true);
+
+drop policy if exists "heatmap_weekly: đọc" on analytics_heatmap_weekly;
+create policy "heatmap_weekly: đọc" on analytics_heatmap_weekly for select using (true);
+
+-- ============================================================
 -- 3. Row Level Security — cho phép mọi người đọc, và ghi có kiểm soát
 -- ============================================================
 -- Game chạy hoàn toàn phía client (không có backend riêng), nên viewer cần
