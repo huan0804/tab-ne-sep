@@ -761,6 +761,14 @@
   const HINT_APPROACH = 'atd_hintApproachSeen';
   const HINT_CATCH = 'atd_hintCatchSeen';
   const HINT_TAB_BTN = 'atd_hintTabBtnSeen';
+  // Forced-action first-run tutorial: ván solo ĐẦU TIÊN của mỗi trình duyệt
+  // chặn Sếp lao tới cho đến khi người chơi tự bấm Tab, thay vì bắt người
+  // chơi đọc 4 bước introSteps trước khi chơi (feedback: tutorial dạng đọc bị
+  // lướt qua, người chơi vào thẳng game rồi không hiểu luật giữa chừng).
+  // Chỉ áp dụng cho solo — room/multiplayer có host điều khiển boss riêng,
+  // ép boss đứng yên ở đó sẽ ảnh hưởng tới người chơi khác trong phòng.
+  const HINT_TUTORIAL_DONE = 'atd_tutorialDone';
+  let tutorialActive = false; // true = đang ở ván solo đầu tiên, chưa bấm Tab lần nào
   function hasSeenHint(key){ try{ return localStorage.getItem(key) === '1'; }catch(e){ return true; } }
   function markHintSeen(key){ try{ localStorage.setItem(key, '1'); }catch(e){} }
   const coachmarkEl = document.getElementById('coachmark');
@@ -1881,6 +1889,10 @@
     if(!confirm('Dừng ván hiện tại? Điểm ván này sẽ KHÔNG được tính.')) return;
     state.running = false;
     state.gameStarted = false;
+    // Dừng giữa chừng ván tutorial: coi như chưa học xong, bấm "Bắt Đầu" lại
+    // sẽ chạy lại từ bước 1 sạch sẽ (thay vì kẹt ở giữa nếu chỉ tắt cờ mà
+    // không dọn — resetState() ở startBtn handler tạo boss mới nên an toàn).
+    tutorialActive = false;
     if(roomMode !== 'solo') resetRoomModeForReplay();
     transitionPhase('intro');
     introScreen.classList.remove('hide');
@@ -2144,6 +2156,10 @@
       // First close approach this browser has ever seen: go gentle (slowest
       // speed in the range) so there's real time to notice and react.
       maybeShowApproachHint(sr[0]);
+      // Tutorial ép (bước 2): còn chậm hơn cả mức "gentle" thường lệ, để
+      // người chơi có đủ thời gian nhìn vòng tròn khoảng cách co lại và hiểu
+      // ý nghĩa của nó trước khi phải phản xạ bấm Tab (bước 3, xem catchPlayer()).
+      if(tutorialActive) boss.speed = sr[0] * 0.5;
     } else if(roomMode === 'host' && currentTargetPlayerId === playerId){
       // Host tự là target của chính mình — hint áp dụng y hệt solo.
       maybeShowApproachHint(sr[0]);
@@ -2178,6 +2194,15 @@
     beep(state.mode==='personal'?520:340, 0.08, 'square', 0.05);
     setTimeout(()=>switcherOverlay.classList.remove('show'), 140);
     hideCoachmark();
+
+    // Bước 1 của tutorial ép (xem startBtn handler + nhãn "màn xem phim" hiện
+    // sẵn từ lúc bắt đầu ván): người chơi vừa bấm Tab LẦN ĐẦU trong ván đầu
+    // tiên — bất kể đổi sang mode nào, đây là tín hiệu "đã hiểu nút Tab dùng
+    // để làm gì", nên thả Sếp ra (bước 2) ngay, không cần chờ mode cụ thể.
+    if(tutorialActive){
+      boss.forced = false; // mở khoá — forceCloseApproach() tự nhiên trong tick() có thể chạy lại
+      scheduleNextCheck();
+    }
 
     // Sếp đã đứng trong catchRadius từ trước (boss.wasClose=true nên tick()
     // không bắt lại) — nếu người chơi CHỦ ĐỘNG đổi sang personal ngay lúc đó,
@@ -2399,6 +2424,13 @@
 
   function endGame(won, reason){
     state.running = false;
+    // Tutorial ép chỉ kéo dài đúng 1 ván solo, thắng hay thua đều tính là
+    // "đã học" — không lặp lại ở ván kế tiếp kể cả khi người chơi bấm "Chơi
+    // lại" ngay trong modal kết quả.
+    if(tutorialActive){
+      tutorialActive = false;
+      markHintSeen(HINT_TUTORIAL_DONE);
+    }
     if(roomMode !== 'solo') roomFinishedPlayerIds.add(playerId);
     modal.classList.add('show');
     transitionPhase('result');
@@ -2477,7 +2509,14 @@
     bossAngryUntil = performance.now() + 1100;
     showBossBubble(pick(SCOLD_LINES), 1300);
     beep(140, 0.3, 'sawtooth', 0.09);
-    if(!hasSeenHint(HINT_CATCH)){
+    if(tutorialActive){
+      // Bước 3: người phỏng vấn thật đã nhầm "màn hình laptop hiện ra = bị
+      // bắt", trong khi thực chất laptop là do NGƯỜI CHƠI tự bấm Tab, còn bị
+      // bắt là do bấm TRỄ. Nói thẳng nguyên nhân — cause-and-effect — thay vì
+      // chỉ nhắc lại mẹo chung chung như hint cũ ở dưới.
+      showCoachmark('❌ Bị bắt vì chưa kịp bấm Tab trước khi Sếp vào 1m — không phải vì đổi màn hình', 5500);
+      markHintSeen(HINT_CATCH);
+    } else if(!hasSeenHint(HINT_CATCH)){
       showCoachmark('💡 Mẹo: bấm Tab NGAY khi Sếp chạm mốc 1m, đừng đợi số về 0', 5500);
       markHintSeen(HINT_CATCH);
     }
@@ -2538,17 +2577,23 @@
 
     if(roomMode !== 'guest' && roomMode !== 'host'){
       // Solo: mô phỏng y hệt trước đây (host đã tự chạy khối riêng ở trên).
-      if(!boss.forced && state.elapsed >= boss.nextCheckAt){
-        forceCloseApproach();
-        scheduleNextCheck();
-      }
-      const dx = boss.target.x - boss.x, dy = boss.target.y - boss.y;
-      const dToTarget = Math.hypot(dx,dy);
-      if(dToTarget < 0.12){
-        pickAmbientTarget();
-      } else {
-        boss.x += (dx/dToTarget) * boss.speed * dt;
-        boss.y += (dy/dToTarget) * boss.speed * dt;
+      // Tutorial ép bước 1: boss.forced=true chỉ khoá forceCloseApproach() gọi
+      // lại (chọn target MỚI), KHÔNG tự chặn việc trôi tới target hiện có —
+      // nên phải chặn di chuyển ở đây bằng tutorialActive riêng, cho tới khi
+      // toggleMode() mở khoá boss.forced=false (xem đó để biết thời điểm thả).
+      if(!(tutorialActive && boss.forced)){
+        if(!boss.forced && state.elapsed >= boss.nextCheckAt){
+          forceCloseApproach();
+          scheduleNextCheck();
+        }
+        const dx = boss.target.x - boss.x, dy = boss.target.y - boss.y;
+        const dToTarget = Math.hypot(dx,dy);
+        if(dToTarget < 0.12){
+          pickAmbientTarget();
+        } else {
+          boss.x += (dx/dToTarget) * boss.speed * dt;
+          boss.y += (dy/dToTarget) * boss.speed * dt;
+        }
       }
     }
 
@@ -2619,10 +2664,24 @@
     transitionPhase('game');
     try{ if(!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){}
 
-    // Màn hẹp (điện thoại) không có phím Tab vật lý — chỉ có nút bấm dưới
-    // màn hình, dễ bị bỏ sót lúc mới vào game. Chỉ dạy 1 lần duy nhất, chỉ
-    // trên màn hẹp, ngay khi bắt đầu ván đầu tiên.
-    if(window.matchMedia('(max-width:480px)').matches && !hasSeenHint(HINT_TAB_BTN)){
+    // Ván solo đầu tiên của trình duyệt này: giữ Sếp đứng yên xa (boss.forced
+    // = true chặn forceCloseApproach() tự nhiên trong tick()) cho đến khi
+    // người chơi tự bấm Tab ít nhất 1 lần — dạy bằng hành động thay vì chữ.
+    // roomMaxPlayers check không cần vì startBtn chỉ dẫn tới solo, không phải
+    // room (room đi qua joinExistingRoom ở nhánh pendingRoomInvite phía trên).
+    if(!hasSeenHint(HINT_TUTORIAL_DONE)){
+      tutorialActive = true;
+      boss.forced = true; // khoá forceCloseApproach() tự động trong tick()
+      // Mặc định mode ban đầu luôn là 'personal' (xem resetState()) — tận
+      // dụng đúng lúc đó để dạy bước 4 (ý nghĩa màn hình) GỘP LUÔN với bước 1
+      // (nút Tab dùng để làm gì), vì 2 sự thật này chỉ đúng đồng thời ở đây:
+      // đang xem phim + cần biết Tab để né Sếp sau này.
+      showCoachmark('🎬 Đây là màn "xem phim" của bạn. Lát Sếp lại gần, bấm TAB để đổi sang màn làm việc nhé!', 6000);
+    } else if(window.matchMedia('(max-width:480px)').matches && !hasSeenHint(HINT_TAB_BTN)){
+      // Màn hẹp (điện thoại) không có phím Tab vật lý — chỉ có nút bấm dưới
+      // màn hình, dễ bị bỏ sót lúc mới vào game. Chỉ dạy 1 lần duy nhất, chỉ
+      // trên màn hẹp, ngay khi bắt đầu ván đầu tiên (người chơi cũ đã qua
+      // tutorial ép ở trên rồi nên không hiện đè lên nhau).
       showCoachmark('👇 Bấm nút này để đổi màn hình làm việc/riêng tư', 4000);
       markHintSeen(HINT_TAB_BTN);
     }
