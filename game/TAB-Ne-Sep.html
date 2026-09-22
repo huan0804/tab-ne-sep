@@ -204,9 +204,6 @@
   .vid-progress-fill{height:100%; width:38%; background:#e11d48; animation:vidbar 6s linear infinite;}
   @keyframes vidbar{ 0%{width:5%;} 100%{width:96%;} }
 
-  .aura-ring{position:absolute; border-radius:50%; border:2px solid rgba(255,180,60,0.6); animation:auraPulse 1.4s ease-out infinite;}
-  @keyframes auraPulse{ 0%{transform:scale(0.6); opacity:0.9;} 100%{transform:scale(1.6); opacity:0;} }
-
   #deskSurface{position:absolute; bottom:0; left:0; right:0; height:28%;}
   .keyboard{position:absolute; bottom:16%; left:50%; transform:translateX(-50%); width:190px; height:52px; background:#232326; border-radius:6px; box-shadow:0 4px 10px rgba(0,0,0,0.3);}
   .keyboard::after{content:'';position:absolute; inset:6px; background-image:repeating-linear-gradient(90deg,#3a3a3e 0 14px, transparent 14px 17px), repeating-linear-gradient(0deg,#3a3a3e 0 9px, transparent 9px 12px); border-radius:3px;}
@@ -417,7 +414,6 @@
 
   /* Accessibility: respect reduced-motion preference */
   @media (prefers-reduced-motion: reduce){
-    .aura-ring{ animation:none; opacity:0.5; }
     #startBtn{ animation:none; }
     .vid-progress-fill{ animation:none; width:60%; }
     #monitorRig.shake{ animation:none; }
@@ -702,6 +698,33 @@
     const usableHalfWidth = sceneW * 0.42; // leave the side columns clear
     metersToPxX = Math.max(50, usableHalfWidth / CONFIG.fieldRangeMeters);
     metersToPxY = metersToPxX / CONFIG.ellipseRatio;
+    sizeMonitorToField();
+  }
+
+  // #monitor trước đây có kích thước cố định bằng CSS clamp()/cqw, hoàn toàn
+  // độc lập với metersToPxX — trên màn hẹp, sàn cứng clamp() (từng phải hạ
+  // xuống 200/180px, xem comment media query bên dưới) vẫn có thể LỚN HƠN
+  // đường kính vòng tròn 1m thật (2×metersToPxX), khiến monitor trông "chạm"
+  // Sếp trên màn hình dù số mét thật vẫn còn >1m (feedback phỏng vấn: người
+  // chơi bấm Tab sớm vì cảm giác Sếp đã sát máy tính). Neo trực tiếp theo
+  // đường kính vòng 1m — luôn khớp đúng số học ở MỌI kích thước màn hình,
+  // không cần đoán breakpoint riêng nữa. CSS clamp() giữ lại làm giá trị khởi
+  // tạo/fallback trước khi JS chạy lần đầu, không xoá để tránh nháy layout.
+  function sizeMonitorToField(){
+    const ring1DiameterPx = metersToPxX * 2;
+    const isRoomShrink = monitorEl.classList.contains('roomShrink');
+    const targetRatio = isRoomShrink ? 0.62 : 0.85; // monitor nhỏ hơn khi ở phòng chung, chừa chỗ thấy bàn đồng nghiệp
+    // Sàn tối thiểu để chữ trong màn hình (bảng chứng khoán, dashboard...)
+    // còn đọc được — quyết định có chủ đích: chấp nhận monitor hơi TO HƠN
+    // vòng 1m một chút trên màn cực hẹp, đổi lại nội dung không vỡ chữ. Sàn
+    // này THẤP HƠN NHIỀU so với lỗi cũ (320px) nên độ lệch chỉ còn nhỏ, không
+    // còn cảm giác "monitor chiếm hết field" như trước khi sửa.
+    const minW = 140;
+    const maxW = isRoomShrink ? 380 : 620;
+    const w = Math.min(maxW, Math.max(minW, ring1DiameterPx * targetRatio));
+    const h = w * (200/320); // giữ đúng tỉ lệ khung hình gốc của #monitor (320:200)
+    monitorEl.style.width = w + 'px';
+    monitorEl.style.height = h + 'px';
   }
   const RING_METERS = [1, 2, 3];
   function buildProxRings(){
@@ -853,7 +876,7 @@
 
   /* ---------- Content themes ---------- */
   const WORK_THEMES = ['excel','dashboard','stock'];
-  const PERSONAL_THEMES = ['dbz1','dbz2','memeCat','memeDog'];
+  const PERSONAL_THEMES = ['tomjerry','pikachu','memeCat','memeDog'];
 
   function genWorkData(theme){
     if(theme === 'excel'){
@@ -947,26 +970,44 @@
     return '<div class="work-content"></div>';
   }
 
-  function heroSVG(colorA, colorB){
-    return '<svg viewBox="0 0 100 100" width="72" height="72">'
-      + '<circle cx="50" cy="42" r="16" fill="#e8b98c"/>'
-      + '<path d="M34 34 L40 10 L46 32 L52 8 L58 32 L66 12 L64 36 Z" fill="#1a1a1a"/>'
-      + '<path d="M32 60 Q50 50 68 60 L64 92 L36 92 Z" fill="'+colorA+'"/>'
-      + '<rect x="40" y="72" width="20" height="6" fill="'+colorB+'"/>'
-      + '</svg>';
-  }
-
   function buildPersonalHTML(theme){
     let frameInner='', caption='', likes=Math.floor(rand(200,1800))+'K', comments=Math.floor(rand(80,900));
-    if(theme === 'dbz1'){
-      frameInner = '<div class="aura-ring" style="width:70px;height:70px;left:50%;top:50%;margin:-35px 0 0 -35px;"></div>'
-        + '<div class="aura-ring" style="width:70px;height:70px;left:50%;top:50%;margin:-35px 0 0 -35px;animation-delay:0.5s;"></div>'
-        + heroSVG('#2b6fb0','#f2c14e');
-      caption = '"Đại Chiến Deadline" — Tập 146: Cực Phẩm Tăng Ca Saiyan';
-    } else if(theme === 'dbz2'){
-      frameInner = '<div class="aura-ring" style="width:80px;height:80px;left:50%;top:50%;margin:-40px 0 0 -40px;border-color:rgba(120,200,255,0.6);"></div>'
-        + heroSVG('#3d7a3f','#eee');
-      caption = 'Genki Dama chưa chắc mạnh bằng 1 câu "sếp gọi kìa"';
+    if(theme === 'tomjerry'){
+      frameInner = '<svg viewBox="0 0 100 100" width="76" height="76">'
+        // Tom (mèo xanh-xám) — đầu to tròn với má phính, tai tam giác nhọn
+        // vểnh lên, mắt xanh lá đặc trưng, mũi hồng nhỏ giữa mặt.
+        + '<ellipse cx="32" cy="66" rx="21" ry="13" fill="#7c8b9e"/>'
+        + '<circle cx="30" cy="40" r="18" fill="#7c8b9e"/>'
+        + '<path d="M15 30 L9 6 L27 22 Z" fill="#7c8b9e"/><path d="M45 30 L51 6 L33 22 Z" fill="#7c8b9e"/>'
+        + '<path d="M16 27 L13 12 L24 23 Z" fill="#f2c9d8"/><path d="M44 27 L47 12 L36 23 Z" fill="#f2c9d8"/>'
+        + '<ellipse cx="22" cy="42" rx="4" ry="5" fill="#dff2c0"/><ellipse cx="38" cy="42" rx="4" ry="5" fill="#dff2c0"/>'
+        + '<circle cx="22" cy="43" r="2" fill="#1a1a1a"/><circle cx="38" cy="43" r="2" fill="#1a1a1a"/>'
+        + '<path d="M28 49 L32 49 L30 52 Z" fill="#e8a9c2"/>'
+        + '<path d="M18 54 Q30 58 42 54" stroke="#1a1a1a" stroke-width="1.6" fill="none"/>'
+        // Jerry (chuột nâu nhỏ) — đầu tròn với 2 tai tròn to đặc trưng, mũi
+        // hồng nhọn, đứng phía trước-dưới bên phải như đang chạy trốn Tom.
+        + '<ellipse cx="74" cy="76" rx="13" ry="9" fill="#b97a45"/>'
+        + '<circle cx="75" cy="58" r="10" fill="#b97a45"/>'
+        + '<circle cx="66" cy="48" r="7" fill="#b97a45"/><circle cx="84" cy="48" r="7" fill="#b97a45"/>'
+        + '<circle cx="66" cy="48" r="3.5" fill="#f2d7b6"/><circle cx="84" cy="48" r="3.5" fill="#f2d7b6"/>'
+        + '<circle cx="71" cy="57" r="1.8" fill="#1a1a1a"/><circle cx="79" cy="57" r="1.8" fill="#1a1a1a"/>'
+        + '<ellipse cx="75" cy="62" rx="2.2" ry="1.8" fill="#3a2416"/>'
+        + '<path d="M73 63 Q75 66 77 63" stroke="#1a1a1a" stroke-width="1.2" fill="none"/>'
+        + '</svg>';
+      caption = 'Tom rượt Jerry vòng quanh văn phòng — hồi hộp hơn cả họp KPI';
+    } else if(theme === 'pikachu'){
+      frameInner = '<svg viewBox="0 0 100 100" width="72" height="72">'
+        + '<ellipse cx="50" cy="62" rx="26" ry="22" fill="#f7d02c"/>'
+        // Tai nhọn đen ở đầu — đặc điểm nhận diện chính của Pikachu
+        + '<path d="M28 40 L18 8 L38 30 Z" fill="#f7d02c"/><path d="M30 34 L24 14 L36 28 Z" fill="#2a2a2a"/>'
+        + '<path d="M72 40 L82 8 L62 30 Z" fill="#f7d02c"/><path d="M70 34 L76 14 L64 28 Z" fill="#2a2a2a"/>'
+        + '<circle cx="40" cy="56" r="4" fill="#1a1a1a"/><circle cx="60" cy="56" r="4" fill="#1a1a1a"/>'
+        + '<ellipse cx="30" cy="64" rx="7" ry="5" fill="#e8433a"/><ellipse cx="70" cy="64" rx="7" ry="5" fill="#e8433a"/>'
+        + '<path d="M42 66 Q50 72 58 66" stroke="#1a1a1a" stroke-width="2" fill="none" stroke-linecap="round"/>'
+        // Đuôi tia sét zigzag nâu-vàng — đặc điểm nhận diện thứ hai
+        + '<path d="M74 78 L92 60 L82 60 L96 40 L80 58 L88 58 Z" fill="#f7d02c" stroke="#a9772a" stroke-width="2"/>'
+        + '</svg>';
+      caption = 'Pikachu "Chích Điện Deadline" — 100.000 volt cho ai giục việc';
     } else if(theme === 'memeCat'){
       frameInner = '<svg viewBox="0 0 100 100" width="70" height="70">'
         + '<circle cx="50" cy="55" r="30" fill="#d9a066"/>'
@@ -1554,6 +1595,7 @@
     introScreen.classList.add('hide');
     transitionPhase('game');
     monitorEl.classList.add('roomShrink'); // nhường chỗ thấy bàn đồng nghiệp
+    sizeMonitorToField(); // targetRatio đổi theo roomShrink — tính lại ngay
     try{ if(!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){}
   }
 
@@ -1581,6 +1623,7 @@
     roomMatchResults = {};
     teammatesLayer.innerHTML = '';
     monitorEl.classList.remove('roomShrink');
+    sizeMonitorToField(); // targetRatio đổi theo roomShrink — tính lại ngay
     try{
       const url = new URL(location.href);
       url.searchParams.delete('room');
@@ -1599,6 +1642,7 @@
     roomMatchResults = {};
     teammatesLayer.innerHTML = '';
     monitorEl.classList.remove('roomShrink');
+    sizeMonitorToField(); // targetRatio đổi theo roomShrink — tính lại ngay
   }
 
   createRoomBtn.addEventListener('click', createRoom);
@@ -1625,6 +1669,7 @@
     roomMatchResults = {};
     teammatesLayer.innerHTML = '';
     monitorEl.classList.remove('roomShrink');
+    sizeMonitorToField(); // targetRatio đổi theo roomShrink — tính lại ngay
     try{
       const url = new URL(location.href);
       url.searchParams.delete('room');
