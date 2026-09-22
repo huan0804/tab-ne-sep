@@ -129,6 +129,94 @@ begin
 end $$;
 
 -- ============================================================
+-- 2d. RPC tăng nguyên tử cho 3 bảng analytics — thay cho pattern
+-- select-rồi-update phía client (đã dùng trước đây).
+-- ============================================================
+-- Lý do đổi: analytics_access_hours/analytics_screen_time chỉ có ĐÚNG 1
+-- dòng cố định (id=1), analytics_heatmap chỉ có 2 dòng cố định (intro/game)
+-- — nghĩa là MỌI người chơi cùng lúc đều ghi vào chung 1-2 dòng đó. Pattern
+-- cũ (client SELECT giá trị hiện tại, cộng ở JS, rồi UPDATE giá trị mới)
+-- có race condition kinh điển: nếu 2 người chơi SELECT gần như cùng lúc rồi
+-- đều UPDATE, người ghi sau ĐÈ MẤT phần cộng của người ghi trước (mất dữ
+-- liệu âm thầm, không báo lỗi) — càng đông người chơi cùng lúc, tỷ lệ mất
+-- càng cao. RPC dưới đây làm phép cộng NGAY TRONG 1 câu UPDATE ở Postgres
+-- (x = x + n), được Postgres tự khoá row trong lúc thực thi — đúng nghĩa
+-- atomic, không còn khoảng hở giữa đọc và ghi để race condition xảy ra.
+-- security definer: hàm chạy với quyền chủ sở hữu (bỏ qua RLS của chính
+-- bảng analytics_* bên trong hàm), cho phép xoá hẳn policy UPDATE public ở
+-- mục 3 bên dưới — client giờ chỉ được SELECT trực tiếp + gọi RPC qua
+-- supabase-js .rpc(...), không còn được UPDATE tuỳ ý 2 bảng này nữa (thắt
+-- chặt hơn so với trước, không chỉ là sửa race condition).
+create or replace function increment_access_hour(p_hour int)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  col text := 'h' || p_hour::text;
+begin
+  if p_hour < 0 or p_hour > 23 then
+    raise exception 'invalid hour: %', p_hour;
+  end if;
+  execute format('update analytics_access_hours set %I = %I + 1, total = total + 1 where id = 1', col, col);
+end;
+$$;
+
+create or replace function increment_screen_time(p_phase text, p_duration_ms double precision)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  sum_col text := p_phase || '_sum';
+  count_col text := p_phase || '_count';
+begin
+  if p_phase not in ('intro', 'game', 'result') then
+    raise exception 'invalid phase: %', p_phase;
+  end if;
+  execute format(
+    'update analytics_screen_time set %I = %I + $1, %I = %I + 1 where id = 1',
+    sum_col, sum_col, count_col, count_col
+  ) using p_duration_ms;
+end;
+$$;
+
+-- Heatmap cộng dồn từng bucket vào JSONB — merge nguyên tử bằng jsonb ||
+-- (khoá row trong UPDATE) thay vì merge ở JS rồi ghi đè cả object, tránh
+-- mất bucket của người chơi khác ghi cùng lúc. p_buckets là JSONB dạng
+-- {"col_row": count, ...} do client gửi lên (số lần chuột/tay chạm bucket
+-- đó trong phiên vừa xong của riêng client này).
+create or replace function increment_heatmap(p_screen text, p_buckets jsonb)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if p_screen not in ('intro', 'game') then
+    raise exception 'invalid screen: %', p_screen;
+  end if;
+  update analytics_heatmap
+  set buckets = (
+    select jsonb_object_agg(
+      key,
+      coalesce((buckets->key)::int, 0) + coalesce((p_buckets->key)::int, 0)
+    )
+    from jsonb_object_keys(buckets || p_buckets) as key
+  )
+  where screen = p_screen;
+end;
+$$;
+
+-- Client (publishable key = role "anon") gọi các RPC trên qua supabase-js
+-- .rpc(...) — cần GRANT EXECUTE rõ ràng, Postgres không tự cho phép.
+grant execute on function increment_access_hour(int) to anon, authenticated;
+grant execute on function increment_screen_time(text, double precision) to anon, authenticated;
+grant execute on function increment_heatmap(text, jsonb) to anon, authenticated;
+
+-- ============================================================
 -- 3. Row Level Security — cho phép mọi người đọc, và ghi có kiểm soát
 -- ============================================================
 -- Game chạy hoàn toàn phía client (không có backend riêng), nên viewer cần
@@ -149,20 +237,23 @@ create policy "players: ai cũng ghi được (upsert điểm của chính mình
 drop policy if exists "players: ai cũng update được" on players;
 create policy "players: ai cũng update được" on players for update using (true);
 
+-- Không còn policy UPDATE public cho 3 bảng analytics — client ghi qua RPC
+-- security definer (increment_access_hour/increment_screen_time/
+-- increment_heatmap ở mục 2d), không update thẳng bảng nữa. Nếu nâng cấp từ
+-- Supabase cũ (đã tạo policy "...: ghi" kiểu update using(true) trước đây),
+-- xoá luôn để tránh còn đường ghi trực tiếp song song với RPC.
+drop policy if exists "access_hours: ghi" on analytics_access_hours;
+drop policy if exists "screen_time: ghi" on analytics_screen_time;
+drop policy if exists "heatmap: ghi" on analytics_heatmap;
+
 drop policy if exists "access_hours: đọc" on analytics_access_hours;
 create policy "access_hours: đọc" on analytics_access_hours for select using (true);
-drop policy if exists "access_hours: ghi" on analytics_access_hours;
-create policy "access_hours: ghi" on analytics_access_hours for update using (true);
 
 drop policy if exists "screen_time: đọc" on analytics_screen_time;
 create policy "screen_time: đọc" on analytics_screen_time for select using (true);
-drop policy if exists "screen_time: ghi" on analytics_screen_time;
-create policy "screen_time: ghi" on analytics_screen_time for update using (true);
 
 drop policy if exists "heatmap: đọc" on analytics_heatmap;
 create policy "heatmap: đọc" on analytics_heatmap for select using (true);
-drop policy if exists "heatmap: ghi" on analytics_heatmap;
-create policy "heatmap: ghi" on analytics_heatmap for update using (true);
 
 -- ============================================================
 -- 4. Seed 6 "đối thủ ảo" — idempotent, chạy lại không tạo trùng

@@ -1109,7 +1109,13 @@
     // JS client, so count how many players rank strictly above this one.
     const me = await getPlayerRecord(id);
     if(!me) return { rank: null, total: 0 };
-    const { count: total } = await sb.from('players').select('*', { count:'exact', head:true });
+    // total: chỉ để hiển thị "Hạng X / ~Y người chơi" — không cần chính xác
+    // tuyệt đối, dùng count:'estimated' (đọc từ thống kê pg_class, không
+    // quét toàn bảng) để không chậm dần khi bảng players phình to theo
+    // traffic. above: quyết định con số hạng thật, giữ 'exact' nhưng có
+    // điều kiện gt(avg_score) khớp index players_avg_score_idx nên vẫn là
+    // index scan nhanh, không phải seq scan toàn bảng như count tổng.
+    const { count: total } = await sb.from('players').select('*', { count:'estimated', head:true });
     const { count: above } = await sb.from('players').select('*', { count:'exact', head:true }).gt('avg_score', me.avgScore||0);
     return { rank: (above||0) + 1, total: total||0 };
   }
@@ -1655,38 +1661,30 @@
     if(e.touches && e.touches[0]) sampleMouseAt(e.touches[0].clientX, e.touches[0].clientY);
   }, { passive:true });
 
-  // Read-modify-write against the single fixed row in each analytics table.
-  // Same trade-off as before: concurrent writers can race (last write wins),
-  // acceptable for approximate aggregate analytics at this game's scale.
+  // Gọi RPC tăng nguyên tử (increment_*, xem supabase/schema.sql mục 2d)
+  // thay vì select-rồi-update phía client như trước — pattern cũ có race
+  // condition thật khi nhiều người chơi cùng ghi vào 1 dòng chung (người ghi
+  // sau đè mất phần cộng của người ghi trước), càng rõ khi traffic tăng đột
+  // biến. RPC làm phép cộng ngay trong Postgres nên luôn đúng dù bao nhiêu
+  // người gọi cùng lúc.
   async function recordAccessHour(){
     if(!sb) return;
     try{
-      const key = 'h' + new Date().getHours();
-      const { data: prev } = await sb.from('analytics_access_hours').select('*').eq('id', 1).maybeSingle();
-      if(!prev) return;
-      await sb.from('analytics_access_hours').update({ [key]: (prev[key]||0) + 1, total: (prev.total||0) + 1 }).eq('id', 1);
+      await sb.rpc('increment_access_hour', { p_hour: new Date().getHours() });
     }catch(e){ /* best-effort */ }
   }
 
   async function flushScreenTime(phaseName, durationMs){
     if(!sb || durationMs < 200) return; // ignore near-instant transitions (noise)
     try{
-      const sumCol = phaseName + '_sum', countCol = phaseName + '_count';
-      const { data: prev } = await sb.from('analytics_screen_time').select('*').eq('id', 1).maybeSingle();
-      if(!prev) return;
-      await sb.from('analytics_screen_time').update({
-        [sumCol]: (prev[sumCol]||0) + durationMs, [countCol]: (prev[countCol]||0) + 1
-      }).eq('id', 1);
+      await sb.rpc('increment_screen_time', { p_phase: phaseName, p_duration_ms: durationMs });
     }catch(e){ /* best-effort */ }
   }
 
   async function flushHeatmap(screenName, buckets){
     if(!sb || Object.keys(buckets).length === 0) return;
     try{
-      const { data: prev } = await sb.from('analytics_heatmap').select('buckets').eq('screen', screenName).maybeSingle();
-      const merged = Object.assign({}, prev ? prev.buckets : {});
-      for(const k in buckets){ merged[k] = (merged[k]||0) + buckets[k]; }
-      await sb.from('analytics_heatmap').update({ buckets: merged }).eq('screen', screenName);
+      await sb.rpc('increment_heatmap', { p_screen: screenName, p_buckets: buckets });
     }catch(e){ /* best-effort */ }
   }
 
