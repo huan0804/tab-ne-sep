@@ -4,7 +4,22 @@
 
 ## Trạng thái hiện tại (2026-09-22)
 
+**Đã push lên GitHub (2 commit): thuật toán rải bàn phòng đông người (`c7a9739`) + sửa database scalability (`289e410`).**
+
 **Đang giữa vòng sửa mobile UX (lag + tràn màn hình + bàn phím) — CHƯA COMMIT, CHƯA TEST.** Đã sửa xong trong working tree của `game/TAB-Ne-Sep.html`, chờ user test lại bằng điện thoại thật (hôm sau) rồi mới quyết commit/push hay sửa tiếp.
+
+### ✅ Đã xong + push — Database scalability cho traffic tăng đột biến (commit `289e410`)
+
+User yêu cầu đảm bảo game chịu được traffic tăng đột biến + đánh giá khả năng chèn quảng cáo. Rà lại toàn bộ cách client ghi vào Supabase, phát hiện 2 điểm nghẽn thật:
+
+1. **Race condition ở 3 bảng analytics** (`analytics_access_hours`, `analytics_screen_time`, `analytics_heatmap`) — mỗi bảng chỉ có 1-2 dòng CỐ ĐỊNH mà MỌI người chơi cùng ghi đè. Code cũ: client SELECT giá trị hiện tại → cộng ở JS → UPDATE giá trị mới. Nhiều người ghi gần đồng thời → người ghi sau đè mất phần cộng của người ghi trước, mất dữ liệu âm thầm không báo lỗi — càng đông người chơi cùng lúc càng mất nhiều. Đã sửa: 3 RPC function Postgres (`increment_access_hour`, `increment_screen_time`, `increment_heatmap`, khai báo `security definer` trong `supabase/schema.sql` mục 2d) làm phép cộng NGAY trong 1 câu `UPDATE` — Postgres tự khoá row, atomic thật sự. Xoá luôn quyền UPDATE trực tiếp public trên 3 bảng này (client giờ chỉ SELECT + gọi RPC).
+2. **`getPlayerRank()` dùng `count:'exact'` cho tổng số người chơi** — quét toàn bảng, chậm dần khi `players` phình to theo traffic. Đổi sang `count:'estimated'` cho phần này (chỉ cần hiển thị gần đúng); giữ `exact` cho phần quyết định thứ hạng thật vì có điều kiện khớp index `players_avg_score_idx` nên vẫn nhanh.
+
+**⚠️ CẦN LÀM THỦ CÔNG TRƯỚC KHI RPC HOẠT ĐỘNG TRÊN PRODUCTION**: chạy lại `supabase/schema.sql` trên Supabase SQL Editor thật — nếu không chạy, code gọi `sb.rpc('increment_access_hour', ...)` sẽ lỗi vì function chưa tồn tại trên DB (analytics sẽ ngừng ghi nhưng không crash UI, vì có try/catch best-effort).
+
+**Chưa sửa, cần user quyết định (không phải bug, là chi phí thật):** đang dùng **Supabase Free tier** — giới hạn cứng connection đồng thời, bandwidth 5GB/tháng, DB size 500MB, tự pause sau 7 ngày không traffic. Game có sẵn tính năng chia sẻ mạng xã hội nên traffic viral tăng đột biến là rủi ro thật. Nếu traffic tăng thật, cần nâng **Pro tier** ($25/tháng).
+
+**Quảng cáo — đánh giá, chưa làm gì:** hiện chưa có tích hợp ad network nào (không AdSense, không SDK). Kiến trúc 1-file-HTML + Vercel thuận lợi để chèn — có sẵn điểm chuyển màn hình tự nhiên (`#introScreen`, `#modal` kết quả ván, `#lbModal` bảng xếp hạng) phù hợp cho interstitial/banner kiểu game casual. Cần thiết kế riêng (chọn network, luồng UX, đo hiệu quả) khi user muốn triển khai thật.
 
 ### ⏳ PENDING ƯU TIÊN NHẤT — test lại trên điện thoại thật, báo kết quả theo từng mục
 
