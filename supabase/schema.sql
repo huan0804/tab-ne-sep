@@ -29,6 +29,44 @@ alter table players add column if not exists longest_streak integer not null def
 -- Query chính của leaderboard: ORDER BY avg_score DESC — cần index để nhanh khi nhiều người chơi.
 create index if not exists players_avg_score_idx on players (avg_score desc);
 
+-- CHECK constraints — lưới an toàn cuối cùng ở tầng DB, độc lập với logic
+-- RPC bên dưới: dù RPC có bug hay bị gọi sai cách nào, Postgres vẫn từ chối
+-- giá trị vô lý (âm, hoặc vượt xa giới hạn game). "avg_score"/"best_score"
+-- đến từ "correctTime" (docs/GAME_SPEC.md mục 2.7, đã lạc hậu về con số cụ
+-- thể — xem game/TAB-Ne-Sep.html CONFIG.matchDuration=60 là nguồn thật):
+-- TỔNG thời gian "chơi đúng" suốt trận (mode=work gần Sếp HOẶC mode=personal
+-- xa Sếp), khác với ngưỡng targetPersonalTime=30s riêng của LUẬT THẮNG. Một
+-- ván chơi giỏi có thể có correctTime gần hết matchDuration=60s — biên 65
+-- (60s trận + 5s buffer) đủ rộng cho ván hợp lệ, vẫn chặn được giá trị vượt
+-- xa thực tế game. Bọc trong DO block vì "add constraint" không có dạng
+-- "if not exists" ở mọi phiên bản Postgres — cách này vẫn giữ được tính
+-- idempotent khi chạy lại schema.sql nhiều lần.
+do $$
+begin
+  alter table players add constraint players_avg_score_range check (avg_score >= 0 and avg_score <= 65);
+exception when duplicate_object then null;
+end $$;
+do $$
+begin
+  alter table players add constraint players_best_score_range check (best_score >= 0 and best_score <= 65);
+exception when duplicate_object then null;
+end $$;
+do $$
+begin
+  alter table players add constraint players_session_count_nonneg check (session_count >= 0);
+exception when duplicate_object then null;
+end $$;
+do $$
+begin
+  alter table players add constraint players_total_correct_time_nonneg check (total_correct_time >= 0);
+exception when duplicate_object then null;
+end $$;
+do $$
+begin
+  alter table players add constraint players_name_length check (char_length(name) <= 40);
+exception when duplicate_object then null;
+end $$;
+
 -- ============================================================
 -- 2. Analytics ẩn danh gộp (4 "document" cũ → giờ là 4 dòng cố định)
 -- ============================================================
@@ -84,6 +122,28 @@ create table if not exists sessions (
 create index if not exists sessions_variant_idx on sessions (variant);
 create index if not exists sessions_player_id_idx on sessions (player_id);
 
+-- CHECK constraints cùng biên hợp lý như players (mục 1 — score/correctTime
+-- khớp CONFIG.matchDuration=60s + buffer, xem giải thích chi tiết ở
+-- constraint players_avg_score_range). Bảng này insert tự do (insert with
+-- check(true) bên dưới) nên vẫn cần chặn giá trị vô lý ở tầng DB dù rủi ro
+-- thấp hơn (chỉ phục vụ A/B testing nội bộ, không ảnh hưởng leaderboard
+-- hiển thị cho người chơi).
+do $$
+begin
+  alter table sessions add constraint sessions_score_range check (score >= 0 and score <= 65);
+exception when duplicate_object then null;
+end $$;
+do $$
+begin
+  alter table sessions add constraint sessions_play_time_range check (play_time >= 0 and play_time <= 65);
+exception when duplicate_object then null;
+end $$;
+do $$
+begin
+  alter table sessions add constraint sessions_score_le_play_time check (score <= play_time);
+exception when duplicate_object then null;
+end $$;
+
 alter table sessions enable row level security;
 drop policy if exists "sessions: ai cũng đọc được" on sessions;
 create policy "sessions: ai cũng đọc được" on sessions for select using (true);
@@ -112,8 +172,11 @@ drop policy if exists "rooms: ai cũng đọc được" on rooms;
 create policy "rooms: ai cũng đọc được" on rooms for select using (true);
 drop policy if exists "rooms: ai cũng tạo được" on rooms;
 create policy "rooms: ai cũng tạo được" on rooms for insert with check (true);
+-- Không còn policy UPDATE public — trước đây using(true) cho phép đổi
+-- status/host_player_id của BẤT KỲ phòng nào (phá phòng người khác, cướp
+-- quyền host). Chuyển status waiting->playing giờ đi qua RPC
+-- start_room_match() (mục 2f) — chỉ host thật của phòng đó gọi được.
 drop policy if exists "rooms: ai cũng update được" on rooms;
-create policy "rooms: ai cũng update được" on rooms for update using (true);
 
 -- Postgres Changes (client subscribe sb.channel(...).on('postgres_changes',...))
 -- chỉ nhận được sự kiện nếu bảng được thêm vào publication này. Bọc kiểm tra
@@ -334,6 +397,152 @@ grant execute on function increment_access_hour_daily(text, int) to anon, authen
 grant execute on function increment_screen_time_daily(text, text, double precision) to anon, authenticated;
 grant execute on function increment_heatmap_weekly(text, text, jsonb) to anon, authenticated;
 
+-- ============================================================
+-- 2f. RPC ghi player qua server — thay cho upsert/update trực tiếp từ
+-- client vào bảng "players"/"rooms" (mục 3 xoá hẳn 2 policy đó bên dưới).
+-- ============================================================
+-- Lý do đổi: trước đây client tự tính avg_score/best_score/session_count ở
+-- JS rồi upsert thẳng, và policy UPDATE dùng using(true) không giới hạn
+-- theo id — nghĩa là AI CŨNG sửa được điểm của BẤT KỲ người chơi nào khác
+-- (không chỉ chính mình) chỉ bằng cách gọi thẳng REST API với publishable
+-- key có sẵn trong HTML, không cần chơi game. Không có Supabase Auth ở đây
+-- (playerId là UUID client tự sinh, không phải danh tính có thể xác thực),
+-- nên RLS kiểu auth.uid() = id không dùng được — giải pháp thực tế là
+-- chuyển toàn bộ ghi vào "players"/"rooms" qua RPC security definer, để:
+-- (a) client không còn gọi UPDATE/INSERT trực tiếp được nữa (xem mục 3),
+-- (b) điểm số được SERVER cộng dồn từ delta 1 ván (score/play_time), không
+-- nhận thẳng avg_score/total_correct_time đã tính sẵn từ client,
+-- (c) CHECK constraint ở mục 1 + validate trong RPC chặn giá trị vượt biên
+-- hợp lý của game (score/play_time trong [0,65]s, score <= play_time —
+-- xem giải thích chi tiết ở constraint players_avg_score_range).
+-- Vẫn còn hạn chế: không phân biệt được "chủ playerId X thật" với "ai đó
+-- giả mạo gửi playerId X" (không có auth) — RPC chỉ chặn được sửa điểm
+-- SAI LỆCH XA giới hạn game hoặc sửa THẲNG người khác qua REST, không chặn
+-- được 100% việc gọi RPC lặp lại để "cày" điểm hợp lệ nhanh hơn chơi thật.
+-- Việc đó cần rate-limit hoặc xác thực server-side đầy đủ (giai đoạn sau).
+
+-- Khởi tạo player lần đầu / chỉ đổi tên — KHÔNG cộng điểm (khác với
+-- submit_match_result). Tách riêng để không nhầm "vào game lần đầu" với
+-- "vừa chơi xong 1 ván 0 điểm" (2 việc khác nhau: cái trước không tăng
+-- session_count, cái sau có).
+create or replace function ensure_player(p_player_id text, p_name text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if char_length(coalesce(p_name, '')) > 40 then
+    raise exception 'name too long';
+  end if;
+
+  insert into players (id, name, last_visit)
+  values (p_player_id, coalesce(nullif(p_name, ''), 'Người chơi ẩn danh'), now())
+  on conflict (id) do update set
+    name = excluded.name,
+    last_visit = excluded.last_visit;
+end;
+$$;
+
+grant execute on function ensure_player(text, text) to anon, authenticated;
+
+-- Ghi kết quả 1 ván chơi thật — nhận DELTA (score/play_time của riêng ván
+-- này), server tự cộng dồn total_correct_time/session_count và tự tính lại
+-- avg_score bên trong transaction (for update khoá row, cùng lý do chống
+-- race condition như các RPC increment_* ở trên). Trả về giá trị đã tính ở
+-- server để client cập nhật UI, thay vì tin giá trị client tự tính.
+create or replace function submit_match_result(
+  p_player_id text,
+  p_name text,
+  p_score double precision,      -- correctTime của ván vừa xong
+  p_play_time double precision,  -- elapsedTime của ván vừa xong
+  p_current_streak int,
+  p_longest_streak int
+)
+returns table(avg_score double precision, session_count int, best_score double precision)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_prev players%rowtype;
+  v_session_count int;
+  v_total_correct double precision;
+  v_best double precision;
+  v_total_play double precision;
+  v_avg double precision;
+begin
+  -- score = "correctTime": tổng thời gian chơi đúng suốt trận (không phải
+  -- targetPersonalTime=30s riêng của luật thắng) — biên khớp
+  -- CONFIG.matchDuration=60s trong game/TAB-Ne-Sep.html + 5s buffer.
+  if p_score < 0 or p_score > 65 then
+    raise exception 'invalid score: %', p_score;
+  end if;
+  if p_play_time < 0 or p_play_time > 65 then
+    raise exception 'invalid play_time: %', p_play_time;
+  end if;
+  if p_score > p_play_time then
+    raise exception 'score cannot exceed play_time: score=%, play_time=%', p_score, p_play_time;
+  end if;
+  if char_length(coalesce(p_name, '')) > 40 then
+    raise exception 'name too long';
+  end if;
+
+  select * into v_prev from players where id = p_player_id for update;
+
+  if not found then
+    v_session_count := 1;
+    v_total_correct := p_score;
+    v_total_play := p_play_time;
+    v_best := p_score;
+  else
+    v_session_count := v_prev.session_count + 1;
+    v_total_correct := v_prev.total_correct_time + p_score;
+    v_total_play := v_prev.total_play_time + p_play_time;
+    v_best := greatest(v_prev.best_score, p_score);
+  end if;
+  v_avg := v_total_correct / v_session_count;
+
+  insert into players (id, name, session_count, total_correct_time, avg_score, best_score, total_play_time, current_streak, longest_streak, last_visit)
+  values (p_player_id, coalesce(nullif(p_name, ''), 'Người chơi ẩn danh'), v_session_count, v_total_correct, v_avg, v_best, v_total_play, p_current_streak, p_longest_streak, now())
+  on conflict (id) do update set
+    name = excluded.name,
+    session_count = excluded.session_count,
+    total_correct_time = excluded.total_correct_time,
+    avg_score = excluded.avg_score,
+    best_score = excluded.best_score,
+    total_play_time = excluded.total_play_time,
+    current_streak = excluded.current_streak,
+    longest_streak = excluded.longest_streak,
+    last_visit = excluded.last_visit;
+
+  return query select v_avg, v_session_count, v_best;
+end;
+$$;
+
+grant execute on function submit_match_result(text, text, double precision, double precision, int, int) to anon, authenticated;
+
+-- Chuyển phòng waiting -> playing — CHỈ cho phép nếu người gọi đúng là
+-- host_player_id của phòng đó, thay cho update using(true) cũ (ai cũng đổi
+-- được status/host của phòng người khác).
+create or replace function start_room_match(p_room_id text, p_requester_id text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  update rooms set status = 'playing'
+  where id = p_room_id and host_player_id = p_requester_id and status = 'waiting';
+
+  if not found then
+    raise exception 'not authorized or invalid room state';
+  end if;
+end;
+$$;
+
+grant execute on function start_room_match(text, text) to anon, authenticated;
+
 alter table analytics_access_hours_daily enable row level security;
 alter table analytics_screen_time_daily enable row level security;
 alter table analytics_heatmap_weekly enable row level security;
@@ -348,13 +557,23 @@ drop policy if exists "heatmap_weekly: đọc" on analytics_heatmap_weekly;
 create policy "heatmap_weekly: đọc" on analytics_heatmap_weekly for select using (true);
 
 -- ============================================================
--- 3. Row Level Security — cho phép mọi người đọc, và ghi có kiểm soát
+-- 3. Row Level Security — cho phép mọi người đọc, ghi player qua RPC only
 -- ============================================================
--- Game chạy hoàn toàn phía client (không có backend riêng), nên viewer cần
--- quyền insert/update trực tiếp bằng publishable key. Đây là đánh đổi chấp
--- nhận được cho 1 mini-game công khai, không có dữ liệu nhạy cảm — giống
--- hệt mô hình "mọi người dùng chung 1 kho db" mà bản Claude Artifact cũ đã
--- dùng.
+-- Game chạy hoàn toàn phía client (không có backend riêng, không có
+-- Supabase Auth — playerId chỉ là UUID tự sinh ở client, không phải danh
+-- tính xác thực được), nên viewer cần đọc tự do bằng publishable key. Đây
+-- là đánh đổi chấp nhận được cho 1 mini-game công khai, không có dữ liệu
+-- nhạy cảm — giống hệt mô hình "mọi người dùng chung 1 kho db" mà bản
+-- Claude Artifact cũ đã dùng.
+--
+-- KHÔNG còn policy INSERT/UPDATE trực tiếp cho "players" (khác các bảng
+-- analytics_*/sessions/rooms bên trên — bảng này giữ điểm số/leaderboard,
+-- rủi ro cao nhất nếu bị ghi tuỳ tiện). Trước đây "update using(true)"
+-- cho phép SỬA ĐIỂM CỦA BẤT KỲ NGƯỜI CHƠI NÀO KHÁC qua REST API trực tiếp
+-- (PATCH .../players?id=eq.<id_bất_kỳ>), không cần chơi game — đã xác nhận
+-- là lỗ hổng thật, không phải lý thuyết. Toàn bộ ghi vào players giờ đi
+-- qua RPC security definer (ensure_player/submit_match_result, mục 2f),
+-- validate delta điểm ở server thay vì tin giá trị đã tính sẵn từ client.
 
 alter table players enable row level security;
 alter table analytics_access_hours enable row level security;
@@ -364,9 +583,7 @@ alter table analytics_heatmap enable row level security;
 drop policy if exists "players: ai cũng đọc được" on players;
 create policy "players: ai cũng đọc được" on players for select using (true);
 drop policy if exists "players: ai cũng ghi được (upsert điểm của chính mình)" on players;
-create policy "players: ai cũng ghi được (upsert điểm của chính mình)" on players for insert with check (true);
 drop policy if exists "players: ai cũng update được" on players;
-create policy "players: ai cũng update được" on players for update using (true);
 
 -- Không còn policy UPDATE public cho 3 bảng analytics — client ghi qua RPC
 -- security definer (increment_access_hour/increment_screen_time/

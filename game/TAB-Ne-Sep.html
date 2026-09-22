@@ -1164,15 +1164,33 @@
     return { currentStreak, longestStreak: Math.max(currentStreak, prevLongestStreak||0) };
   }
 
-  async function upsertPlayerRecord(id, record){
+  // Khởi tạo player lần đầu / chỉ đổi tên — KHÔNG cộng điểm. Gọi RPC
+  // security definer thay vì upsert trực tiếp: bảng "players" không còn
+  // policy INSERT/UPDATE public (xem supabase/schema.sql mục 3) vì
+  // using(true) từng cho phép sửa điểm của BẤT KỲ người chơi nào khác qua
+  // REST API trực tiếp, không cần chơi game.
+  async function ensurePlayerRecord(id, name){
     try{
-      await sb.from('players').upsert({
-        id, name: record.name, session_count: record.sessionCount, total_correct_time: record.totalCorrectTime,
-        avg_score: record.avgScore, best_score: record.bestScore, total_play_time: record.totalPlayTime,
-        current_streak: record.currentStreak||0, longest_streak: record.longestStreak||0,
-        last_visit: new Date().toISOString()
-      });
+      await sb.rpc('ensure_player', { p_player_id: id, p_name: name });
     }catch(e){ /* best-effort */ }
+  }
+
+  // Ghi kết quả 1 ván chơi thật — gửi DELTA (score/play_time của riêng ván
+  // này) cho RPC submit_match_result, server tự cộng dồn + tính lại
+  // avg_score/best_score bên trong transaction và validate biên hợp lý
+  // (score/play_time trong [0,65] — khớp CONFIG.matchDuration=60s + buffer,
+  // score <= play_time) thay vì tin giá trị đã tính sẵn ở client. Trả về
+  // giá trị server đã tính để cập nhật UI.
+  async function submitMatchResult(id, name, score, playTime, currentStreak, longestStreak){
+    try{
+      const { data, error } = await sb.rpc('submit_match_result', {
+        p_player_id: id, p_name: name, p_score: score, p_play_time: playTime,
+        p_current_streak: currentStreak||0, p_longest_streak: longestStreak||0
+      });
+      if(error || !data || !data[0]) return null;
+      const row = data[0];
+      return { avgScore: row.avg_score, sessionCount: row.session_count, bestScore: row.best_score };
+    }catch(e){ return null; }
   }
 
   const STREAK_MILESTONES = {
@@ -1250,13 +1268,8 @@
 
   async function ensurePlayerDoc(){
     try{
-      const existing = await getPlayerRecord(playerId);
       const name = getPlayerName() || 'Người chơi ẩn danh';
-      if(!existing){
-        await upsertPlayerRecord(playerId, { name, sessionCount:0, totalCorrectTime:0, avgScore:0, bestScore:0, totalPlayTime:0 });
-      } else {
-        await upsertPlayerRecord(playerId, Object.assign({}, existing, { name }));
-      }
+      await ensurePlayerRecord(playerId, name);
     }catch(e){ /* ignore */ }
   }
 
@@ -1649,7 +1662,11 @@
 
   roomStartBtn.addEventListener('click', async ()=>{
     if(!isRoomHost || !currentRoomId) return;
-    await sb.from('rooms').update({ status: 'playing' }).eq('id', currentRoomId);
+    // RPC tự xác thực lại requester = host_player_id ở server (xem
+    // start_room_match trong supabase/schema.sql mục 2f) — isRoomHost ở
+    // trên chỉ là kiểm tra UI, không phải nguồn tin cậy thật.
+    const { error } = await sb.rpc('start_room_match', { p_room_id: currentRoomId, p_requester_id: playerId });
+    if(error) return;
     // Host tự chuyển màn ngay — client khác chuyển khi nhận postgres_changes.
     startRoomMatchForEveryone();
   });
@@ -1815,22 +1832,22 @@
   async function recordSharedSession(score, elapsedTime){
     if(!sb) return null;
     try{
-      const prev = (await getPlayerRecord(playerId)) || { sessionCount:0, totalCorrectTime:0, bestScore:0, totalPlayTime:0, currentStreak:0, longestStreak:0, lastVisit:null };
-      const sessionCount = (prev.sessionCount||0) + 1;
-      const totalCorrectTime = (prev.totalCorrectTime||0) + score;
-      const totalPlayTime = (prev.totalPlayTime||0) + elapsedTime;
-      const bestScore = Math.max(prev.bestScore||0, score);
-      const avgScore = totalCorrectTime / sessionCount;
+      const prev = (await getPlayerRecord(playerId)) || { currentStreak:0, longestStreak:0, lastVisit:null };
       const name = getPlayerName() || 'Người chơi ẩn danh';
-      // Tính streak dựa trên lastVisit CŨ — phải tính trước khi upsertPlayerRecord
+      // Tính streak dựa trên lastVisit CŨ — phải tính trước khi submitMatchResult
       // ghi đè last_visit thành "bây giờ", nếu không sẽ luôn thấy gapDays=0.
       const wasStreakBefore = prev.currentStreak||0;
       const { currentStreak, longestStreak } = computeStreak(prev.lastVisit, prev.currentStreak, prev.longestStreak);
-      await upsertPlayerRecord(playerId, { name, sessionCount, totalCorrectTime, avgScore, bestScore, totalPlayTime, currentStreak, longestStreak });
+      // sessionCount/totalCorrectTime/avgScore/bestScore giờ do SERVER cộng
+      // dồn từ delta (score, elapsedTime) của riêng ván này — client không
+      // còn tự tính rồi gửi thẳng con số tổng nữa (xem submit_match_result
+      // trong supabase/schema.sql mục 2f).
+      const result = await submitMatchResult(playerId, name, score, elapsedTime, currentStreak, longestStreak);
+      if(!result) return null;
       try{
         await sb.from('sessions').insert({ player_id: playerId, variant: UI_VARIANT, score, play_time: elapsedTime });
       }catch(e2){ /* best-effort, không ảnh hưởng leaderboard chính */ }
-      return { sessionCount, avgScore, bestScore, currentStreak, longestStreak, streakJustIncreased: currentStreak > wasStreakBefore };
+      return { sessionCount: result.sessionCount, avgScore: result.avgScore, bestScore: result.bestScore, currentStreak, longestStreak, streakJustIncreased: currentStreak > wasStreakBefore };
     }catch(e){ return null; }
   }
 
