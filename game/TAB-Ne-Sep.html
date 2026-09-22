@@ -372,10 +372,12 @@
     .hud-label{font-size:9px;}
     .hud-value{font-size:14px;}
     #hud #title{font-size:12px;}
-    /* Màn hẹp: giữ khung/màu đỏ (vẫn đủ nhận ra là nút) nhưng bỏ chữ, chỉ
-       icon — nhường chỗ cho các khối HUD khác không bị vỡ dòng. */
+    /* Trước đây ẩn hẳn chữ ở màn hẹp, chỉ còn icon ⏹ — người chơi không
+       nhận ra đó là nút bấm được (không phải trang trí), đây là lỗi UX
+       thật chứ không phải chỉ tiết kiệm không gian. Giữ luôn chữ "Dừng"
+       (đã rút gọn từ "Dừng ván" ở mọi kích thước màn hình, xem #hud HTML)
+       để nút luôn tự giải thích được, nhất quán giữa desktop và mobile. */
     #hudStopBtn{padding:5px 7px; font-size:13px;}
-    #hudStopBtn .hudStopLabel{display:none;}
     #progressWrap{min-width:100px;}
     .mouse, .succulent{display:none;}
     #tabBtn{padding:13px 20px;font-size:13px;min-height:44px; background:#c1272d; border-color:#e0454b; box-shadow:0 6px 16px rgba(193,39,45,0.4); animation:pulseTabBtn 1.8s ease-in-out infinite;}
@@ -502,7 +504,7 @@
 
   <div id="hud">
     <div id="title">Ca Làm Việc Của Minh</div>
-    <button id="hudStopBtn" title="Dừng ván, không tính điểm">⏹ <span class="hudStopLabel">Dừng ván</span></button>
+    <button id="hudStopBtn" title="Dừng ván, không tính điểm">⏹ <span class="hudStopLabel">Dừng</span></button>
     <button id="hudTrophyBtn" title="Bảng xếp hạng">🏆</button>
     <div class="hud-block">
       <div class="hud-label">MẠNG</div>
