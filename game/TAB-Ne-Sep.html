@@ -1233,6 +1233,18 @@
     return { rank: (above||0) + 1, total: total||0 };
   }
 
+  // Chặn stored XSS: tên người chơi đến từ DB (RPC ensure_player/
+  // submit_match_result chỉ giới hạn độ dài, không lọc HTML — xem
+  // supabase/schema.sql) và được nhiều người chơi khác nhìn thấy qua
+  // leaderboard/phòng chung/link thách đấu — luôn escape trước khi nối vào
+  // innerHTML. Dùng textContent trung gian thay vì tự viết regex thay thế
+  // để không bỏ sót ký tự đặc biệt nào của trình duyệt.
+  function escapeHtml(s){
+    const d = document.createElement('div');
+    d.textContent = s == null ? '' : String(s);
+    return d.innerHTML;
+  }
+
   function getPlayerId(){
     try{
       let id = localStorage.getItem('atd_playerId');
@@ -1333,7 +1345,7 @@
     roomPlayerList.innerHTML = names.map(p=>{
       const mine = p.playerId === playerId;
       const hostTag = p.playerId === (roomChannel && roomChannel._hostPlayerId) ? ' 👑' : '';
-      return '<div class="roomPlayerRow"><span>'+(p.name||'Ẩn danh')+hostTag+'</span>'+(mine?'<span class="youTag">(bạn)</span>':'')+'</div>';
+      return '<div class="roomPlayerRow"><span>'+escapeHtml(p.name||'Ẩn danh')+hostTag+'</span>'+(mine?'<span class="youTag">(bạn)</span>':'')+'</div>';
     }).join('');
   }
 
@@ -1532,7 +1544,7 @@
     }
     const hostRec = await getPlayerRecord(room.host_player_id);
     pendingRoomInvite = { roomId, hostName: hostRec ? hostRec.name : 'một người bạn' };
-    roomInviteBanner.innerHTML = '👥 <b>' + pendingRoomInvite.hostName + '</b> mời bạn vào phòng chơi cùng!';
+    roomInviteBanner.innerHTML = '👥 <b>' + escapeHtml(pendingRoomInvite.hostName) + '</b> mời bạn vào phòng chơi cùng!';
     roomInviteBanner.classList.add('show');
     startBtn.textContent = '▶️ Vào phòng của ' + pendingRoomInvite.hostName;
     refreshNameInputVisibility();
@@ -1723,7 +1735,7 @@
       if(!sb){ setTimeout(tryShow, 150); return; }
       const rec = await getPlayerRecord(id);
       if(!rec || !rec.bestScore) return; // link cũ/id không có dữ liệu — im lặng bỏ qua
-      challengeBanner.innerHTML = '⚔️ <b>' + (rec.name||'Một người bạn') + '</b> vừa đạt <b>' + rec.bestScore.toFixed(1) + 's</b> — thử vượt qua chưa?';
+      challengeBanner.innerHTML = '⚔️ <b>' + escapeHtml(rec.name||'Một người bạn') + '</b> vừa đạt <b>' + rec.bestScore.toFixed(1) + 's</b> — thử vượt qua chưa?';
       challengeBanner.classList.add('show');
     };
     tryShow();
@@ -1867,7 +1879,7 @@
       const d = p.data; const mine = p.id === playerId;
       const meta = extraMeta ? (' · tốt nhất ' + (d.bestScore||0).toFixed(1) + 's') : '';
       return '<div class="lbRow'+(mine?' me':'')+'"><div class="lbRank">#'+(i+1)+'</div>'
-        + '<div><div class="lbName">'+(d.name||'Ẩn danh')+(mine?' (bạn)':'')+'</div><div class="lbMeta">'+(d.sessionCount||0)+' ván'+meta+'</div></div>'
+        + '<div><div class="lbName">'+escapeHtml(d.name||'Ẩn danh')+(mine?' (bạn)':'')+'</div><div class="lbMeta">'+(d.sessionCount||0)+' ván'+meta+'</div></div>'
         + '<div class="lbScore">'+(d.avgScore||0).toFixed(1)+'s</div></div>';
     }).join('') + '</div>';
     if(rank && rank > docs.length){
@@ -1923,7 +1935,7 @@
       const { rank, total } = await getPlayerRank(playerId);
       const rankText = rank ? '#'+rank+' / '+total+' người chơi' : 'Chưa xếp hạng';
       lbBody.innerHTML = '<div class="lbRow me"><div class="lbRank">'+(rank ? '#'+rank : '—')+'</div>'
-        + '<div><div class="lbName">'+(p.name||'Bạn')+'</div><div class="lbMeta">'+rankText+'</div></div>'
+        + '<div><div class="lbName">'+escapeHtml(p.name||'Bạn')+'</div><div class="lbMeta">'+rankText+'</div></div>'
         + '<div class="lbScore">'+(p.avgScore||0).toFixed(1)+'s</div></div>'
         + '<div class="stats-box" style="margin-top:10px;">'
         + '<div class="stats-row"><span>Tổng số ván đã chơi:</span><b>'+(p.sessionCount||0)+'</b></div>'
@@ -2309,7 +2321,7 @@
       const mine = r.playerId === playerId;
       const tag = r.won ? '🏆' : '💤';
       return '<div class="stats-row"' + (mine?' style="font-weight:700;color:#c1272d;"':'') + '>'
-        + '<span>' + tag + ' ' + r.name + (mine?' (bạn)':'') + '</span><b>' + r.score.toFixed(1) + 's</b></div>';
+        + '<span>' + tag + ' ' + escapeHtml(r.name) + (mine?' (bạn)':'') + '</span><b>' + r.score.toFixed(1) + 's</b></div>';
     }).join('');
     const waiting = roomPlayerIds.length - ids.length;
     box.innerHTML = '<div class="stats-box"><div style="font-weight:700;font-size:12.5px;margin-bottom:4px;">👥 Kết quả phòng này</div>'
