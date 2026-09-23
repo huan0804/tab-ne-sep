@@ -792,6 +792,7 @@
   // ép boss đứng yên ở đó sẽ ảnh hưởng tới người chơi khác trong phòng.
   const HINT_TUTORIAL_DONE = 'atd_tutorialDone';
   let tutorialActive = false; // true = đang ở ván solo đầu tiên, chưa bấm Tab lần nào
+  let tutorialProximityWarned = false; // coachmark bước 2 (Sếp lại gần) đã hiện chưa — chỉ hiện đúng 1 lần/ván
   function hasSeenHint(key){ try{ return localStorage.getItem(key) === '1'; }catch(e){ return true; } }
   function markHintSeen(key){ try{ localStorage.setItem(key, '1'); }catch(e){} }
   const coachmarkEl = document.getElementById('coachmark');
@@ -2468,6 +2469,16 @@
     bossDistTag.classList.toggle('warn', dist > 1.5 && dist <= 3);
 
     radarAlert.classList.toggle('show', boss.forced);
+    // Coachmark bước 1 (lúc startBtn) đã tự ẩn sau 6s từ trước khi Sếp thực
+    // sự lại gần — người chơi lúc này chỉ còn #hint tĩnh ở cuối màn hình,
+    // quá xa tầm mắt đang dán vào Sếp/banner đỏ giữa màn hình (phản hồi
+    // test tay thật: đọc không kịp/không để ý). Bước 2: hiện lại coachmark,
+    // ngắn gọn hơn (người chơi đang căng thẳng, không có thời gian đọc câu
+    // dài) đúng lúc banner "Sếp đang lại gần" vừa bật, chỉ 1 lần/ván.
+    if(tutorialActive && boss.forced && !tutorialProximityWarned){
+      tutorialProximityWarned = true;
+      showCoachmark('🚨 Sếp lại gần rồi — bấm TAB ngay!', 4000);
+    }
     if(performance.now() > bossAngryUntil){
       setBossFace(boss.forced ? 'alert' : 'calm');
     }
@@ -2745,6 +2756,7 @@
     // room (room đi qua joinExistingRoom ở nhánh pendingRoomInvite phía trên).
     if(!hasSeenHint(HINT_TUTORIAL_DONE)){
       tutorialActive = true;
+      tutorialProximityWarned = false;
       boss.forced = true; // khoá forceCloseApproach() tự động trong tick()
       // Mặc định mode ban đầu luôn là 'personal' (xem resetState()) — tận
       // dụng đúng lúc đó để dạy bước 4 (ý nghĩa màn hình) GỘP LUÔN với bước 1
