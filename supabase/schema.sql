@@ -122,20 +122,25 @@ create table if not exists sessions (
 create index if not exists sessions_variant_idx on sessions (variant);
 create index if not exists sessions_player_id_idx on sessions (player_id);
 
--- CHECK constraints cùng biên hợp lý như players (mục 1 — score/correctTime
--- khớp CONFIG.matchDuration=60s + buffer, xem giải thích chi tiết ở
--- constraint players_avg_score_range). Bảng này insert tự do (insert with
--- check(true) bên dưới) nên vẫn cần chặn giá trị vô lý ở tầng DB dù rủi ro
--- thấp hơn (chỉ phục vụ A/B testing nội bộ, không ảnh hưởng leaderboard
--- hiển thị cho người chơi).
+-- CHECK constraints — biên rộng hơn "players" (mục 1, <=65) có chủ đích:
+-- "sessions" lưu TỪNG VÁN riêng lẻ từ 2026-09-19 trở đi, gồm cả dữ liệu
+-- thật từ giai đoạn CONFIG.matchDuration=120s (trước khi rút xuống 60s
+-- cùng ngày 2026-09-19, xem WORK_LOG.md — "players" chỉ lưu số cộng dồn
+-- nên không giữ dấu vết cấu hình cũ, còn "sessions" thì có). Từng phát
+-- hiện 10 dòng play_time≈120.0x bị CHECK <=65 chặn khi chạy lại schema.sql
+-- lần đầu — xác nhận là dữ liệu thật hợp lệ tại thời điểm ghi, không phải
+-- rác, nên nới biên lên 125 (120s trận cũ + 5s buffer) thay vì xoá dữ liệu
+-- lịch sử. Bảng này insert tự do (insert with check(true) bên dưới) nên
+-- vẫn cần chặn giá trị vô lý ở tầng DB dù rủi ro thấp hơn (chỉ phục vụ A/B
+-- testing nội bộ, không ảnh hưởng leaderboard hiển thị cho người chơi).
 do $$
 begin
-  alter table sessions add constraint sessions_score_range check (score >= 0 and score <= 65);
+  alter table sessions add constraint sessions_score_range check (score >= 0 and score <= 125);
 exception when duplicate_object then null;
 end $$;
 do $$
 begin
-  alter table sessions add constraint sessions_play_time_range check (play_time >= 0 and play_time <= 65);
+  alter table sessions add constraint sessions_play_time_range check (play_time >= 0 and play_time <= 125);
 exception when duplicate_object then null;
 end $$;
 do $$
