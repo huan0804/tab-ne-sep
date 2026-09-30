@@ -1,0 +1,2862 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>TAB: Né Sếp (phối cảnh)</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🫣</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Be+Vietnam+Pro:ital,wght@0,400;0,500;0,600;0,700;1,500&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+  :root{
+    --wall:#f4f6f8; --wall-dark:#e2e6ea; --wood:#ffffff; --wood-dark:#c9ced4;
+    --glass-frame:#2b2d31; --bezel:#101012;
+    --work-glow:#2563eb; --personal-glow:#d97706;
+    --danger:#dc2626; --safe:#22c55e; --paper:#f5f1e6; --ink:#1c1c1c;
+    --accent-yellow:#f2b705; --accent-green:#8bc34a;
+    --mono: 'JetBrains Mono', 'Courier New', ui-monospace, monospace;
+    --display: 'Baloo 2', 'Segoe UI', sans-serif;
+    --body: 'Be Vietnam Pro', 'Segoe UI', sans-serif;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;height:100%;background:#111;overflow:hidden;font-family:var(--body);color:var(--paper);}
+  #stage{position:relative;width:100%;height:100%;display:flex;flex-direction:column;user-select:none;background:#111;}
+
+  #hud{position:relative; z-index:30; display:flex; align-items:center; justify-content:space-between; padding:10px 16px; gap:14px; flex-wrap:wrap; border-bottom:1px solid #3a3d46; background:#1a1c20;}
+  .hud-block{display:flex;flex-direction:column;gap:3px;min-width:100px;}
+  .hud-label{font-size:10px;letter-spacing:0.04em;color:#9a9a95;}
+  .hud-value{font-size:18px;font-weight:bold;color:var(--paper); font-family:var(--mono);}
+  #lives{font-size:16px;letter-spacing:3px;}
+  #progressWrap{flex:1;min-width:160px;max-width:300px;}
+  #progressText{font-family:var(--mono);}
+  #clock2{font-family:var(--mono);}
+  #progressTrack{height:12px;border-radius:6px;background:#0e0e10;overflow:hidden;border:1px solid #444;}
+  #progressFill{height:100%; width:0%; background:linear-gradient(90deg, var(--personal-glow), #fbbf24); transition:width 0.15s linear;}
+  #hud #title{font-family:var(--display); font-style:italic; font-size:15px; color:#c9c4b6;}
+
+  /* container-type: kích thước #monitor (xem clamp() dưới) tính theo cqw/cqh
+     — % của CHÍNH #scene (đã trừ #hud/#controls) — thay vì dvw/dvh toàn
+     trang, vốn không phản ánh đúng diện tích thật còn lại cho scene khi HUD
+     trên/dưới chiếm chỗ khác nhau tuỳ màn hình. */
+  #scene{position:relative; flex:1; overflow:hidden; background:linear-gradient(180deg, #fbfcfd 0%, #f2f4f6 55%, #dfe3e7 55%, #c7ccd2 100%); container-type:size;}
+  .column{position:absolute; top:0; bottom:0; width:38px; background:linear-gradient(90deg,#e4e7ea,#ffffff,#e4e7ea); box-shadow:0 0 20px rgba(0,0,0,0.08);}
+  #colLeft{left:3%;} #colRight{right:3%;}
+  .pendant-big{position:absolute; top:0; width:56px; z-index:2;}
+  .pendant-big .wire{width:2px;height:40px;background:#b8bcc2;margin:0 auto;}
+  .pendant-big .shade{width:56px;height:22px;background:linear-gradient(180deg,#ffffff,#d8dbe0);border:1px solid #c5c9ce; border-radius:5px 5px 22px 22px; box-shadow:0 4px 8px rgba(0,0,0,0.12);}
+  .pendant-big .glow{position:absolute; top:60px; left:50%; transform:translateX(-50%); width:180px; height:180px; background:radial-gradient(circle, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0.18) 45%, transparent 72%); pointer-events:none;}
+  .window-daylight{position:absolute; top:4%; right:6%; width:22%; height:48%; background:linear-gradient(180deg,#cfe8f5,#eaf5fb); border:5px solid #fff; box-shadow:0 6px 18px rgba(0,0,0,0.08); border-radius:2px; overflow:hidden;}
+  .window-daylight::after{content:'';position:absolute; top:0; bottom:0; left:50%; width:5px; background:#fff;}
+  .window-daylight .tree{position:absolute; bottom:0; width:30%; height:40%; background:#8bc34a; border-radius:50% 50% 0 0; opacity:0.6;}
+  .plantbig{position:absolute; bottom:41%; left:8%; width:56px; z-index:4;}
+  .plantbig .pot{width:32px;height:28px;background:var(--accent-yellow);border-radius:0 0 6px 6px;margin:0 auto;}
+  .plantbig.right{left:auto; right:8%;}
+
+  .coworkers{position:absolute; bottom:41%; left:0; right:0; height:17%; display:flex; justify-content:space-evenly; padding:0 90px; z-index:3;}
+  .co-desk{width:60px; height:100%; position:relative;}
+  .co-desk .silhouette{position:absolute; bottom:0; left:50%; transform:translateX(-50%); width:34px; height:36px; background:var(--accent-green); border-radius:14px 14px 4px 4px; opacity:0.9;}
+  .co-desk .headsil{position:absolute; bottom:32px; left:50%; transform:translateX(-50%); width:17px; height:19px; border-radius:50% 50% 45% 45%; background:#e0b88f;}
+  .co-desk .glow{position:absolute; bottom:6px; left:50%; transform:translateX(-50%); width:30px; height:16px; background:#1c1c1c; border-radius:2px; opacity:0.92;}
+  .co-desk .glow::after{content:'';position:absolute; inset:2px; background:#2f6fd6; border-radius:1px; opacity:0.9;}
+  .co-desk .drawer{position:absolute; bottom:0; left:50%; transform:translateX(-50%); width:36px; height:8px; background:var(--accent-yellow); border-radius:0 0 3px 3px;}
+
+  /* ---------- Proximity field: concentric distance ELLIPSES centered on the
+     player's desk, replacing the old corner radar. An ellipse (not a circle)
+     reads as the office floor viewed at a slight angle, and lets the ring
+     span wide toward the side columns without crowding the window/desk. ---------- */
+  #proxField{position:absolute; left:50%; bottom:24%; width:0; height:0; z-index:5; pointer-events:none;}
+  .ring{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); border-radius:50%; border:2px dashed rgba(28,28,28,0.16);}
+  .ring.r1{border-color:rgba(220,38,38,0.4);}
+  .ring-label{position:absolute; top:50%; font-family:var(--mono); font-size:10px; font-weight:700; color:#8a8a86; background:rgba(255,255,255,0.55); padding:1px 5px; border-radius:4px; white-space:nowrap;}
+  .ring-label.danger{color:#b91c1c; background:rgba(255,255,255,0.75);}
+  #radarAlert{position:absolute; top:12px; left:50%; transform:translateX(-50%); z-index:26; font-size:12px; font-weight:bold; color:#fff; background:rgba(220,38,38,0.85); padding:4px 14px; border-radius:20px; opacity:0; transition:opacity 0.15s; text-align:center;}
+  #radarAlert.show{opacity:1;}
+
+  /* ---------- Boss: full silhouette that physically walks between the rings ---------- */
+  #bossUnit{position:absolute; left:50%; top:50%; width:46px; height:0; z-index:8; transform:translate(-50%,-50%); will-change:transform;}
+  #bossUnit .bossShadow{position:absolute; bottom:-4px; left:50%; transform:translateX(-50%); width:34px; height:8px; background:rgba(0,0,0,0.22); border-radius:50%; filter:blur(1px);}
+  #bossUnit .bossBody{position:absolute; bottom:0; left:50%; transform:translateX(-50%); width:38px; height:46px; background:#2f6fd6; border-radius:16px 16px 6px 6px;}
+  #bossUnit .bossBody::after{content:'';position:absolute; left:50%; top:6px; transform:translateX(-50%); width:14px; height:10px; background:#e7ecf5; border-radius:2px;}
+  #bossUnit .bossTie{position:absolute; bottom:14px; left:50%; transform:translateX(-50%); width:6px; height:20px; background:#c1272d; clip-path:polygon(50% 0,100% 20%,70% 100%,30% 100%,0 20%);}
+
+  /* ---------- Đồng đội trong phòng "1 Sếp chung": bàn làm việc mini + tên,
+     đặt trên cùng hệ vòng tròn elip đang dùng cho Sếp (dịch toạ độ theo bàn
+     của mình). Monitor mini tái dùng chính buildWorkHTML/buildPersonalHTML
+     của màn hình chính (thu nhỏ bằng scale), không phải hình vẽ riêng. ---------- */
+  #teammatesLayer{position:absolute; left:50%; top:50%; width:0; height:0; z-index:9; pointer-events:none;}
+  .teammateUnit{position:absolute; left:0; top:0;}
+  /* .tmScale nhận transform scale() TÍNH RIÊNG theo metersToPxX hiện tại
+     (xem renderTeammates()) — bắt buộc vì kích thước monitor mini là px cố
+     định nhưng khoảng cách giữa các bàn co giãn theo mét/màn hình: không
+     scale theo thì màn hẹp (mobile) sẽ làm 2 monitor mini chồng lên nhau dù
+     khoảng cách "mét" giữa 2 bàn không đổi. */
+  .tmScale{position:absolute; left:0; top:0; transform-origin:center center; display:flex; flex-direction:column; align-items:center; gap:4px; transition:opacity 0.25s;}
+  .teammateUnit .tmMonitor{width:120px; height:78px; background:var(--bezel); border-radius:8px; padding:5px; box-shadow:0 8px 18px rgba(0,0,0,0.4); border:2px solid #fff;}
+  .teammateUnit.targeted .tmMonitor{border-color:#c1272d; box-shadow:0 0 0 4px rgba(193,39,45,0.3), 0 8px 18px rgba(0,0,0,0.4);}
+  .teammateUnit .tmScreen{width:100%; height:100%; border-radius:4px; overflow:hidden; position:relative; background:#0a0a0a;}
+  /* Khung ảo 660x420 (kích thước tối đa của #screen thật) rồi scale nguyên
+     khối xuống vừa khung mini — work-content/personal-content vốn dùng
+     position:absolute;inset:0 nên cần 1 cha position:relative đúng kích
+     thước gốc để căn đúng, không thể co giãn bằng % trực tiếp. */
+  .teammateUnit .tmScreenInner{position:relative; width:660px; height:420px; transform:scale(0.182); transform-origin:top left;}
+  .teammateUnit .tmName{font-family:var(--body); font-size:11px; font-weight:700; color:#fff; background:rgba(37,99,235,0.9); padding:2px 8px; border-radius:8px; white-space:nowrap; max-width:120px; overflow:hidden; text-overflow:ellipsis; box-shadow:0 2px 6px rgba(0,0,0,0.25);}
+  .teammateUnit.targeted .tmName{background:rgba(193,39,45,0.9);}
+  .teammateUnit.finished .tmScale{opacity:0.35;}
+
+  #bossFaceCard{position:absolute; bottom:40px; left:50%; transform:translateX(-50%); display:flex; flex-direction:column; align-items:center; gap:3px;}
+  #bossFaceSvgWrap{width:64px; height:64px; border-radius:50%; background:#2a2118; border:3px solid #55483a; overflow:hidden; box-shadow:0 6px 16px rgba(0,0,0,0.45); transition:box-shadow 0.2s, border-color 0.2s;}
+  #bossFaceSvgWrap svg{width:100%;height:100%;display:block;}
+  #bossFaceCard.calm #bossFaceSvgWrap{ animation:bossIdle 3.2s ease-in-out infinite; }
+  #bossFaceCard.alert #bossFaceSvgWrap{ border-color:#f59e0b; animation:bossTwitch 0.5s ease-in-out infinite; }
+  #bossFaceCard.angry #bossFaceSvgWrap{ border-color:var(--danger); box-shadow:0 0 22px 6px rgba(220,38,38,0.65); animation:bossShake 0.35s ease-in-out infinite; }
+  @keyframes bossIdle{ 0%,100%{transform:scale(1);} 50%{transform:scale(1.02);} }
+  @keyframes bossTwitch{ 0%,100%{transform:translateX(0);} 30%{transform:translateX(-2px);} 60%{transform:translateX(2px);} }
+  @keyframes bossShake{ 0%,100%{transform:translate(0,0) rotate(0);} 25%{transform:translate(-3px,1px) rotate(-2deg);} 75%{transform:translate(3px,-1px) rotate(2deg);} }
+  #bossDistTag{margin-top:2px; font-family:var(--mono); font-size:11px; font-weight:700; color:#eee; background:rgba(0,0,0,0.55); padding:2px 8px; border-radius:6px; white-space:nowrap; transition:background 0.15s,color 0.15s;}
+  #bossDistTag.danger{ background:rgba(220,38,38,0.88); color:#fff; }
+  #bossDistTag.warn{ background:rgba(245,158,11,0.88); color:#1c1c1c; }
+  #bossLabel{margin-top:1px; font-size:11px; color:#5a5142; background:rgba(255,255,255,0.7); padding:1px 6px; border-radius:5px; letter-spacing:0.03em; font-weight:600; white-space:nowrap;}
+  #bossBubble{
+    position:absolute; bottom:100%; left:50%; margin-bottom:6px; transform:translateX(-50%) scale(0.8); max-width:190px; min-width:120px;
+    background:#fff; color:#2b2620; font-size:12px; font-weight:600;
+    padding:7px 11px; border-radius:11px; text-align:center; opacity:0;
+    transition:opacity 0.15s, transform 0.15s; pointer-events:none;
+  }
+  #bossBubble.show{ opacity:1; transform:translateX(-50%) scale(1); }
+  #bossBubble::after{content:''; position:absolute; top:100%; left:50%; transform:translateX(-50%); border:6px solid transparent; border-top-color:#fff;}
+
+  #desk{position:absolute; bottom:0; left:50%; transform:translateX(-50%); width:min(760px, 96%); height:58%; z-index:6;}
+  #monitorRig{position:absolute; bottom:28%; left:50%; transform:translateX(-50%); display:flex; flex-direction:column; align-items:center;}
+  .arm-clamp{width:30px; height:9px; background:#1c1c1e; border-radius:2px; margin-top:2px;}
+  .arm-pole{width:9px; height:64px; background:linear-gradient(90deg,#2a2a2c,#111);}
+  .arm-joint{width:16px; height:16px; border-radius:50%; background:#2a2a2c; margin:-2px 0;}
+  .arm-horiz{width:100px; height:10px; background:linear-gradient(180deg,#2a2a2c,#111); border-radius:3px; align-self:flex-start; margin-left:-4px;}
+  /* cqw/cqh: % của #scene thật (container-type:size khai báo ở #scene phía
+     trên) — không phải dvw/dvh toàn trang, vốn tính cả phần #hud/#controls
+     nằm ngoài #scene nên luôn thổi phồng kích thước monitor so với chỗ thật
+     sự còn trống để hiển thị. */
+  #monitor{width:clamp(320px, 48cqw, 660px); height:clamp(200px, 33cqh, 420px); background:var(--bezel); border-radius:14px; padding:12px; box-shadow:0 20px 44px rgba(0,0,0,0.55); position:relative; transition:width 0.3s, height 0.3s;}
+  /* Đang trong phòng chung: nhường chỗ để thấy bàn đồng nghiệp trên vòng
+     tròn khoảng cách, không che khuất bởi màn hình chính quá lớn. */
+  #monitor.roomShrink{width:clamp(220px, 32cqw, 440px); height:clamp(140px, 22cqh, 280px);}
+  #screen{width:100%; height:100%; border-radius:6px; overflow:hidden; position:relative; background:#0a0a0a;}
+  .glow-work{ box-shadow:0 0 46px 10px rgba(37,99,235,0.55); }
+  .glow-personal{ box-shadow:0 0 46px 10px rgba(217,119,6,0.6); }
+
+  .work-content, .personal-content{position:absolute; inset:0; padding:12px; font-size:12px; line-height:1.4; overflow:hidden; color:#dfe;}
+  .work-content{font-family:var(--mono);}
+  .personal-content{font-family:var(--body);}
+
+  /* Excel theme */
+  .excel-theme{background:#1c2b1e; display:flex; flex-direction:column;}
+  .xl-topbar{background:#1f6e3c; color:#fff; font-size:11px; padding:4px 8px; border-radius:3px; margin-bottom:5px;}
+  .xl-formula{color:#9fd8ab; font-size:10px; margin-bottom:5px;}
+  .xl-body{display:flex; gap:8px; flex:1; min-height:0;}
+  .xl-grid{background:#0f1a10; border:1px solid #2f4a33; border-radius:3px; overflow:hidden; flex:1.3;}
+  .xl-row{display:grid; grid-template-columns:1.3fr 0.9fr 0.7fr; border-bottom:1px solid #24361f;}
+  .xl-row div{padding:3px 5px; border-right:1px solid #24361f; font-size:10px; color:#cfe8d2;}
+  .xl-header{background:#274d2c; font-weight:bold; color:#fff;}
+  .xl-selected{background:#2c5a33; outline:2px solid #7ee08b;}
+  .xl-chartbox{flex:1; background:#0f1a10; border:1px solid #2f4a33; border-radius:3px; padding:6px; display:flex; flex-direction:column;}
+  .xl-chartbox .xl-chart-title{font-size:9px; color:#9fd8ab; margin-bottom:4px;}
+  .xl-bars{flex:1; display:flex; align-items:flex-end; gap:3px;}
+  .xl-bars div{flex:1; background:linear-gradient(180deg,#7ee08b,#2f9e4f); border-radius:2px 2px 0 0;}
+  .xl-tabs{display:flex; gap:2px; margin-top:5px;}
+  .xl-tabs span{font-size:8px; background:#274d2c; color:#bfe8c5; padding:2px 6px; border-radius:2px 2px 0 0;}
+  .xl-tabs span.active{background:#3a7a44; color:#fff; font-weight:bold;}
+
+  /* Dashboard theme */
+  .dash-theme{background:#0d1b2e; display:flex; flex-direction:column;}
+  .dash-title{font-size:11px; color:#a9c9f5; margin-bottom:6px; font-weight:bold; display:flex; justify-content:space-between;}
+  .dash-cards{display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:6px;}
+  .dash-card{background:#132a45; border-radius:6px; padding:6px; text-align:center;}
+  .dash-num{font-size:15px; font-weight:bold; color:#7ec8ff;}
+  .dash-lbl{font-size:8px; color:#8fa9c2; margin-top:1px;}
+  .dash-row{display:flex; gap:8px; flex:1; min-height:0;}
+  .dash-panel{flex:1; background:#132a45; border-radius:6px; padding:6px; display:flex; flex-direction:column;}
+  .dash-panel-title{font-size:8px; color:#8fa9c2; margin-bottom:3px;}
+  .dash-spark{width:100%; flex:1;}
+  .dash-donut{width:52px; height:52px; border-radius:50%; margin:0 auto;}
+  .dash-donut-lbl{font-size:9px; color:#a9c9f5; text-align:center; margin-top:3px; font-weight:bold;}
+  .dash-bars-mini{flex:1; display:flex; align-items:flex-end; gap:2px;}
+  .dash-bars-mini div{flex:1; background:linear-gradient(180deg,#93c5fd,#3b82f6); border-radius:1px 1px 0 0;}
+
+  /* Stock theme */
+  .stock-theme{background:#0a0f0c; display:flex; flex-direction:column;}
+  .stock-ticker{font-size:13px; font-weight:bold; margin-bottom:4px;}
+  .stock-ticker .up{color:#4ade80;} .stock-ticker .down{color:#f87171;}
+  .stock-chart{width:100%; height:52px;}
+  .stock-vol{width:100%; height:16px; display:flex; align-items:flex-end; gap:1px; margin-top:2px;}
+  .stock-vol div{flex:1; background:#2f4a3a;}
+  .stock-watchlist{margin-top:6px; border-top:1px solid #223022; padding-top:4px;}
+  .stock-wrow{display:flex; justify-content:space-between; font-size:9.5px; padding:1.5px 0; color:#c9d9c9;}
+  .stock-wrow span.up{color:#4ade80;} .stock-wrow span.down{color:#f87171;}
+
+  /* Personal / video content */
+  .personal-content{background:#151515; display:flex; flex-direction:column;}
+  .vid-topbar{font-size:10px; color:#ff5c5c; margin-bottom:4px; display:flex; justify-content:space-between;}
+  .vid-frame{flex:1; background:#1c1c1c; border-radius:5px; display:flex; align-items:center; justify-content:center; position:relative; overflow:hidden;}
+  .vid-caption{font-size:11px; color:#ffe2a8; margin-top:6px; font-weight:bold;}
+  .vid-stats{font-size:9px; color:#c9c1a8; margin-top:2px;}
+  .vid-progress{height:4px; background:#333; border-radius:2px; margin-top:5px; overflow:hidden;}
+  .vid-progress-fill{height:100%; width:38%; background:#e11d48; animation:vidbar 6s linear infinite;}
+  @keyframes vidbar{ 0%{width:5%;} 100%{width:96%;} }
+
+  #deskSurface{position:absolute; bottom:0; left:0; right:0; height:28%;}
+  .keyboard{position:absolute; bottom:16%; left:50%; transform:translateX(-50%); width:190px; height:52px; background:#232326; border-radius:6px; box-shadow:0 4px 10px rgba(0,0,0,0.3);}
+  .keyboard::after{content:'';position:absolute; inset:6px; background-image:repeating-linear-gradient(90deg,#3a3a3e 0 14px, transparent 14px 17px), repeating-linear-gradient(0deg,#3a3a3e 0 9px, transparent 9px 12px); border-radius:3px;}
+  .mouse{position:absolute; bottom:20%; left:calc(50% + 122px); width:22px; height:34px; background:#2a2a2e; border-radius:11px;}
+  .mug{position:absolute; bottom:18%; left:calc(50% - 165px); width:28px; height:30px; background:#f2f0ea; border-radius:3px 3px 6px 6px;}
+  .mug::after{content:'';position:absolute; right:-9px; top:6px; width:10px; height:14px; border:3px solid #f2f0ea; border-left:none; border-radius:0 8px 8px 0;}
+  .succulent{position:absolute; bottom:17%; left:calc(50% + 163px); width:26px; height:26px;}
+  .notepad{position:absolute; bottom:19%; left:calc(50% - 122px); width:36px; height:26px; background:#eee; border:1px solid #ccc; transform:rotate(-4deg);}
+
+  #switcherOverlay{position:absolute; inset:0; z-index:35; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,0); pointer-events:none; opacity:0; transition:opacity 0.12s;}
+  #switcherOverlay.show{ opacity:1; background:rgba(0,0,0,0.3); }
+  #switcherCard{background:#1c1c1e; border:2px solid #55555a; border-radius:10px; padding:14px 24px; font-size:14px; color:#eee; box-shadow:0 10px 40px rgba(0,0,0,0.6); transform:scale(0.9); transition:transform 0.12s;}
+  #switcherOverlay.show #switcherCard{ transform:scale(1); }
+
+  #vignette{position:absolute; inset:0; z-index:20; pointer-events:none; box-shadow:inset 0 0 0 0 rgba(220,38,38,0); transition:box-shadow 0.15s;}
+
+  #controls{position:relative; z-index:30; display:flex; align-items:center; justify-content:center; padding:10px; gap:12px; border-top:1px solid #3a3d46; background:#1a1c20; flex-wrap:wrap;}
+  #tabBtn{font-family:var(--mono); font-weight:bold; font-size:14px; letter-spacing:0.03em; padding:11px 24px; border-radius:8px; border:2px solid #555; background:#26272c; color:var(--paper); cursor:pointer; transition:transform 0.08s, background 0.15s;}
+  #tabBtn:active{ transform:scale(0.96); background:#33343a; }
+  #hint{font-size:11px; color:#b7b7b2; max-width:280px;}
+
+  #modal{position:absolute; inset:0; z-index:50; display:none; align-items:center; justify-content:center; background:rgba(10,10,12,0.8);}
+  #modal.show{display:flex;}
+  #modalCard{background:var(--paper); color:var(--ink); padding:26px 30px; border-radius:10px; max-width:380px; width:92%; text-align:center; box-shadow:0 20px 60px rgba(0,0,0,0.5); max-height:88dvh; overflow-y:auto; position:relative;}
+  .modalCloseX{position:absolute; top:10px; right:10px; width:30px; height:30px; border-radius:50%; border:none; background:#eee2; background:rgba(0,0,0,0.06); color:#555; font-size:15px; cursor:pointer; display:flex; align-items:center; justify-content:center; line-height:1;}
+  .modalCloseX:hover{background:rgba(0,0,0,0.12);}
+  .lbInviteRowSmall{display:grid; grid-template-columns:repeat(4,1fr); gap:6px; margin-top:8px;}
+  #replayFab{position:absolute; bottom:70px; right:16px; z-index:45; width:56px; height:56px; border-radius:50%; border:none; background:#c1272d; color:#fff; font-size:22px; cursor:pointer; box-shadow:0 8px 20px rgba(193,39,45,0.5); display:none; align-items:center; justify-content:center;}
+  #replayFab.show{display:flex;}
+  #modalCard h2{ font-family:var(--display); font-size:24px; margin:0 0 8px; }
+  #modalCard p{ font-size:13.5px; line-height:1.5; color:#333; }
+  #modalBtn{margin-top:14px; font-family:var(--mono); font-weight:bold; font-size:13px; padding:10px 22px; border-radius:6px; border:none; background:var(--ink); color:var(--paper); cursor:pointer;}
+  /* Ad slot trung lập — KHÔNG gắn cứng network nào (AdSense/brand deal đều
+     nạp vào đây qua renderAdSlot(), xem <script>). Rỗng = display:none, để
+     không chiếm chỗ/không hiện khung viền vô nghĩa khi chưa có ai gọi
+     renderAdSlot() — game hiện tại (chưa launch, chưa chọn network) sẽ luôn
+     ở trạng thái này. .has-content chỉ được JS thêm sau khi có nội dung
+     thật, để margin/border không "nhấp nháy" ngay cả lúc rỗng. */
+  #adSlot{display:none;}
+  #adSlot.has-content{display:block; margin-top:12px; padding:8px; border-radius:8px; background:#f3ecd8; text-align:center; min-height:50px;}
+  #adSlot .ad-slot-label{font-size:9px; letter-spacing:0.05em; color:#a89968; text-transform:uppercase; margin-bottom:4px;}
+  .stats-box{background:#efe9d8; border-radius:8px; padding:10px 12px; margin-top:10px; text-align:left;}
+  .stats-row{display:flex; justify-content:space-between; font-size:12.5px; padding:3px 0; color:#3a3327;}
+  .leaderboard-title{font-size:12px; font-weight:bold; margin-top:12px; margin-bottom:4px; color:#8a6d1f;}
+  .leaderboard-list{margin:0; padding-left:18px; text-align:left; font-size:12px; color:#4a4130; max-height:120px; overflow-y:auto;}
+
+  #flash{position:absolute; inset:0; z-index:40; background:var(--danger); opacity:0; pointer-events:none;}
+  #flash.hit{ animation:flashHit 0.35s ease-out; }
+  @keyframes flashHit{ 0%{opacity:0.5;} 100%{opacity:0;} }
+
+  @keyframes monitorShake{
+    0%,100%{ transform:translate(0,0) rotate(0); }
+    20%{ transform:translate(-6px,3px) rotate(-1.5deg); }
+    40%{ transform:translate(5px,-3px) rotate(1.5deg); }
+    60%{ transform:translate(-4px,2px) rotate(-1deg); }
+    80%{ transform:translate(4px,-2px) rotate(1deg); }
+  }
+  #monitorRig.shake{ animation:monitorShake 0.4s ease-in-out; }
+
+  #catchPopup, #safePopup{position:absolute; top:38%; left:50%; transform:translate(-50%,-50%) scale(0.7); z-index:45; font-weight:bold; opacity:0; pointer-events:none; text-shadow:0 2px 8px rgba(0,0,0,0.6); white-space:nowrap;}
+  #catchPopup{font-size:26px; color:#ff6b6b;}
+  #safePopup{font-size:18px; color:#6ee08b;}
+  #catchPopup.pop, #safePopup.pop{ animation:popFeedback 0.9s ease-out forwards; }
+  @keyframes popFeedback{
+    0%{ opacity:0; transform:translate(-50%,-50%) scale(0.6); }
+    18%{ opacity:1; transform:translate(-50%,-50%) scale(1.08); }
+    30%{ transform:translate(-50%,-50%) scale(1); }
+    100%{ opacity:0; transform:translate(-50%,-65%) scale(1); }
+  }
+
+  #introScreen{position:absolute; inset:0; z-index:80; display:flex; align-items:center; justify-content:center; background:rgba(20,18,30,0.86); padding:16px;}
+  #introScreen.hide{display:none;}
+  #introCard{background:#fffaf0; color:#2b2620; border-radius:20px; max-width:460px; width:100%; padding:26px 24px 22px; box-shadow:0 24px 70px rgba(0,0,0,0.5); text-align:center; max-height:92dvh; overflow-y:auto;}
+  #introCard h1{font-family:var(--display); font-size:24px; margin:0 0 6px; color:#c1272d;}
+  #challengeBanner{display:none; background:#fff3d6; border:1.5px solid #f2b705; border-radius:12px; padding:10px 14px; margin-bottom:14px; font-size:13px; color:#5a4a1f; text-align:left;}
+  #challengeBanner.show{display:block;}
+  #challengeBanner b{color:#c1272d;}
+  #roomInviteBanner{display:none; background:#e8f0fe; border:1.5px solid #2563eb; border-radius:12px; padding:10px 14px; margin-bottom:14px; font-size:13px; color:#1e3a6d; text-align:left;}
+  #roomInviteBanner.show{display:block;}
+  #roomInviteBanner b{color:#2563eb;}
+  .introLead{font-size:14px; color:#5a5142; margin:0 0 16px; line-height:1.5;}
+  .introSteps{display:flex; flex-direction:column; gap:10px; text-align:left; margin-bottom:14px; max-height:0; overflow:hidden; opacity:0; transition:max-height 0.3s ease, opacity 0.2s ease, margin 0.3s ease;}
+  .introSteps.open{max-height:600px; opacity:1; margin-top:12px;}
+  #howToPlayToggle{display:block; margin:10px auto 0; background:none; border:none; font-family:var(--body); font-size:12.5px; color:#8a6d1f; text-decoration:underline; cursor:pointer; padding:4px;}
+  .introStep{display:flex; align-items:center; gap:12px; background:#f3ecd8; border-radius:14px; padding:9px 13px;}
+  .stepNum{flex:0 0 24px; height:24px; border-radius:50%; background:#c1272d; color:#fff; font-weight:bold; font-size:12px; display:flex; align-items:center; justify-content:center;}
+  .stepIcon{font-size:24px; flex:0 0 32px; text-align:center;}
+  .stepText{font-size:13.5px; line-height:1.4; color:#3a3327;}
+  .stepText b{color:#b4272c;}
+  #nameInputWrap{margin-bottom:14px; text-align:left;}
+  #nameInputWrap label{font-size:12px; color:#5a5142; font-weight:600; display:block; margin-bottom:5px;}
+  #nameInput{width:100%; font-family:var(--body); font-size:15px; padding:10px 12px; border-radius:10px; border:2px solid #e0d6c0; background:#fff; color:#2b2620;}
+  #nameInput:focus{outline:none; border-color:#c1272d;}
+  #nameSuggestions{display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;}
+  .nameChip{font-family:var(--body); font-size:12px; font-weight:600; padding:5px 10px; border-radius:14px; border:1.5px solid #e0d6c0; background:#f8f3e6; color:#8a6d1f; cursor:pointer;}
+  .nameChip:active{ transform:scale(0.95); }
+  #recordLine{font-size:12px; color:#8a6d1f; margin-bottom:12px;}
+  #hudTrophyBtn{background:none; border:none; font-size:20px; cursor:pointer; padding:2px 4px;}
+  /* Trước đây chỉ 1 icon "⏹" màu xám nhạt trên nền tối — gần như vô hình,
+     không ai nhận ra đó là nút bấm được (thiếu affordance: không có nền,
+     không có label). Sửa lại có khung/nền/viền rõ + chữ, giống các nút
+     hành động khác trong game (vd nút "Đổi màn hình" luôn có icon + text). */
+  #hudStopBtn{display:flex; align-items:center; gap:4px; background:rgba(220,38,38,0.12); border:1.5px solid rgba(220,38,38,0.5); border-radius:8px; font-family:var(--body); font-size:11px; font-weight:600; color:#ff8a8a; cursor:pointer; padding:5px 10px;}
+  #hudStopBtn:hover{background:rgba(220,38,38,0.25); color:#fff;}
+
+  #lbModal{position:absolute; inset:0; z-index:55; display:none; align-items:center; justify-content:center; background:rgba(10,10,12,0.8);}
+  #lbModal.show{display:flex;}
+  #lbCard{background:var(--paper); color:var(--ink); padding:22px 24px; border-radius:12px; max-width:400px; width:92%; max-height:84dvh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,0.5);}
+  #lbCard h2{font-family:var(--display); font-size:22px; margin:0 0 12px; text-align:center;}
+  #lbTabs{display:flex; gap:6px; margin-bottom:12px;}
+  .lbTabBtn{flex:1; font-family:var(--body); font-weight:700; font-size:13px; padding:9px; border-radius:8px; border:2px solid #ddd; background:#fff; color:#555; cursor:pointer;}
+  .lbTabBtn.active{background:#c1272d; color:#fff; border-color:#c1272d;}
+  #lbBody{min-height:120px;}
+  .lbRow{display:flex; align-items:center; gap:10px; padding:8px 6px; border-bottom:1px solid #ece6d6; font-size:13.5px;}
+  .lbRow.me{background:#fff3d6; border-radius:8px;}
+  .lbScrollWrap{max-height:280px; overflow-y:auto;}
+  .lbRank{width:26px; font-weight:bold; color:#8a6d1f; text-align:center;}
+  .lbName{flex:1; font-weight:600; color:#2b2620;}
+  .lbScore{font-family:var(--mono); font-weight:bold; color:#c1272d;}
+  .lbMeta{font-size:10.5px; color:#999; margin-top:1px;}
+  #lbInviteBtn{margin-top:14px; width:100%; font-family:var(--body); font-weight:700; font-size:14px; padding:11px; border-radius:8px; border:none; background:#2563eb; color:#fff; cursor:pointer;}
+  #lbInviteRow{display:grid; grid-template-columns:repeat(4,1fr); gap:7px; margin-top:12px;}
+  .shareBtn{display:flex; flex-direction:column; align-items:center; justify-content:flex-start; gap:3px; font-family:var(--body); font-size:10.5px; font-weight:600; padding:9px 4px; border-radius:10px; border:1.5px solid #e0d6c0; background:#fff; color:#3a3327; cursor:pointer; line-height:1.25;}
+  .shareBtn .lbl{min-height:2.5em; display:flex; align-items:flex-start;}
+  .shareBtn .ic{font-size:20px;}
+  .shareBtn .ic svg{width:20px;height:20px;display:block;}
+  .shareBtn.fb{border-color:#1877f2;} .shareBtn.zalo{border-color:#0068ff;}
+  #lbCloseBtn{margin-top:8px; width:100%; font-family:var(--body); font-weight:600; font-size:13px; padding:9px; border-radius:8px; border:1px solid #ccc; background:#fff; color:#555; cursor:pointer;}
+  #lbLoading{text-align:center; color:#999; font-size:13px; padding:20px 0;}
+  #startBtn{font-family:var(--mono); font-weight:bold; font-size:16px; padding:14px 34px; border-radius:12px; border:none; background:#c1272d; color:#fff; cursor:pointer; box-shadow:0 8px 20px rgba(193,39,45,0.4); animation:pulseBtn 1.6s ease-in-out infinite;}
+  #startBtn:active{ transform:scale(0.96); }
+  @keyframes pulseBtn{ 0%,100%{transform:scale(1);} 50%{transform:scale(1.045);} }
+
+  /* ---------- Chơi cùng bạn: tạo/vào phòng, màn chờ ---------- */
+  #createRoomBtn{display:block; margin:10px auto 0; font-family:var(--body); font-weight:700; font-size:13px; padding:9px 16px; border-radius:10px; border:1.5px solid #2563eb; background:#fff; color:#2563eb; cursor:pointer;}
+  #roomWaitScreen{position:absolute; inset:0; z-index:80; display:none; align-items:center; justify-content:center; background:rgba(20,18,30,0.86); padding:16px;}
+  #roomWaitScreen.show{display:flex;}
+  #roomWaitCard{background:#fffaf0; color:#2b2620; border-radius:20px; max-width:420px; width:100%; padding:26px 24px 22px; box-shadow:0 24px 70px rgba(0,0,0,0.5); text-align:center; max-height:92dvh; overflow-y:auto;}
+  #roomWaitCard h2{font-family:var(--display); font-size:21px; margin:0 0 6px; color:#c1272d;}
+  #roomCodeDisplay{font-family:var(--mono); font-size:26px; font-weight:bold; letter-spacing:0.1em; background:#f3ecd8; border-radius:10px; padding:10px; margin:10px 0; color:#3a3327;}
+  #roomCopyLinkBtn{font-family:var(--body); font-weight:600; font-size:12.5px; padding:8px 14px; border-radius:8px; border:1px solid #ccc; background:#fff; color:#555; cursor:pointer; margin-bottom:14px;}
+  #roomPlayerList{text-align:left; background:#f8f3e6; border-radius:12px; padding:10px 14px; margin-bottom:14px; max-height:180px; overflow-y:auto;}
+  .roomPlayerRow{font-size:13.5px; padding:4px 0; color:#3a3327; display:flex; justify-content:space-between;}
+  .roomPlayerRow .youTag{color:#8a6d1f; font-size:11px;}
+  #roomStartBtn{font-family:var(--mono); font-weight:bold; font-size:15px; padding:12px 30px; border-radius:12px; border:none; background:#c1272d; color:#fff; cursor:pointer; box-shadow:0 8px 20px rgba(193,39,45,0.4);}
+  #roomWaitingForHost{font-size:13px; color:#8a6d1f; padding:10px 0;}
+  #roomLeaveBtn{display:block; margin:12px auto 0; background:none; border:none; font-family:var(--body); font-size:12px; color:#999; text-decoration:underline; cursor:pointer;}
+
+  @media (max-width:520px){
+    .keyboard{width:130px;height:38px;}
+    .column{width:18px;}
+    #bossFaceSvgWrap{width:50px;height:50px;}
+  }
+
+  /* Điện thoại dọc: HUD/nút chạm/vật trang trí bàn dễ vỡ ở màn hẹp (<480px) —
+     .mouse/.succulent dùng left:calc(50% ± px cố định) nên tràn ra ngoài
+     #desk trước tiên khi màn hẹp lại; ẩn 2 item ít quan trọng nhất, giữ
+     .mug/.notepad (offset nhỏ hơn, còn nằm trong khung) để không mất hết
+     chi tiết trang trí bàn làm việc. */
+  @media (max-width:480px){
+    #hud{padding:8px 10px; gap:8px;}
+    .hud-block{min-width:72px;gap:1px;}
+    .hud-label{font-size:9px;}
+    .hud-value{font-size:14px;}
+    #hud #title{font-size:12px;}
+    /* Trước đây ẩn hẳn chữ ở màn hẹp, chỉ còn icon ⏹ — người chơi không
+       nhận ra đó là nút bấm được (không phải trang trí), đây là lỗi UX
+       thật chứ không phải chỉ tiết kiệm không gian. Giữ luôn chữ "Dừng"
+       (đã rút gọn từ "Dừng ván" ở mọi kích thước màn hình, xem #hud HTML)
+       để nút luôn tự giải thích được, nhất quán giữa desktop và mobile. */
+    #hudStopBtn{padding:5px 7px; font-size:13px;}
+    #progressWrap{min-width:100px;}
+    .mouse, .succulent{display:none;}
+    #tabBtn{padding:13px 20px;font-size:13px;min-height:44px; background:#c1272d; border-color:#e0454b; box-shadow:0 6px 16px rgba(193,39,45,0.4); animation:pulseTabBtn 1.8s ease-in-out infinite;}
+    #tabBtn:active{ background:#a01f24; }
+    @keyframes pulseTabBtn{ 0%,100%{transform:scale(1);} 50%{transform:scale(1.04);} }
+    #hint{font-size:10px;max-width:100%;}
+    #controls{padding:8px;gap:8px;}
+    .shareBtn{font-size:9.5px;padding:8px 3px;}
+    .shareBtn .ic svg{width:18px;height:18px;}
+    /* Sàn cứng 320px của #monitor (xem clamp() gốc) chiếm gần hết chiều
+       ngang màn hẹp, che khuất vòng tròn khoảng cách vẽ cùng khu vực —
+       hạ sàn để 48cqw thực sự phát huy, dành chỗ nhìn rõ Sếp tới/đi. */
+    #monitor{width:clamp(200px, 48cqw, 660px); height:clamp(130px, 26cqh, 420px);}
+  }
+
+  /* Điện thoại cầm dọc (portrait, màn hẹp): game thiết kế gốc cho khung
+     ngang, TRƯỚC ĐÂY ép rotate(90deg) toàn #stage bằng CSS — bỏ vì (1) bàn
+     phím ảo của hệ điều hành không nằm trong DOM nên không xoay theo, gây
+     lệch trục lúc nhập tên; (2) đo kích thước theo vw/vh trong bối cảnh đã
+     xoay gây sai lệch, góp phần vào bug #monitor tràn màn hình. Giờ portrait
+     hiển thị dọc THẬT, co lại tự nhiên theo #monitor/HUD responsive bên
+     dưới. (Từng có banner gợi ý xoay ngang #rotateHint — bỏ hẳn vì test
+     thật cho thấy 1 số máy/cấu hình Android không xoay theo kể cả sau khi
+     nghiêng máy thật, banner gợi ý vô dụng trong trường hợp đó và portrait
+     tự nó đã chơi được ổn sau khi sửa #monitor bên dưới.) */
+  @media (max-width:600px) and (orientation:portrait){
+    /* Portrait thật (không rotate): #monitor cần sàn thấp hơn nhiều so với
+       bản gốc/landscape — 60cqw ở đây là % của chiều ngang THẬT của #scene
+       (không phải dvw toàn trang), nên cả clamp min lẫn max phải hạ để
+       không chiếm hết bề ngang và che khuất scene xung quanh. */
+    #monitor{width:clamp(180px, 60cqw, 340px); height:clamp(120px, 22cqh, 220px);}
+    #monitorRig{ bottom:24%; }
+  }
+
+  /* Accessibility: visible focus states for keyboard nav */
+  button:focus-visible{ outline:3px solid #7ec8ff; outline-offset:2px; }
+
+  /* Accessibility: respect reduced-motion preference */
+  @media (prefers-reduced-motion: reduce){
+    #startBtn{ animation:none; }
+    .vid-progress-fill{ animation:none; width:60%; }
+    #monitorRig.shake{ animation:none; }
+    #bossFaceCard.calm #bossFaceSvgWrap, #bossFaceCard.alert #bossFaceSvgWrap, #bossFaceCard.angry #bossFaceSvgWrap{ animation:none; }
+    #catchPopup.pop, #safePopup.pop{ animation:popFeedbackReduced 0.9s ease-out forwards; }
+    #flash.hit{ animation:none; opacity:0; }
+  }
+  @keyframes popFeedbackReduced{
+    0%{ opacity:0; } 15%{ opacity:1; } 80%{ opacity:1; } 100%{ opacity:0; }
+  }
+
+  /* ---------- Just-in-time coachmark (shown once, exactly when the mechanic first matters) ---------- */
+  #coachmark{
+    position:absolute; z-index:38; left:50%; bottom:96px; transform:translateX(-50%) translateY(6px);
+    display:flex; flex-direction:column; align-items:center; gap:2px;
+    opacity:0; pointer-events:none; transition:opacity 0.25s, transform 0.25s;
+  }
+  #coachmark.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+  #coachmarkArrow{ font-size:22px; animation:coachBounce 1s ease-in-out infinite; }
+  @keyframes coachBounce{ 0%,100%{transform:translateY(0);} 50%{transform:translateY(5px);} }
+  #coachmarkText{
+    background:#fff; color:#2b2620; font-family:var(--body); font-weight:700; font-size:13px;
+    padding:8px 14px; border-radius:12px; box-shadow:0 8px 22px rgba(0,0,0,0.35); text-align:center; max-width:240px;
+  }
+  @media (prefers-reduced-motion: reduce){ #coachmarkArrow{ animation:none; } }
+  @media (prefers-reduced-motion: reduce){ #tabBtn{ animation:none; } }
+</style>
+</head>
+<body>
+<div id="stage">
+
+  <div id="introScreen">
+    <div id="introCard">
+      <div id="challengeBanner"></div>
+      <h1>🙈 Trốn Sếp, Xem Phim Vui!</h1>
+      <p class="introLead">Canh chừng Sếp, đừng để bị bắt gặp đang xem phim nhé 👀</p>
+      <div id="roomInviteBanner"></div>
+      <div id="nameInputWrap">
+        <label for="nameInput">Đặt tên cho bạn (chỉ hỏi 1 lần, hiện trên bảng xếp hạng)</label>
+        <input type="text" id="nameInput" maxlength="18" placeholder="VD: Heo Mập Mập">
+        <div id="nameSuggestions"></div>
+      </div>
+      <div id="recordLine"></div>
+      <button id="startBtn">▶️ Bắt Đầu Chơi</button>
+      <button id="createRoomBtn">👥 Chơi cùng bạn (tạo phòng)</button>
+      <button id="howToPlayToggle">❓ Xem cách chơi chi tiết</button>
+      <div class="introSteps" id="introSteps">
+        <div class="introStep"><div class="stepNum">1</div><div class="stepIcon">📺</div><div class="stepText">Màn hình của bạn đang chiếu <b>phim vui</b>. Càng xem lâu, bạn càng được điểm cao!</div></div>
+        <div class="introStep"><div class="stepNum">2</div><div class="stepIcon">🎯</div><div class="stepText">Nhìn vào các <b>vòng tròn quanh bàn làm việc</b>: đó là <b>Sếp</b> đang đi lại gần bạn.</div></div>
+        <div class="introStep"><div class="stepNum">3</div><div class="stepIcon">🖐️</div><div class="stepText">Khi số cạnh Sếp nhỏ hơn <b>1 mét</b> (vòng trong cùng) — Sếp SẮP TỚI RỒI! Bạn bấm thật nhanh nút to <b>⇆ TAB</b> để đổi màn hình thành bài làm việc.</div></div>
+        <div class="introStep"><div class="stepNum">4</div><div class="stepIcon">🏆</div><div class="stepText">Đoán đúng lúc thì được điểm. Bị bắt gặp thì mất ❤️. Hết 3 tim là thua, xem đủ giờ là bạn <b>thắng</b>!</div></div>
+      </div>
+      <div style="font-size:10px; color:#aaa; margin-top:10px;">Game ghi nhận ẩn danh thời gian chơi &amp; thao tác để cải thiện trải nghiệm.</div>
+    </div>
+  </div>
+
+  <div id="roomWaitScreen">
+    <div id="roomWaitCard">
+      <h2>👥 Phòng chơi cùng bạn</h2>
+      <div id="roomCodeDisplay">------</div>
+      <button id="roomCopyLinkBtn">🔗 Copy link mời bạn vào phòng</button>
+      <div id="roomPlayerList"><div class="roomPlayerRow">Đang tải danh sách...</div></div>
+      <button id="roomStartBtn">▶️ Bắt Đầu (cho cả phòng)</button>
+      <div id="roomWaitingForHost">Đang chờ chủ phòng bấm bắt đầu...</div>
+      <div id="roomToast" style="font-size:11.5px; color:#8a6d1f; min-height:14px; margin-top:6px;"></div>
+      <button id="roomLeaveBtn">Rời phòng, chơi 1 mình</button>
+    </div>
+  </div>
+
+  <div id="coachmark">
+    <div id="coachmarkArrow">⬆️</div>
+    <div id="coachmarkText"></div>
+  </div>
+
+  <div id="hud">
+    <div id="title">Ca Làm Việc Của Minh</div>
+    <button id="hudStopBtn" title="Dừng ván, không tính điểm">⏹ <span class="hudStopLabel">Dừng</span></button>
+    <button id="hudTrophyBtn" title="Bảng xếp hạng">🏆</button>
+    <div class="hud-block">
+      <div class="hud-label">MẠNG</div>
+      <div class="hud-value" id="lives">❤️❤️❤️</div>
+    </div>
+    <div id="progressWrap">
+      <div class="hud-label">VIỆC RIÊNG <span id="progressText">0 / 30s</span></div>
+      <div id="progressTrack"><div id="progressFill"></div></div>
+    </div>
+    <div class="hud-block">
+      <div class="hud-label">CÒN LẠI</div>
+      <div class="hud-value" id="clock2">2:00</div>
+    </div>
+  </div>
+
+  <div id="scene">
+    <div id="colLeft" class="column"></div>
+    <div id="colRight" class="column"></div>
+    <div class="window-daylight"><div class="tree" style="left:10%;"></div><div class="tree" style="left:55%;"></div></div>
+    <div class="pendant-big" style="left:14%;"><div class="wire"></div><div class="shade"></div><div class="glow"></div></div>
+    <div class="pendant-big" style="left:40%;"><div class="wire"></div><div class="shade"></div><div class="glow"></div></div>
+    <div class="pendant-big" style="left:66%;"><div class="wire"></div><div class="shade"></div><div class="glow"></div></div>
+    <div class="pendant-big" style="left:88%;"><div class="wire"></div><div class="shade"></div><div class="glow"></div></div>
+
+    <div class="plantbig">
+      <svg viewBox="0 0 60 70" width="56" height="44"><ellipse cx="30" cy="20" rx="26" ry="18" fill="#4d9e4d"/><ellipse cx="16" cy="26" rx="13" ry="10" fill="#5db35d"/><ellipse cx="44" cy="26" rx="13" ry="10" fill="#5db35d"/></svg>
+      <div class="pot"></div>
+    </div>
+    <div class="plantbig right">
+      <svg viewBox="0 0 60 70" width="56" height="44"><ellipse cx="30" cy="20" rx="26" ry="18" fill="#4d9e4d"/><ellipse cx="16" cy="26" rx="13" ry="10" fill="#5db35d"/><ellipse cx="44" cy="26" rx="13" ry="10" fill="#5db35d"/></svg>
+      <div class="pot"></div>
+    </div>
+
+    <div class="coworkers">
+      <div class="co-desk"><div class="silhouette"></div><div class="headsil"></div><div class="glow"></div><div class="drawer"></div></div>
+      <div class="co-desk"><div class="silhouette"></div><div class="headsil"></div><div class="glow"></div><div class="drawer"></div></div>
+      <div class="co-desk"><div class="silhouette"></div><div class="headsil"></div><div class="glow"></div><div class="drawer"></div></div>
+      <div class="co-desk"><div class="silhouette"></div><div class="headsil"></div><div class="glow"></div><div class="drawer"></div></div>
+      <div class="co-desk"><div class="silhouette"></div><div class="headsil"></div><div class="glow"></div><div class="drawer"></div></div>
+    </div>
+
+    <div id="radarAlert">🚨 SẾP ĐANG LẠI GẦN!</div>
+
+    <div id="proxField"></div>
+
+    <div id="teammatesLayer"></div>
+
+    <div id="bossUnit">
+      <div class="bossShadow"></div>
+      <div class="bossBody"></div>
+      <div class="bossTie"></div>
+      <div id="bossFaceCard">
+        <div id="bossFaceSvgWrap"></div>
+        <div id="bossDistTag">-- m</div>
+        <div id="bossLabel">SẾP TÙNG</div>
+        <div id="bossBubble"></div>
+      </div>
+    </div>
+
+    <div id="vignette"></div>
+
+    <div id="desk">
+      <div id="monitorRig">
+        <div id="monitor"><div id="screen"></div></div>
+        <div class="arm-horiz"></div>
+        <div class="arm-joint"></div>
+        <div class="arm-pole"></div>
+        <div class="arm-clamp"></div>
+      </div>
+      <div id="deskSurface">
+        <div class="keyboard"></div>
+        <div class="mouse"></div>
+        <div class="mug"></div>
+        <div class="notepad"></div>
+        <svg class="succulent" viewBox="0 0 22 22"><rect x="4" y="14" width="14" height="8" rx="2" fill="#a8532f"/><circle cx="11" cy="10" r="8" fill="#4d8f4d"/></svg>
+      </div>
+    </div>
+
+    <div id="switcherOverlay"><div id="switcherCard">⇆ Đang chuyển cửa sổ…</div></div>
+    <div id="catchPopup">😱 BỊ BẮT RỒI!</div>
+    <div id="safePopup">✓ Né đẹp!</div>
+    <div id="flash"></div>
+  </div>
+
+  <div id="controls">
+    <button id="tabBtn">⇆ Đổi màn hình (phím Tab)</button>
+    <div id="hint">Theo dõi Sếp đi lại quanh bàn — chuyển sang "Work" TRƯỚC khi Sếp lọt vào vòng trong cùng (1m)!</div>
+  </div>
+
+  <div id="modal">
+    <div id="modalCard">
+      <button id="modalCloseX" class="modalCloseX" aria-label="Đóng">✕</button>
+      <h2 id="modalTitle">Kết quả</h2>
+      <p id="modalText"></p>
+      <div id="modalStats"></div>
+      <div style="margin-top:14px; font-size:12.5px; font-weight:700; color:#3a3327; text-align:center;">📤 Rủ bạn bè đấu lại</div>
+      <div id="modalInviteRow" class="lbInviteRowSmall">
+        <button class="shareBtn fb" id="mShareFb"><span class="ic"><svg viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg"><circle cx="18" cy="18" r="18" fill="#1877f2"/><path d="M25 18h-4.5v11h-4.5V18h-3v-4h3v-2.8C16 8.1 17.7 6 21.3 6H25v4h-2.5c-1 0-1.5.5-1.5 1.5V14H25l-.6 4z" fill="#fff"/></svg></span><span class="lbl">Facebook</span></button>
+        <button class="shareBtn zalo" id="mShareZalo"><span class="ic"><svg viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg"><rect x="1" y="1" width="34" height="34" rx="9" fill="#0068ff"/><text x="18" y="23" font-family="Arial,Helvetica,sans-serif" font-size="12" font-weight="700" fill="#fff" text-anchor="middle">Zalo</text></svg></span><span class="lbl">Zalo</span></button>
+        <button class="shareBtn" id="mShareCopy"><span class="ic">🔗</span><span class="lbl">Sao chép liên kết</span></button>
+        <button class="shareBtn" id="mShareNative"><span class="ic">📱</span><span class="lbl">Khác</span></button>
+      </div>
+      <div id="mShareToast" style="text-align:center; font-size:11px; color:#8a6d1f; margin-top:6px; min-height:14px;"></div>
+      <div id="adSlot" class="ad-slot"></div>
+      <button id="modalBtn">Chơi lại</button>
+    </div>
+  </div>
+
+  <button id="replayFab" title="Chơi lại">▶️</button>
+
+  <div id="lbModal">
+    <div id="lbCard">
+      <button id="lbCloseX" class="modalCloseX" aria-label="Đóng">✕</button>
+      <h2>🏆 Bảng Xếp Hạng</h2>
+      <div id="lbTabs">
+        <button class="lbTabBtn active" data-tab="top">Top người chơi</button>
+        <button class="lbTabBtn" data-tab="me">Hạng của tôi</button>
+      </div>
+      <div id="lbBody"><div id="lbLoading">Đang tải...</div></div>
+      <div style="margin-top:14px; font-size:13px; font-weight:700; color:#3a3327; text-align:center;">📤 Mời bạn bè cùng thi đấu</div>
+      <div id="lbInviteRow">
+        <button class="shareBtn fb" id="shareFb"><span class="ic"><svg viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg"><circle cx="18" cy="18" r="18" fill="#1877f2"/><path d="M25 18h-4.5v11h-4.5V18h-3v-4h3v-2.8C16 8.1 17.7 6 21.3 6H25v4h-2.5c-1 0-1.5.5-1.5 1.5V14H25l-.6 4z" fill="#fff"/></svg></span><span class="lbl">Facebook</span></button>
+        <button class="shareBtn zalo" id="shareZalo"><span class="ic"><svg viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg"><rect x="1" y="1" width="34" height="34" rx="9" fill="#0068ff"/><text x="18" y="23" font-family="Arial,Helvetica,sans-serif" font-size="12" font-weight="700" fill="#fff" text-anchor="middle">Zalo</text></svg></span><span class="lbl">Zalo</span></button>
+        <button class="shareBtn" id="shareCopy"><span class="ic">🔗</span><span class="lbl">Sao chép liên kết</span></button>
+        <button class="shareBtn" id="shareNative"><span class="ic">📱</span><span class="lbl">Khác</span></button>
+      </div>
+      <div id="shareToast" style="text-align:center; font-size:11.5px; color:#8a6d1f; margin-top:6px; min-height:14px;"></div>
+      <button id="lbCloseBtn">Đóng</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+(function(){
+  const CONFIG = {
+    // Rút trận từ 120s→60s (feedback: 120s quá dài) — targetPersonalTime và
+    // difficultyRampSeconds rút theo đúng tỉ lệ cũ (60/120=50%, 80/120≈67%)
+    // để giữ nguyên cảm giác độ khó tương đối, chỉ chơi nhanh hơn.
+    targetPersonalTime: 30, matchDuration: 60, maxLives: 3,
+    catchRadius: 1.0, rearmRadius: 1.8,
+    ambientBoundsMin: 2.5, ambientBoundsMax: 6.5,
+    ambientNearBiasProbStart: 0.15, ambientNearBiasProbEnd: 0.28,
+    ambientNearMin: 1.2, ambientNearMax: 3.2,
+    speedAmbientStart: [0.5, 1.3], speedAmbientEnd: [0.8, 1.9],
+    speedCheckStart: [0.6, 2.0], speedCheckEnd: [1.2, 3.4],
+    checkGapStart: [5.0, 7.0], checkGapEnd: [1.4, 2.4],
+    checkTargetMin: 0.15, checkTargetMax: 0.85,
+    difficultyRampSeconds: 40,
+    fieldRangeMeters: 3, // outermost distance ellipse drawn = this many meters
+    ellipseRatio: 1.4, // X:Y — how flattened the proximity field is (floor-plan tilt)
+    // Mỗi ván mỗi người bốc ngẫu nhiên 1 góc nhìn riêng (độ dẹt vòng + hướng
+    // xoay của Sếp/đồng nghiệp quanh bàn mình). Chỉ đổi cách VẼ — khoảng cách
+    // thật (computeMyBossView().dist) tính trên sàn thật nên không đổi theo
+    // góc nhìn. Sàn 1.4 = đúng ellipseRatio gốc (không bao giờ ít dẹt hơn
+    // hiện tại, vì vòng ngoài đã bị cắt bởi chiều cao scene).
+    viewTiltMin: 1.4, viewTiltMax: 2.4, // (bản phối cảnh không dùng — camera cố định)
+    cameraDist: 4.5, // mét từ camera tới bàn mình; PHẢI > fieldRangeMeters(3)
+    cameraFH: 6.5,   // f·h / metersToPxX — càng lớn sàn càng "dốc", vòng càng cao
+    // ---- Chơi cùng bạn: 1 Sếp chung (Bước 2) ----
+    // roomDeskMaxRadius là bán kính rải bàn quanh 1 tâm chung — mỗi người
+    // luôn là tâm màn hình CỦA CHÍNH HỌ (field 3m quanh họ), nên khoảng cách
+    // xa nhất có thể xảy ra giữa 2 người bất kỳ là 2×roomDeskMaxRadius (2
+    // điểm ở 2 phía đối diện vòng rải). Phải giữ 2×roomDeskMaxRadius ≤
+    // fieldRangeMeters để KHÔNG BAO GIỜ có ai bị đẩy ra ngoài khung nhìn của
+    // người khác — đã từng để bán kính quá lớn (rải theo hình vuông ±2.6m,
+    // đường chéo xa nhất ~7.3m) khiến 1 người trong phòng 3 người biến mất
+    // hoàn toàn khỏi màn hình 2 người kia.
+    roomDeskMaxRadius: 1.4, // 2×1.4=2.8 ≤ fieldRangeMeters(3), còn biên an toàn nhỏ
+    roomDeskMinSpacing: 1.0, // khoảng cách tối thiểu giữa 2 bàn, tránh chồng lấn
+    // Jitter (lệch ngẫu nhiên nhỏ quanh vị trí lý tưởng trên vành tròn) để
+    // layout không trông "quá đều/máy móc" — xem generateDeskLayout() để
+    // hiểu vì sao bán kính thật sự dùng phải LỚN HƠN mức lý thuyết tối
+    // thiểu một khoảng bù đúng bằng roomDeskJitterRadius.
+    roomDeskJitterAngle: 0.12, // radian, ~6.9°
+    roomDeskJitterRadius: 0.06, // mét
+    // Trần cứng số người/phòng: với roomDeskMaxRadius=1.4 cố định (giới hạn
+    // bởi fieldRangeMeters, xem comment trên), bán kính vành cần thiết để
+    // giữ đủ roomDeskMinSpacing giữa MỌI cặp người (kể cả sau khi bù jitter
+    // 2 chiều) vượt quá 1.4 kể từ 7 người trở lên (đã kiểm chứng bằng mô
+    // phỏng offline) — quá ngưỡng này, dù thuật toán nào cũng phải chấp
+    // nhận chồng lấn vì không đủ diện tích hình học. Chặn ở UI thay vì để
+    // xảy ra bug hiển thị (đã từng gặp: người biến mất khỏi màn hình nhau).
+    roomMaxPlayers: 6,
+    roomBroadcastHz: 15 // tần suất host gửi vị trí Sếp cho cả phòng
+  };
+
+  const el = id => document.getElementById(id);
+  const livesEl = el('lives'), progressFill = el('progressFill'), progressText = el('progressText'),
+        clockEl = el('clock2'), tabBtn = el('tabBtn'), switcherOverlay = el('switcherOverlay'),
+        flashEl = el('flash'), modal = el('modal'), modalTitle = el('modalTitle'),
+        modalText = el('modalText'), modalStats = el('modalStats'), modalBtn = el('modalBtn'), adSlot = el('adSlot'),
+        proxField = el('proxField'), bossUnit = el('bossUnit'), bossDistTag = el('bossDistTag'),
+        radarAlert = el('radarAlert'), vignette = el('vignette'), screenEl = el('screen'),
+        monitorEl = el('monitor'), monitorRig = el('monitorRig'), introScreen = el('introScreen'),
+        startBtn = el('startBtn'), recordLine = el('recordLine'),
+        catchPopup = el('catchPopup'), safePopup = el('safePopup'), sceneEl = el('scene'),
+        bossFaceCard = el('bossFaceCard'), bossFaceSvgWrap = el('bossFaceSvgWrap'), bossBubble = el('bossBubble'),
+        nameInput = el('nameInput'), nameInputWrap = el('nameInputWrap'), nameSuggestions = el('nameSuggestions'), hudTrophyBtn = el('hudTrophyBtn'), hudStopBtn = el('hudStopBtn'),
+        lbModal = el('lbModal'), lbBody = el('lbBody'), lbCloseBtn = el('lbCloseBtn'),
+        shareFb = el('shareFb'), shareZalo = el('shareZalo'), shareCopy = el('shareCopy'), shareNative = el('shareNative'), shareToast = el('shareToast'),
+        modalCloseX = el('modalCloseX'), lbCloseX = el('lbCloseX'),
+        createRoomBtn = el('createRoomBtn'), roomWaitScreen = el('roomWaitScreen'), roomCodeDisplay = el('roomCodeDisplay'),
+        roomCopyLinkBtn = el('roomCopyLinkBtn'), roomPlayerList = el('roomPlayerList'), roomStartBtn = el('roomStartBtn'),
+        roomWaitingForHost = el('roomWaitingForHost'), roomLeaveBtn = el('roomLeaveBtn'), roomToast = el('roomToast'),
+        challengeBanner = el('challengeBanner'), teammatesLayer = el('teammatesLayer'), roomInviteBanner = el('roomInviteBanner');
+
+  // px-per-meter on the X axis, sized so the outermost ring nearly reaches the
+  // side columns. Recomputed on load/resize since it depends on scene width.
+  // viewRatio/viewRot: góc nhìn riêng của người chơi này ở ván hiện tại (xem
+  // pickViewAngle()). Mặc định = góc gốc (ratio 1.4, không xoay).
+  let viewRatio = CONFIG.ellipseRatio, viewRot = 0;
+  let metersToPxX = 90, metersToPxY = metersToPxX / viewRatio;
+  function recomputeFieldScale(){
+    const sceneW = sceneEl.clientWidth;
+    const usableHalfWidth = sceneW * 0.42; // leave the side columns clear
+    metersToPxX = Math.max(50, usableHalfWidth / CONFIG.fieldRangeMeters);
+    metersToPxY = metersToPxX / viewRatio;
+    sizeMonitorToField();
+  }
+
+  // Đổi vector lệch trong toạ độ game (dx, dy — cùng hệ với boss.x/y và
+  // deskLayout) sang pixel trên màn hình THEO GÓC NHÌN CỦA MÌNH. dy nhân
+  // ellipseRatio để về mét thật trên sàn (đúng công thức dist ở
+  // computeMyBossView), xoay theo viewRot, rồi chiếu xuống màn hình bằng
+  // đúng tỉ lệ dẹt viewRatio mà các vòng đang dùng → Sếp/bàn đồng nghiệp luôn
+  // nằm đúng vòng mà số mét hiển thị nói, ở mọi góc nhìn.
+  function worldToScreenPx(dx, dy){
+    const tz = dy * CONFIG.ellipseRatio;
+    const c = Math.cos(viewRot), s = Math.sin(viewRot);
+    return groundToScreen(dx*c - tz*s, dx*s + tz*c);
+  }
+
+  /* ---------- PHỐI CẢNH THẬT (khác bản elip dẹt đều) ----------
+     Camera đặt sau lưng người chơi, cách tâm cameraDist mét, nhìn thẳng vào
+     phòng. Điểm sàn (X ngang, Z chiều sâu, mét thật, gốc = bàn mình) chiếu
+     bằng pinhole: sx = f·X/depth, sy = fh·(1/depth − 1/D) với depth = D+Z.
+     Vòng tròn thật bán kính r → elip có bán kính ngang a = f·r/√(D²−r²),
+     mép gần/xa ở Z=∓r (xem ringGeom) — tâm elip LỆCH về phía xa và vòng xa
+     bị nén, đúng như hình bia ngắm phối cảnh. f chọn để vòng 3m rộng đúng
+     3·metersToPxX như bản elip (khớp bề ngang màn hình). */
+  function persp(){
+    const D = CONFIG.cameraDist;
+    return { D, f: metersToPxX * Math.sqrt(D*D - 9), fh: metersToPxX * CONFIG.cameraFH };
+  }
+  function groundToScreen(X, Z){
+    const { D, f, fh } = persp();
+    const depth = Math.max(D + Z, 0.8); // chặn điểm ở sau/sát camera (Sếp spawn xa ngoài màn)
+    return { px: f * X / depth, py: fh * (1/depth - 1/D), scale: D / depth };
+  }
+  function ringGeom(r){
+    const { D, f, fh } = persp();
+    const yNear = fh * (1/(D - r) - 1/D), yFar = fh * (1/(D + r) - 1/D);
+    return { a: f * r / Math.sqrt(D*D - r*r), b: (yNear - yFar) / 2, yc: (yNear + yFar) / 2 };
+  }
+
+  // Bốc góc nhìn mới cho ván này, rồi vẽ lại vòng + đồng nghiệp theo góc đó.
+  // Ván tutorial đầu tiên giữ góc gốc để hình minh hoạ hướng dẫn không đổi.
+  function pickViewAngle(){
+    if(hasSeenHint(HINT_TUTORIAL_DONE)){
+      viewRot = Math.random() * Math.PI * 2;
+    } else {
+      viewRatio = CONFIG.ellipseRatio;
+      viewRot = 0;
+    }
+    metersToPxY = metersToPxX / viewRatio;
+    buildProxRings();
+    if(roomMode !== 'solo') renderTeammates();
+  }
+
+  // #monitor trước đây có kích thước cố định bằng CSS clamp()/cqw, hoàn toàn
+  // độc lập với metersToPxX — trên màn hẹp, sàn cứng clamp() (từng phải hạ
+  // xuống 200/180px, xem comment media query bên dưới) vẫn có thể LỚN HƠN
+  // đường kính vòng tròn 1m thật (2×metersToPxX), khiến monitor trông "chạm"
+  // Sếp trên màn hình dù số mét thật vẫn còn >1m (feedback phỏng vấn: người
+  // chơi bấm Tab sớm vì cảm giác Sếp đã sát máy tính). Neo trực tiếp theo
+  // đường kính vòng 1m — luôn khớp đúng số học ở MỌI kích thước màn hình,
+  // không cần đoán breakpoint riêng nữa. CSS clamp() giữ lại làm giá trị khởi
+  // tạo/fallback trước khi JS chạy lần đầu, không xoá để tránh nháy layout.
+  function sizeMonitorToField(){
+    const ring1DiameterPx = ringGeom(1).a * 2;
+    const isRoomShrink = monitorEl.classList.contains('roomShrink');
+    const targetRatio = isRoomShrink ? 0.62 : 0.85; // monitor nhỏ hơn khi ở phòng chung, chừa chỗ thấy bàn đồng nghiệp
+    // Sàn tối thiểu để chữ trong màn hình (bảng chứng khoán, dashboard...)
+    // còn đọc được — quyết định có chủ đích: chấp nhận monitor hơi TO HƠN
+    // vòng 1m một chút trên màn cực hẹp, đổi lại nội dung không vỡ chữ. Sàn
+    // này THẤP HƠN NHIỀU so với lỗi cũ (320px) nên độ lệch chỉ còn nhỏ, không
+    // còn cảm giác "monitor chiếm hết field" như trước khi sửa.
+    const minW = 140;
+    const maxW = isRoomShrink ? 380 : 620;
+    const w = Math.min(maxW, Math.max(minW, ring1DiameterPx * targetRatio));
+    const h = w * (200/320); // giữ đúng tỉ lệ khung hình gốc của #monitor (320:200)
+    monitorEl.style.width = w + 'px';
+    monitorEl.style.height = h + 'px';
+  }
+  const RING_METERS = [1, 2, 3];
+  function buildProxRings(){
+    proxField.innerHTML = '';
+    RING_METERS.forEach(m=>{
+      const g = ringGeom(m);
+      const pxW = g.a * 2;
+      const ring = document.createElement('div');
+      ring.className = 'ring' + (m===1 ? ' r1' : '');
+      ring.style.width = pxW+'px';
+      ring.style.height = (g.b * 2)+'px';
+      ring.style.top = g.yc+'px'; // tâm elip lệch về phía xa (phối cảnh)
+      proxField.appendChild(ring);
+      const label = document.createElement('div');
+      label.className = 'ring-label' + (m===1 ? ' danger' : '');
+      label.textContent = m+'m';
+      label.style.left = '50%';
+      label.style.top = g.yc+'px';
+      label.style.transform = 'translate(' + (pxW/2 + 8) + 'px, -50%)';
+      proxField.appendChild(label);
+    });
+  }
+  recomputeFieldScale();
+  buildProxRings();
+  window.addEventListener('resize', ()=>{ recomputeFieldScale(); buildProxRings(); if(roomMode !== 'solo') renderTeammates(); });
+
+  let audioCtx = null;
+  function beep(freq, dur, type, vol){
+    try{
+      if(!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+      const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o.type = type||'square'; o.frequency.value = freq;
+      g.gain.value = vol||0.06;
+      o.connect(g); g.connect(audioCtx.destination);
+      o.start();
+      g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + dur);
+      o.stop(audioCtx.currentTime + dur);
+    }catch(e){}
+  }
+  let lastStep = 0;
+  function maybeFootstep(dist, now){
+    if(dist > 5) return;
+    const interval = Math.max(0.16, dist * 0.13);
+    if(now - lastStep > interval){
+      lastStep = now;
+      const vol = Math.max(0.01, 0.06 * (1 - dist/5));
+      beep(90 + Math.random()*20, 0.05, 'square', vol);
+    }
+  }
+
+  function rand(a,b){ return a + Math.random()*(b-a); }
+  function lerp(a,b,t){ return a+(b-a)*t; }
+  function pick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+
+  /* ---------- Just-in-time coaching (Invisible Design: teach only at the
+     exact moment a mechanic first matters, then get out of the way forever).
+     Two one-shot hints, each remembered permanently via localStorage so a
+     returning player is never taught the same thing twice: */
+  const HINT_APPROACH = 'atd_hintApproachSeen';
+  const HINT_CATCH = 'atd_hintCatchSeen';
+  const HINT_TAB_BTN = 'atd_hintTabBtnSeen';
+  // Forced-action first-run tutorial: ván solo ĐẦU TIÊN của mỗi trình duyệt
+  // chặn Sếp lao tới cho đến khi người chơi tự bấm Tab, thay vì bắt người
+  // chơi đọc 4 bước introSteps trước khi chơi (feedback: tutorial dạng đọc bị
+  // lướt qua, người chơi vào thẳng game rồi không hiểu luật giữa chừng).
+  // Chỉ áp dụng cho solo — room/multiplayer có host điều khiển boss riêng,
+  // ép boss đứng yên ở đó sẽ ảnh hưởng tới người chơi khác trong phòng.
+  const HINT_TUTORIAL_DONE = 'atd_tutorialDone';
+  let tutorialActive = false; // true = đang ở ván solo đầu tiên, chưa bấm Tab lần nào
+  let tutorialProximityWarned = false; // coachmark bước 2 (Sếp lại gần) đã hiện chưa — chỉ hiện đúng 1 lần/ván
+  function hasSeenHint(key){ try{ return localStorage.getItem(key) === '1'; }catch(e){ return true; } }
+  function markHintSeen(key){ try{ localStorage.setItem(key, '1'); }catch(e){} }
+  const coachmarkEl = document.getElementById('coachmark');
+  const coachmarkTextEl = document.getElementById('coachmarkText');
+  let coachmarkHideTimer = null;
+  function showCoachmark(text, durationMs){
+    coachmarkTextEl.textContent = text;
+    coachmarkEl.classList.add('show');
+    clearTimeout(coachmarkHideTimer);
+    coachmarkHideTimer = setTimeout(()=> coachmarkEl.classList.remove('show'), durationMs);
+  }
+  function hideCoachmark(){
+    coachmarkEl.classList.remove('show');
+    clearTimeout(coachmarkHideTimer);
+  }
+
+  /* ---------- Boss face expressions ---------- */
+  const FACE_HEAD = '<rect x="0" y="0" width="100" height="100" fill="#2a2118"/><circle cx="50" cy="55" r="36" fill="#e6b98d"/><path d="M14 42 Q18 10 50 10 Q82 10 86 42 Q72 22 50 22 Q28 22 14 42 Z" fill="#241a10"/><ellipse cx="50" cy="88" rx="30" ry="14" fill="#2f5aa8"/>';
+  function bossFace(state){
+    if(state === 'angry'){
+      return '<svg viewBox="0 0 100 100">'+FACE_HEAD
+        + '<path d="M40 30 L20 55 M60 30 L80 55 M50 24 L50 40" stroke="#c0392b" stroke-width="3" stroke-linecap="round" opacity="0.85"/>'
+        + '<rect x="25" y="44" width="50" height="13" rx="2" fill="#1a1a1a" opacity="0.9"/>'
+        + '<path d="M28 42 L46 49" stroke="#1a1a1a" stroke-width="5" stroke-linecap="round"/>'
+        + '<path d="M72 42 L54 49" stroke="#1a1a1a" stroke-width="5" stroke-linecap="round"/>'
+        + '<circle cx="37" cy="53" r="3" fill="#fff"/><circle cx="63" cy="53" r="3" fill="#fff"/>'
+        + '<ellipse cx="27" cy="66" rx="6" ry="4" fill="#c0392b" opacity="0.5"/><ellipse cx="73" cy="66" rx="6" ry="4" fill="#c0392b" opacity="0.5"/>'
+        + '<ellipse cx="50" cy="76" rx="15" ry="12" fill="#7a1010"/>'
+        + '<ellipse cx="50" cy="79" rx="9" ry="6" fill="#2a0303"/>'
+        + '<path d="M40 76 L60 76" stroke="#fff" stroke-width="2"/>'
+        + '</svg>';
+    }
+    if(state === 'alert'){
+      return '<svg viewBox="0 0 100 100">'+FACE_HEAD
+        + '<rect x="26" y="45" width="48" height="12" rx="2" fill="#1a1a1a" opacity="0.85"/>'
+        + '<path d="M29 40 Q38 34 47 40" stroke="#1a1a1a" stroke-width="3.5" fill="none" stroke-linecap="round"/>'
+        + '<path d="M71 40 Q62 34 53 40" stroke="#1a1a1a" stroke-width="3.5" fill="none" stroke-linecap="round"/>'
+        + '<ellipse cx="37" cy="53" rx="4.5" ry="3.5" fill="#1a1a1a"/>'
+        + '<ellipse cx="63" cy="53" rx="4.5" ry="3.5" fill="#1a1a1a"/>'
+        + '<circle cx="35.5" cy="52" r="1.3" fill="#fff"/><circle cx="61.5" cy="52" r="1.3" fill="#fff"/>'
+        + '<ellipse cx="72" cy="34" rx="4" ry="6" fill="#a8d4f0" opacity="0.85"/>'
+        + '<path d="M42 76 L58 76" stroke="#7a4a2a" stroke-width="3.5" stroke-linecap="round"/>'
+        + '</svg>';
+    }
+    return '<svg viewBox="0 0 100 100">'+FACE_HEAD
+      + '<rect x="26" y="45" width="48" height="12" rx="2" fill="#1a1a1a" opacity="0.85"/>'
+      + '<path d="M30 39 Q38 34 46 39" stroke="#1a1a1a" stroke-width="3.5" fill="none" stroke-linecap="round"/>'
+      + '<path d="M70 39 Q62 34 54 39" stroke="#1a1a1a" stroke-width="3.5" fill="none" stroke-linecap="round"/>'
+      + '<circle cx="37" cy="53" r="4" fill="#1a1a1a"/><circle cx="63" cy="53" r="4" fill="#1a1a1a"/>'
+      + '<circle cx="35.5" cy="51.5" r="1.3" fill="#fff"/><circle cx="61.5" cy="51.5" r="1.3" fill="#fff"/>'
+      + '<ellipse cx="27" cy="63" rx="5" ry="3" fill="#e8a87c" opacity="0.6"/><ellipse cx="73" cy="63" rx="5" ry="3" fill="#e8a87c" opacity="0.6"/>'
+      + '<path d="M37 74 Q50 84 63 74" stroke="#7a4a2a" stroke-width="3.5" fill="none" stroke-linecap="round"/>'
+      + '</svg>';
+  }
+  let bossAngryUntil = 0;
+  function setBossFace(state){
+    bossFaceSvgWrap.innerHTML = bossFace(state);
+    bossFaceCard.classList.toggle('angry', state==='angry');
+    bossFaceCard.classList.toggle('alert', state==='alert');
+    bossFaceCard.classList.toggle('calm', state==='calm');
+  }
+
+  const SCOLD_LINES = [
+    'Làm gì đó?? Xem phim giờ làm à?!',
+    'Ủa, deadline đâu rồi ta?',
+    'Trời đất, giờ này còn coi TikTok?',
+    'Bảng lương tháng này coi lại nha!!',
+    'Họp 5 phút nữa, còn ngồi xem hả?',
+    'Cái gì đang chạy trên màn hình vậy ba?',
+    'Ơ hay, tăng ca mà xem hài à ku?!',
+    'Nay hết KPI rồi hả mà rảnh dữ?',
+    'Con này, để ý công việc chút coi!'
+  ];
+  const PRAISE_LINES = ['✓ Né đẹp!', '✓ Sát nút!', '✓ Auto né chuyên nghiệp!', '✓ Sếp đi qua luôn!'];
+  let bossBubbleTimeout = null;
+  function showBossBubble(text, duration){
+    bossBubble.textContent = text;
+    bossBubble.classList.add('show');
+    clearTimeout(bossBubbleTimeout);
+    bossBubbleTimeout = setTimeout(()=>bossBubble.classList.remove('show'), duration);
+  }
+
+  /* ---------- Content themes ---------- */
+  const WORK_THEMES = ['excel','dashboard','stock'];
+  const PERSONAL_THEMES = ['tomjerry','pikachu','memeCat','memeDog'];
+
+  function genWorkData(theme){
+    if(theme === 'excel'){
+      const rev = (rand(80,240)).toFixed(1);
+      const cost = (rev*rand(0.4,0.7)).toFixed(1);
+      const profit = (rev-cost).toFixed(1);
+      const bars = Array.from({length:7}, ()=> rand(20,100));
+      return { rev, cost, profit, p1:(rand(2,18)).toFixed(1), p2:(rand(1,9)).toFixed(1), p3:(rand(5,25)).toFixed(1), q4:(rand(10,60)).toFixed(1), q5:(rand(1,15)).toFixed(1), bars };
+    }
+    if(theme === 'dashboard'){
+      const pts = Array.from({length:10}, ()=> rand(5,30));
+      const bars = Array.from({length:8}, ()=> rand(10,100));
+      const donutPct = Math.floor(rand(35,88));
+      return { kpi1: Math.floor(rand(120,980)), kpi2: (rand(2,18)).toFixed(1), kpi3: Math.floor(rand(40,600)), kpi4: (rand(90,99.9)).toFixed(1), pts, bars, donutPct };
+    }
+    if(theme === 'stock'){
+      let p = rand(40,120); const pts=[p];
+      for(let i=0;i<11;i++){ p += rand(-6,6); p=Math.max(5,p); pts.push(p); }
+      const pct = ((pts[pts.length-1]-pts[0])/pts[0]*100);
+      const vol = Array.from({length:14}, ()=> rand(10,100));
+      const allTickers = ['VNM','FPT','HPG','MWG','VIC','VCB','MSN','GAS'];
+      const main = pick(allTickers);
+      const others = allTickers.filter(t=>t!==main).sort(()=>Math.random()-0.5).slice(0,3).map(t=>({ t, pct:(rand(-4,4)).toFixed(2) }));
+      return { ticker: main, price: pts[pts.length-1].toFixed(2), pct: pct.toFixed(2), up: pct>=0, pts, vol, watchlist: others };
+    }
+    return {};
+  }
+
+  function sparkPoints(pts, w, h){
+    const max = Math.max(...pts), min = Math.min(...pts);
+    return pts.map((v,i)=>{
+      const x = (i/(pts.length-1))*w;
+      const y = h - ((v-min)/Math.max(0.0001,(max-min)))*h;
+      return x.toFixed(1)+','+y.toFixed(1);
+    }).join(' ');
+  }
+  function bars(values, cls){
+    const max = Math.max(...values);
+    return values.map(v=>'<div style="height:'+Math.max(6,(v/max*100)).toFixed(0)+'%"></div>').join('');
+  }
+
+  function buildWorkHTML(theme, data){
+    if(theme === 'excel'){
+      return '<div class="work-content excel-theme">'
+        + '<div class="xl-topbar">📊 BaoCao_Quy_ThatSu_FINAL_v2.xlsx</div>'
+        + '<div class="xl-formula">fx  =SUM(B2:B8)</div>'
+        + '<div class="xl-body">'
+        + '<div class="xl-grid">'
+        + '<div class="xl-row xl-header"><div>Khoản mục</div><div>Giá trị</div><div>%</div></div>'
+        + '<div class="xl-row"><div>Doanh thu</div><div>'+data.rev+'</div><div>+'+data.p1+'%</div></div>'
+        + '<div class="xl-row"><div>Chi phí</div><div>'+data.cost+'</div><div>-'+data.p2+'%</div></div>'
+        + '<div class="xl-row xl-selected"><div>Lợi nhuận</div><div>'+data.profit+'</div><div>+'+data.p3+'%</div></div>'
+        + '<div class="xl-row"><div>Marketing</div><div>'+data.q4+'</div><div>-'+data.q5+'%</div></div>'
+        + '</div>'
+        + '<div class="xl-chartbox"><div class="xl-chart-title">Doanh thu theo tuần</div><div class="xl-bars">'+bars(data.bars)+'</div></div>'
+        + '</div>'
+        + '<div class="xl-tabs"><span>T1</span><span>T2</span><span class="active">T3</span><span>T4</span></div>'
+        + '</div>';
+    }
+    if(theme === 'dashboard'){
+      return '<div class="work-content dash-theme">'
+        + '<div class="dash-title"><span>📈 Dashboard Vận Hành</span><span style="color:#4ade80;">● Realtime</span></div>'
+        + '<div class="dash-cards">'
+        + '<div class="dash-card"><div class="dash-num">'+data.kpi1+'</div><div class="dash-lbl">Khách hàng mới</div></div>'
+        + '<div class="dash-card"><div class="dash-num">'+data.kpi2+'%</div><div class="dash-lbl">Tỉ lệ chuyển đổi</div></div>'
+        + '<div class="dash-card"><div class="dash-num">'+data.kpi3+'</div><div class="dash-lbl">Đơn hàng</div></div>'
+        + '<div class="dash-card"><div class="dash-num">'+data.kpi4+'%</div><div class="dash-lbl">Uptime hệ thống</div></div>'
+        + '</div>'
+        + '<div class="dash-row">'
+        + '<div class="dash-panel"><div class="dash-panel-title">Xu hướng 10 ngày</div><svg class="dash-spark" viewBox="0 0 100 34" preserveAspectRatio="none"><polyline points="'+sparkPoints(data.pts,100,30)+'" fill="none" stroke="#7ec8ff" stroke-width="2"/></svg></div>'
+        + '<div class="dash-panel"><div class="dash-panel-title">Theo kênh</div><div class="dash-donut" style="background:conic-gradient(#7ec8ff 0% '+data.donutPct+'%, #274d6b '+data.donutPct+'% 100%);"></div><div class="dash-donut-lbl">'+data.donutPct+'%</div></div>'
+        + '<div class="dash-panel"><div class="dash-panel-title">Theo khu vực</div><div class="dash-bars-mini">'+bars(data.bars)+'</div></div>'
+        + '</div>'
+        + '</div>';
+    }
+    if(theme === 'stock'){
+      const cls = data.up ? 'up' : 'down';
+      const arrow = data.up ? '▲' : '▼';
+      const stroke = data.up ? '#4ade80' : '#f87171';
+      const watchRows = data.watchlist.map(w=>{
+        const wup = parseFloat(w.pct) >= 0;
+        return '<div class="stock-wrow"><span>'+w.t+'</span><span class="'+(wup?'up':'down')+'">'+(wup?'+':'')+w.pct+'%</span></div>';
+      }).join('');
+      return '<div class="work-content stock-theme">'
+        + '<div class="stock-ticker">'+data.ticker+' <span class="'+cls+'">'+data.price+'k '+arrow+' '+Math.abs(data.pct)+'%</span></div>'
+        + '<svg class="stock-chart" viewBox="0 0 100 40" preserveAspectRatio="none"><polyline points="'+sparkPoints(data.pts,100,36)+'" fill="none" stroke="'+stroke+'" stroke-width="2.4"/></svg>'
+        + '<div class="stock-vol">'+bars(data.vol)+'</div>'
+        + '<div class="stock-watchlist">'+watchRows+'</div>'
+        + '</div>';
+    }
+    return '<div class="work-content"></div>';
+  }
+
+  function buildPersonalHTML(theme){
+    let frameInner='', caption='', likes=Math.floor(rand(200,1800))+'K', comments=Math.floor(rand(80,900));
+    if(theme === 'tomjerry'){
+      frameInner = '<svg viewBox="0 0 100 100" width="76" height="76">'
+        // Tom (mèo xanh-xám) — đầu to tròn với má phính, tai tam giác nhọn
+        // vểnh lên, mắt xanh lá đặc trưng, mũi hồng nhỏ giữa mặt.
+        + '<ellipse cx="32" cy="66" rx="21" ry="13" fill="#7c8b9e"/>'
+        + '<circle cx="30" cy="40" r="18" fill="#7c8b9e"/>'
+        + '<path d="M15 30 L9 6 L27 22 Z" fill="#7c8b9e"/><path d="M45 30 L51 6 L33 22 Z" fill="#7c8b9e"/>'
+        + '<path d="M16 27 L13 12 L24 23 Z" fill="#f2c9d8"/><path d="M44 27 L47 12 L36 23 Z" fill="#f2c9d8"/>'
+        + '<ellipse cx="22" cy="42" rx="4" ry="5" fill="#dff2c0"/><ellipse cx="38" cy="42" rx="4" ry="5" fill="#dff2c0"/>'
+        + '<circle cx="22" cy="43" r="2" fill="#1a1a1a"/><circle cx="38" cy="43" r="2" fill="#1a1a1a"/>'
+        + '<path d="M28 49 L32 49 L30 52 Z" fill="#e8a9c2"/>'
+        + '<path d="M18 54 Q30 58 42 54" stroke="#1a1a1a" stroke-width="1.6" fill="none"/>'
+        // Jerry (chuột nâu nhỏ) — đầu tròn với 2 tai tròn to đặc trưng, mũi
+        // hồng nhọn, đứng phía trước-dưới bên phải như đang chạy trốn Tom.
+        + '<ellipse cx="74" cy="76" rx="13" ry="9" fill="#b97a45"/>'
+        + '<circle cx="75" cy="58" r="10" fill="#b97a45"/>'
+        + '<circle cx="66" cy="48" r="7" fill="#b97a45"/><circle cx="84" cy="48" r="7" fill="#b97a45"/>'
+        + '<circle cx="66" cy="48" r="3.5" fill="#f2d7b6"/><circle cx="84" cy="48" r="3.5" fill="#f2d7b6"/>'
+        + '<circle cx="71" cy="57" r="1.8" fill="#1a1a1a"/><circle cx="79" cy="57" r="1.8" fill="#1a1a1a"/>'
+        + '<ellipse cx="75" cy="62" rx="2.2" ry="1.8" fill="#3a2416"/>'
+        + '<path d="M73 63 Q75 66 77 63" stroke="#1a1a1a" stroke-width="1.2" fill="none"/>'
+        + '</svg>';
+      caption = 'Tom rượt Jerry vòng quanh văn phòng — hồi hộp hơn cả họp KPI';
+    } else if(theme === 'pikachu'){
+      frameInner = '<svg viewBox="0 0 100 100" width="72" height="72">'
+        + '<ellipse cx="50" cy="62" rx="26" ry="22" fill="#f7d02c"/>'
+        // Tai nhọn đen ở đầu — đặc điểm nhận diện chính của Pikachu
+        + '<path d="M28 40 L18 8 L38 30 Z" fill="#f7d02c"/><path d="M30 34 L24 14 L36 28 Z" fill="#2a2a2a"/>'
+        + '<path d="M72 40 L82 8 L62 30 Z" fill="#f7d02c"/><path d="M70 34 L76 14 L64 28 Z" fill="#2a2a2a"/>'
+        + '<circle cx="40" cy="56" r="4" fill="#1a1a1a"/><circle cx="60" cy="56" r="4" fill="#1a1a1a"/>'
+        + '<ellipse cx="30" cy="64" rx="7" ry="5" fill="#e8433a"/><ellipse cx="70" cy="64" rx="7" ry="5" fill="#e8433a"/>'
+        + '<path d="M42 66 Q50 72 58 66" stroke="#1a1a1a" stroke-width="2" fill="none" stroke-linecap="round"/>'
+        // Đuôi tia sét zigzag nâu-vàng — đặc điểm nhận diện thứ hai
+        + '<path d="M74 78 L92 60 L82 60 L96 40 L80 58 L88 58 Z" fill="#f7d02c" stroke="#a9772a" stroke-width="2"/>'
+        + '</svg>';
+      caption = 'Pikachu "Chích Điện Deadline" — 100.000 volt cho ai giục việc';
+    } else if(theme === 'memeCat'){
+      frameInner = '<svg viewBox="0 0 100 100" width="70" height="70">'
+        + '<circle cx="50" cy="55" r="30" fill="#d9a066"/>'
+        + '<path d="M25 35 L35 12 L45 33 Z" fill="#d9a066"/><path d="M75 35 L65 12 L55 33 Z" fill="#d9a066"/>'
+        + '<rect x="28" y="48" width="44" height="12" rx="6" fill="#1a1a1a"/>'
+        + '<path d="M42 70 Q50 78 58 70" stroke="#5a3d10" stroke-width="2" fill="none"/>'
+        + '</svg>';
+      caption = 'Mèo Tổng Giám Đốc phê duyệt: "Cho nghỉ thêm 5 phút"';
+    } else {
+      frameInner = '<svg viewBox="0 0 100 100" width="70" height="70">'
+        + '<ellipse cx="50" cy="55" rx="32" ry="28" fill="#e8c07a"/>'
+        + '<ellipse cx="26" cy="34" rx="10" ry="16" fill="#e8c07a"/><ellipse cx="74" cy="34" rx="10" ry="16" fill="#e8c07a"/>'
+        + '<circle cx="38" cy="52" r="4" fill="#222"/><circle cx="62" cy="52" r="4" fill="#222"/>'
+        + '<ellipse cx="50" cy="68" rx="10" ry="6" fill="#f4a6b8"/>'
+        + '</svg>';
+      caption = '"Vẫn Ổn Thôi" — trong lúc sếp đi vòng vòng sau lưng';
+    }
+    return '<div class="personal-content">'
+      + '<div class="vid-topbar"><span>🔴 LIVE - Kênh Giải Trí Công Sở</span><span>2:41:0'+Math.floor(rand(0,9))+'</span></div>'
+      + '<div class="vid-frame">'+frameInner+'</div>'
+      + '<div class="vid-caption">'+caption+'</div>'
+      + '<div class="vid-stats">👍 '+likes+'  💬 '+comments+'</div>'
+      + '<div class="vid-progress"><div class="vid-progress-fill"></div></div>'
+      + '</div>';
+  }
+
+  /* ---------- Leaderboard (localStorage) ---------- */
+  function loadLeaderboard(){
+    try{
+      const total = parseFloat(localStorage.getItem('atd_total')||'0');
+      const count = parseInt(localStorage.getItem('atd_count')||'0');
+      const top = JSON.parse(localStorage.getItem('atd_top')||'[]');
+      return {total, count, top};
+    }catch(e){ return {total:0, count:0, top:[]}; }
+  }
+  function recordSession(score){
+    try{
+      const lb = loadLeaderboard();
+      lb.total += score; lb.count += 1;
+      lb.top.push({score: score, t: Date.now()});
+      lb.top.sort((a,b)=>b.score-a.score);
+      lb.top = lb.top.slice(0,10);
+      localStorage.setItem('atd_total', String(lb.total));
+      localStorage.setItem('atd_count', String(lb.count));
+      localStorage.setItem('atd_top', JSON.stringify(lb.top));
+      return lb;
+    }catch(e){ return {total:score, count:1, top:[{score:score,t:Date.now()}]}; }
+  }
+  function showRecordLine(){
+    if(dbReady && sb){
+      getPlayerRecord(playerId).then(p=>{
+        if(p && p.sessionCount > 0){
+          // Đòn bẩy retention chính (không phải con số streak tự thân): nếu
+          // đang giữ chuỗi ≥2 ngày và CHƯA chơi hôm nay, cảnh báo sắp mất
+          // chuỗi thay vì hiện dòng trung bình thường — tâm lý loss-aversion
+          // khiến người chơi mở lại game để giữ chuỗi.
+          const playedToday = p.lastVisit && vnDateKey(p.lastVisit) === vnDateKey(new Date());
+          if((p.currentStreak||0) >= 2 && !playedToday){
+            recordLine.textContent = '⚠️ Chơi 1 ván hôm nay để giữ chuỗi ' + p.currentStreak + ' ngày liên tiếp!';
+            return;
+          }
+          recordLine.textContent = '🏆 Trung bình của bạn: ' + (p.avgScore||0).toFixed(1) + 's/ván (qua ' + p.sessionCount + ' ván) — xem 🏆 để so với người khác';
+          return;
+        }
+        recordLine.textContent = 'Chưa có ván nào — chơi ván đầu tiên để lập kỷ lục!';
+      }).catch(()=>{});
+      return;
+    }
+    const lb = loadLeaderboard();
+    if(lb.count > 0){
+      recordLine.textContent = '🏆 Trung bình của bạn: ' + (lb.total/lb.count).toFixed(1) + 's/ván (qua ' + lb.count + ' ván)';
+    } else {
+      recordLine.textContent = 'Chưa có ván nào — chơi ván đầu tiên để lập kỷ lục!';
+    }
+  }
+
+  /* ---------- Shared player identity & cross-player leaderboard (Supabase) ----------
+     STORAGE MODEL: 1 row per player in the "players" table (Postgres has no
+     5,000-document cap like Claude Artifact's db capability had, so the old
+     40-shard workaround is gone — every player is just a real row, and
+     ranking uses a real server-side ORDER BY instead of reading everything
+     and sorting client-side).
+     Column names are snake_case (Postgres convention); helper functions
+     below translate to/from the camelCase shape the rest of the game code
+     already expects, so downstream code barely changed. */
+  function playerRowToRecord(row){
+    if(!row) return null;
+    return {
+      name: row.name, sessionCount: row.session_count, totalCorrectTime: row.total_correct_time,
+      avgScore: row.avg_score, bestScore: row.best_score, totalPlayTime: row.total_play_time,
+      createdAt: row.created_at, lastVisit: row.last_visit,
+      currentStreak: row.current_streak || 0, longestStreak: row.longest_streak || 0
+    };
+  }
+
+  // Chuỗi ngày chơi liên tiếp — luôn chuẩn hóa "ngày" theo giờ Việt Nam
+  // (UTC+7) bất kể múi giờ máy người chơi, để nhất quán cho 1 game 100%
+  // tiếng Việt/target VN, không phụ thuộc cài đặt hệ thống của từng máy.
+  function vnDateKey(isoOrDate){
+    const ms = (isoOrDate instanceof Date ? isoOrDate : new Date(isoOrDate)).getTime();
+    const vn = new Date(ms + 7*3600*1000);
+    return vn.getUTCFullYear() + '-' + vn.getUTCMonth() + '-' + vn.getUTCDate();
+  }
+  // Khoá ngày/tuần CHO PHÂN TÍCH THEO THỜI GIAN (analytics_*_daily/_weekly,
+  // xem supabase/schema.sql mục 2e) — khác vnDateKey() ở trên vì cần
+  // zero-pad (YYYY-MM-DD) để sort đúng thứ tự bằng string so sánh trong
+  // SQL (vnDateKey() không zero-pad, chỉ dùng nội bộ để so sánh streak nên
+  // không sao, nhưng sẽ sort sai nếu dùng làm primary key để query
+  // "order by date_key"). Không đổi vnDateKey() cũ để không đụng vào logic
+  // streak đang chạy đúng.
+  function vnDateKeyPadded(isoOrDate){
+    const ms = (isoOrDate instanceof Date ? isoOrDate : new Date(isoOrDate)).getTime();
+    const vn = new Date(ms + 7*3600*1000);
+    const pad = n => String(n).padStart(2, '0');
+    return vn.getUTCFullYear() + '-' + pad(vn.getUTCMonth()+1) + '-' + pad(vn.getUTCDate());
+  }
+  // ISO week (Th 2 là ngày đầu tuần, tuần chứa ngày 4/1 là tuần 1 — chuẩn
+  // ISO 8601) tính trên "ngày VN" (đã dịch UTC+7) chứ không phải ngày UTC
+  // gốc, để nhất quán múi giờ với vnDateKeyPadded() ở trên.
+  function vnWeekKey(isoOrDate){
+    const ms = (isoOrDate instanceof Date ? isoOrDate : new Date(isoOrDate)).getTime();
+    const vn = new Date(ms + 7*3600*1000);
+    const d = new Date(Date.UTC(vn.getUTCFullYear(), vn.getUTCMonth(), vn.getUTCDate()));
+    const dayNum = (d.getUTCDay() + 6) % 7; // Mon=0..Sun=6
+    d.setUTCDate(d.getUTCDate() - dayNum + 3); // gần nhất Thứ 5 cùng tuần ISO
+    const isoYear = d.getUTCFullYear();
+    const jan4 = new Date(Date.UTC(isoYear, 0, 4));
+    const week1Monday = new Date(jan4);
+    week1Monday.setUTCDate(jan4.getUTCDate() - ((jan4.getUTCDay()+6)%7));
+    const weekNum = 1 + Math.round((d - week1Monday) / (7*86400000));
+    return isoYear + '-W' + String(weekNum).padStart(2, '0');
+  }
+  function vnDaysBetween(isoA, isoB){
+    const toVnMidnightMs = (iso)=>{
+      const ms = new Date(iso).getTime() + 7*3600*1000;
+      const vn = new Date(ms);
+      return Date.UTC(vn.getUTCFullYear(), vn.getUTCMonth(), vn.getUTCDate());
+    };
+    return Math.round((toVnMidnightMs(isoB) - toVnMidnightMs(isoA)) / 86400000);
+  }
+  // Trả về { currentStreak, longestStreak } mới, dựa trên lastVisit CŨ (trước
+  // ván này) so với "hôm nay". Gọi 1 lần mỗi khi 1 ván kết thúc, TRƯỚC khi
+  // last_visit bị upsert đè thành thời điểm hiện tại.
+  function computeStreak(prevLastVisitIso, prevCurrentStreak, prevLongestStreak){
+    const now = new Date().toISOString();
+    if(!prevLastVisitIso){
+      return { currentStreak: 1, longestStreak: Math.max(1, prevLongestStreak||0) };
+    }
+    const gapDays = vnDaysBetween(prevLastVisitIso, now);
+    let currentStreak;
+    if(gapDays === 0) currentStreak = Math.max(1, prevCurrentStreak||0); // vẫn trong ngày cũ, giữ nguyên
+    else if(gapDays === 1) currentStreak = (prevCurrentStreak||0) + 1;   // đúng hôm sau, nối chuỗi
+    else currentStreak = 1;                                             // cách xa hơn 1 ngày, reset
+    return { currentStreak, longestStreak: Math.max(currentStreak, prevLongestStreak||0) };
+  }
+
+  // Khởi tạo player lần đầu / chỉ đổi tên — KHÔNG cộng điểm. Gọi RPC
+  // security definer thay vì upsert trực tiếp: bảng "players" không còn
+  // policy INSERT/UPDATE public (xem supabase/schema.sql mục 3) vì
+  // using(true) từng cho phép sửa điểm của BẤT KỲ người chơi nào khác qua
+  // REST API trực tiếp, không cần chơi game.
+  async function ensurePlayerRecord(id, name){
+    try{
+      await sb.rpc('ensure_player', { p_player_id: id, p_name: name });
+    }catch(e){ /* best-effort */ }
+  }
+
+  // Ghi kết quả 1 ván chơi thật — gửi DELTA (score/play_time của riêng ván
+  // này) cho RPC submit_match_result, server tự cộng dồn + tính lại
+  // avg_score/best_score bên trong transaction và validate biên hợp lý
+  // (score/play_time trong [0,65] — khớp CONFIG.matchDuration=60s + buffer,
+  // score <= play_time) thay vì tin giá trị đã tính sẵn ở client. Trả về
+  // giá trị server đã tính để cập nhật UI.
+  async function submitMatchResult(id, name, score, playTime, currentStreak, longestStreak){
+    try{
+      const { data, error } = await sb.rpc('submit_match_result', {
+        p_player_id: id, p_name: name, p_score: score, p_play_time: playTime,
+        p_current_streak: currentStreak||0, p_longest_streak: longestStreak||0
+      });
+      if(error || !data || !data[0]) return null;
+      const row = data[0];
+      return { avgScore: row.avg_score, sessionCount: row.session_count, bestScore: row.best_score };
+    }catch(e){ return null; }
+  }
+
+  const STREAK_MILESTONES = {
+    30: '🔥 30 ngày liên tiếp — Sếp còn phải nể bạn!',
+    14: '🔥 14 ngày rồi — thói quen né sếp đỉnh của đỉnh!',
+    7:  '🔥 7 ngày rồi — Sếp còn ngán bạn hơn ngán deadline!',
+    3:  '🔥 3 ngày liên tiếp — giữ vững đà này nhé!'
+  };
+  function streakMilestoneText(currentStreak){
+    return STREAK_MILESTONES[currentStreak] || ('🔥 Chuỗi ' + currentStreak + ' ngày chơi liên tiếp!');
+  }
+
+  async function getPlayerRecord(id){
+    try{
+      const { data, error } = await sb.from('players').select('*').eq('id', id).maybeSingle();
+      if(error) return null;
+      return playerRowToRecord(data);
+    }catch(e){ return null; }
+  }
+
+  async function getTopPlayers(limit){
+    const { data, error } = await sb.from('players').select('*').order('avg_score', { ascending:false }).limit(limit);
+    if(error || !data) return [];
+    return data.map(row=>({ id: row.id, data: playerRowToRecord(row) }));
+  }
+
+  async function getPlayerRank(id){
+    // Postgres has no built-in "row number in this order" shortcut over the
+    // JS client, so count how many players rank strictly above this one.
+    const me = await getPlayerRecord(id);
+    if(!me) return { rank: null, total: 0 };
+    // total: chỉ để hiển thị "Hạng X / ~Y người chơi" — không cần chính xác
+    // tuyệt đối, dùng count:'estimated' (đọc từ thống kê pg_class, không
+    // quét toàn bảng) để không chậm dần khi bảng players phình to theo
+    // traffic. above: quyết định con số hạng thật, giữ 'exact' nhưng có
+    // điều kiện gt(avg_score) khớp index players_avg_score_idx nên vẫn là
+    // index scan nhanh, không phải seq scan toàn bảng như count tổng.
+    const { count: total } = await sb.from('players').select('*', { count:'estimated', head:true });
+    const { count: above } = await sb.from('players').select('*', { count:'exact', head:true }).gt('avg_score', me.avgScore||0);
+    return { rank: (above||0) + 1, total: total||0 };
+  }
+
+  // Chặn stored XSS: tên người chơi đến từ DB (RPC ensure_player/
+  // submit_match_result chỉ giới hạn độ dài, không lọc HTML — xem
+  // supabase/schema.sql) và được nhiều người chơi khác nhìn thấy qua
+  // leaderboard/phòng chung/link thách đấu — luôn escape trước khi nối vào
+  // innerHTML. Dùng textContent trung gian thay vì tự viết regex thay thế
+  // để không bỏ sót ký tự đặc biệt nào của trình duyệt.
+  function escapeHtml(s){
+    const d = document.createElement('div');
+    d.textContent = s == null ? '' : String(s);
+    return d.innerHTML;
+  }
+
+  function getPlayerId(){
+    try{
+      let id = localStorage.getItem('atd_playerId');
+      if(!id){
+        id = (crypto && crypto.randomUUID) ? crypto.randomUUID() : ('p' + Date.now() + Math.random().toString(36).slice(2));
+        localStorage.setItem('atd_playerId', id);
+      }
+      return id;
+    }catch(e){ return 'p' + Date.now(); }
+  }
+  function getPlayerName(){
+    try{ return localStorage.getItem('atd_playerName') || ''; }catch(e){ return ''; }
+  }
+  function savePlayerName(name){
+    try{ localStorage.setItem('atd_playerName', name); }catch(e){}
+  }
+
+  const playerId = getPlayerId();
+  // ---- Supabase project config ----
+  // Publishable key is safe to ship in client code by design — real access
+  // control lives in the database's Row Level Security policies (see
+  // supabase/schema.sql), not in keeping this key secret.
+  const SUPABASE_URL = 'https://vznqblibuviqywgvyybg.supabase.co';
+  const SUPABASE_KEY = 'sb_publishable_a91I3H0gcOSEZMiyAUGeww_skfkc4l9';
+  const UI_VARIANT = 'perspective'; // dùng để tách số liệu A/B test trong bảng "sessions"
+  let sb = null;
+  let dbReady = false;
+
+  // The 6 seed "rival" players are pre-loaded via supabase/schema.sql, not
+  // re-seeded from here on every load — Postgres has no per-artifact
+  // document cap forcing a shard workaround, so there's no upside to
+  // re-upserting them from the client every session.
+
+  async function ensurePlayerDoc(){
+    try{
+      const name = getPlayerName() || 'Người chơi ẩn danh';
+      await ensurePlayerRecord(playerId, name);
+    }catch(e){ /* ignore */ }
+  }
+
+  async function initSharedDb(){
+    try{
+      if(typeof supabase === 'undefined' || !supabase.createClient) return;
+      sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+      await ensurePlayerDoc();
+      dbReady = true;
+      showRecordLine();
+      recordAccessHour();
+    }catch(e){ sb = null; }
+  }
+
+  /* ---------- Chơi cùng bạn: tạo/vào phòng, màn chờ ----------
+     Vòng đời phòng (tạo/vào/chờ/bắt đầu) — "1 Sếp chung" thật (hệ toạ độ
+     chung, target-selection, xem khối "1 Sếp chung" ngay dưới đây và trong
+     tick()) ghép vào phần này qua startRoomMatchForEveryone().
+     - Bảng "rooms" (supabase/schema.sql) chỉ lưu host_player_id + status
+       ('waiting'|'playing') — bắt buộc dùng Postgres Changes (không phải
+       Broadcast) để đảm bảo mọi client, kể cả subscribe muộn, đều nhận được
+       đúng 1 lần sự kiện "bắt đầu".
+     - Danh sách "ai đang trong phòng" dùng Supabase Realtime Presence
+       (channel.track()) — không lưu vào DB, vì đây là trạng thái tạm thời
+       (mất khi đóng tab), Presence tự xử lý join/leave qua WebSocket. */
+  let currentRoomId = null;
+  let isRoomHost = false;
+  let roomChannel = null;
+
+  /* ---------- "1 Sếp chung" — trạng thái phòng đang chơi (Bước 2) ----------
+     roomMode phân biệt 3 chế độ boss AI chạy ở đâu: 'solo' (mặc định, y hệt
+     hành vi cũ), 'host' (mình mô phỏng Sếp và Broadcast cho cả phòng), 'guest'
+     (chỉ nhận Broadcast, không tự mô phỏng gì). */
+  let roomMode = 'solo';
+  let deskLayout = null;              // { [playerId]: {x,y} }, cố định suốt 1 trận
+  let myDesk = {x:0, y:0};
+  let roomPlayerIds = [];             // roster tại thời điểm host bấm Bắt đầu
+  let roomFinishedPlayerIds = new Set();
+  let roomMatchResults = {};          // { [playerId]: {name, score, won} } — xem endGame()/broadcastMyFinishResult()
+  let currentTargetPlayerId = null;   // null = Sếp đang ambient, không nhắm ai
+  let lastAmbientAnchorId = null;     // người vừa bị nhắm gần nhất — tâm ambient kế tiếp
+  let lastBroadcastAt = 0;
+
+  function genRoomCode(){
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // bỏ ký tự dễ nhầm (I/O/0/1)
+    let code = '';
+    for(let i=0;i<6;i++) code += chars[Math.floor(Math.random()*chars.length)];
+    return code;
+  }
+
+  function renderRoomPlayerList(presenceState){
+    const names = [];
+    for(const key in presenceState){
+      const metas = presenceState[key];
+      if(metas && metas[0]) names.push(metas[0]);
+    }
+    if(names.length === 0){
+      roomPlayerList.innerHTML = '<div class="roomPlayerRow">Đang tải danh sách...</div>';
+      return;
+    }
+    roomPlayerList.innerHTML = names.map(p=>{
+      const mine = p.playerId === playerId;
+      const hostTag = p.playerId === (roomChannel && roomChannel._hostPlayerId) ? ' 👑' : '';
+      return '<div class="roomPlayerRow"><span>'+escapeHtml(p.name||'Ẩn danh')+hostTag+'</span>'+(mine?'<span class="youTag">(bạn)</span>':'')+'</div>';
+    }).join('');
+  }
+
+  function updateRoomHostUI(){
+    roomStartBtn.style.display = isRoomHost ? 'block' : 'none';
+    roomWaitingForHost.style.display = isRoomHost ? 'none' : 'block';
+  }
+
+  // Trả về true nếu vào phòng thành công, false nếu bị từ chối vì phòng đã
+  // đủ roomMaxPlayers người (xem comment ở CONFIG.roomMaxPlayers).
+  async function joinRoomChannel(roomId, hostPlayerId){
+    if(!sb) return false;
+    if(roomChannel) { try{ await sb.removeChannel(roomChannel); }catch(e){} }
+    roomChannel = sb.channel('room:' + roomId, { config: { presence: { key: playerId } } });
+    roomChannel._hostPlayerId = hostPlayerId;
+
+    roomChannel.on('presence', { event: 'sync' }, () => {
+      renderRoomPlayerList(roomChannel.presenceState());
+    });
+
+    roomChannel.on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'rooms', filter: 'id=eq.' + roomId }, (payload) => {
+      if(payload.new && payload.new.status === 'playing'){
+        startRoomMatchForEveryone();
+      }
+    });
+
+    // ---------- "1 Sếp chung" — nhận layout bàn + vị trí Sếp từ host ----------
+    // Đăng ký từ lúc vào phòng chờ (không phải lúc bắt đầu trận) để không lỡ
+    // sự kiện match_start nếu nó tới trước khi postgres_changes báo playing.
+    // Cũng là sự kiện DUY NHẤT báo "host vừa bấm Chơi lại cả phòng" — lúc đó
+    // rooms.status vẫn là 'playing' từ trước (không đổi giá trị), nên
+    // postgres_changes KHÔNG fire lại; guest phải tự gọi
+    // startRoomMatchForEveryone() ngay tại đây thay vì đợi postgres_changes.
+    roomChannel.on('broadcast', { event: 'match_start' }, ({ payload }) => {
+      if(roomMode === 'host') return; // host đã tự dựng layout của chính mình
+      const wasAlreadyInRoom = roomMode === 'guest';
+      deskLayout = payload.deskLayout;
+      myDesk = deskLayout[playerId] || {x:0, y:0};
+      roomPlayerIds = payload.playerIds || Object.keys(deskLayout);
+      roomMode = 'guest';
+      roomMatchResults = {};
+      renderTeammates();
+      if(wasAlreadyInRoom && state && !state.gameStarted){
+        // Ván trước đã kết thúc (đang ở modal kết quả) và host vừa bấm chơi
+        // lại — tự đưa mình vào ván mới ngay, không cần chờ postgres_changes.
+        modal.classList.remove('show');
+        startRoomMatchForEveryone();
+      }
+    });
+
+    roomChannel.on('broadcast', { event: 'boss_state' }, ({ payload }) => {
+      if(roomMode === 'host' || !boss) return;
+      const nowDbg = performance.now();
+      window.__bossStateGaps = window.__bossStateGaps || [];
+      if(window.__lastBossStateAt) window.__bossStateGaps.push(Math.round(nowDbg - window.__lastBossStateAt));
+      window.__lastBossStateAt = nowDbg;
+      if(window.__bossStateGaps.length % 30 === 0){
+        const gaps = window.__bossStateGaps.slice(-30);
+        console.log('[debug boss_state gaps ms, last 30]', gaps, 'avg=', Math.round(gaps.reduce((a,b)=>a+b,0)/gaps.length));
+      }
+      const wasTargetingMe = boss.targetPlayerId === playerId;
+      // KHÔNG gán thẳng boss.x/y ở đây — broadcast chỉ tới ~15 lần/giây
+      // trong khi tick() chạy ~60fps, nên gán trực tiếp làm Sếp "đứng khựng"
+      // giữa 2 lần nhận rồi giật sang vị trí mới, trông lag hẳn so với host
+      // (host tự mô phỏng mượt mỗi frame). netX/netY là vị trí đích THẬT từ
+      // mạng; tick() của guest tự nội suy boss.x/y tiến dần tới đó mỗi frame
+      // (xem khối "Guest: nội suy" trong tick()) để chuyển động mượt như host.
+      if(boss.netX === undefined){
+        // Lần đầu tiên nhận broadcast — snap thẳng thay vì nội suy từ vị trí
+        // placeholder (0,0), tránh cảnh Sếp "trượt" từ giữa màn hình ra vị
+        // trí thật ngay lúc bắt đầu ván.
+        boss.x = payload.x; boss.y = payload.y;
+      }
+      boss.netX = payload.x; boss.netY = payload.y;
+      boss.forced = payload.forced; boss.targetPlayerId = payload.targetPlayerId;
+      if(payload.finishedPlayerIds) roomFinishedPlayerIds = new Set(payload.finishedPlayerIds);
+      updateTeammateTargetHighlight();
+      if(modal.classList.contains('show')) renderRoomReplayUI();
+      if(!wasTargetingMe && boss.targetPlayerId === playerId) maybeShowApproachHint();
+    });
+
+    // Trạng thái màn hình (mode/theme) của TỪNG người — mỗi client tự gửi
+    // của riêng mình khi đổi mode (xem broadcastMyPlayerState()), không phải
+    // chỉ host, vì mỗi người điều khiển mode của chính họ.
+    roomChannel.on('broadcast', { event: 'player_state' }, ({ payload }) => {
+      if(payload.playerId === playerId) return; // bỏ qua broadcast của chính mình
+      teammatePlayerStates[payload.playerId] = payload;
+      updateTeammateScreen(payload.playerId);
+    });
+
+    // "Kết quả phòng này" trong modal kết thúc ván — mỗi người tự báo điểm
+    // của mình khi finish, mọi client tích luỹ để hiện bảng so sánh riêng
+    // giữa những người cùng phòng (khác với bảng xếp hạng chung toàn game).
+    roomChannel.on('broadcast', { event: 'player_finished' }, ({ payload }) => {
+      roomMatchResults[payload.playerId] = payload;
+      roomFinishedPlayerIds.add(payload.playerId);
+      renderRoomMatchResults();
+      renderRoomReplayUI();
+    });
+
+    roomChannel.on('presence', { event: 'leave' }, ({ key }) => {
+      if(roomMode === 'host'){
+        // Khách rời giữa trận — coi như đã xong để Sếp không kẹt nhắm người
+        // không còn ở đó nữa.
+        roomFinishedPlayerIds.add(key);
+        return;
+      }
+      if(roomMode === 'guest' && key === roomChannel._hostPlayerId){
+        handleHostDisconnected();
+      }
+    });
+
+    // Chặn phòng quá đông NGAY TRƯỚC khi track() presence của chính mình —
+    // presenceState() lúc này chưa gồm mình nên đếm được đúng số người ĐÃ
+    // ở trong phòng trước khi mình vào. Chỉ chặn người join SAU khi đã đủ
+    // roomMaxPlayers, không ảnh hưởng ai đã ở trong phòng từ trước (xem
+    // comment ở CONFIG.roomMaxPlayers cho lý do hình học của giới hạn này).
+    return new Promise((resolve) => {
+      roomChannel.subscribe(async (status) => {
+        if(status === 'SUBSCRIBED'){
+          const currentCount = Object.keys(roomChannel.presenceState()).length;
+          if(currentCount >= CONFIG.roomMaxPlayers){
+            try{ await sb.removeChannel(roomChannel); }catch(e){}
+            resolve(false);
+            return;
+          }
+          await roomChannel.track({ playerId, name: getPlayerName() || 'Người chơi ẩn danh' });
+          resolve(true);
+        }
+      });
+    });
+  }
+
+  async function createRoom(){
+    if(!sb){ alert('Chưa kết nối được máy chủ chung, thử lại sau nhé.'); return; }
+    const nm = nameInput.value.trim();
+    if(nm) savePlayerName(nm);
+    await ensurePlayerDoc();
+    const roomId = genRoomCode();
+    const { error } = await sb.from('rooms').insert({ id: roomId, host_player_id: playerId, status: 'waiting' });
+    if(error){ alert('Không tạo được phòng, thử lại nhé.'); return; }
+    currentRoomId = roomId;
+    isRoomHost = true;
+    // Trên file:// (test cục bộ), Chromium chặn replaceState kèm URL tuyệt
+    // đối với lỗi "unsafe attempt to load URL" — vô hại (chỉ ảnh hưởng việc
+    // link trên thanh địa chỉ có tự cập nhật ?room= hay không), không xảy ra
+    // khi deploy thật qua https://. Bọc try/catch để không log lỗi đỏ gây
+    // nhiễu khi debug các lỗi khác lúc test local.
+    try{
+      const url = new URL(location.href);
+      url.searchParams.set('room', roomId);
+      history.replaceState(null, '', url.toString());
+    }catch(e){}
+    await joinRoomChannel(roomId, playerId);
+    showRoomWaitScreen(roomId);
+  }
+
+  async function joinExistingRoom(roomId){
+    if(!sb) return;
+    const { data: room, error } = await sb.from('rooms').select('*').eq('id', roomId).maybeSingle();
+    if(error || !room){
+      log_roomJoinFailed();
+      return;
+    }
+    currentRoomId = roomId;
+    isRoomHost = (room.host_player_id === playerId);
+    if(room.status === 'playing'){
+      // Vào muộn, phòng đã chơi rồi — bản đầu chưa hỗ trợ vào giữa trận,
+      // cho vào chơi solo bình thường để không kẹt màn chờ vô nghĩa.
+      currentRoomId = null;
+      return;
+    }
+    const joined = await joinRoomChannel(roomId, room.host_player_id);
+    if(!joined){
+      currentRoomId = null;
+      alert('Phòng đã đủ ' + CONFIG.roomMaxPlayers + ' người, thử tạo phòng mới hoặc vào phòng khác nhé.');
+      return;
+    }
+    showRoomWaitScreen(roomId);
+  }
+
+  // ---------- Mời vào phòng qua link (?room=<id>) ----------
+  // KHÔNG tự động join ngay khi mở link (trước đây làm vậy → ẩn luôn màn
+  // hỏi tên, người chơi vào phòng với tên mặc định "Người chơi ẩn danh" dù
+  // họ chưa hề được hỏi/xác nhận). Luôn dừng lại ở màn intro trước, kể cả
+  // khi đã có tên lưu sẵn từ trước (họ có thể muốn đổi tên) — chỉ thực sự
+  // join khi bấm nút xác nhận.
+  let pendingRoomInvite = null; // {roomId, hostName} — chờ user bấm nút xác nhận
+  async function prepareRoomInvite(roomId){
+    if(!sb){ setTimeout(()=>prepareRoomInvite(roomId), 150); return; }
+    const { data: room, error } = await sb.from('rooms').select('*').eq('id', roomId).maybeSingle();
+    if(error || !room || room.status === 'playing'){
+      // Phòng không tồn tại/đã hết hạn/đã chơi rồi — im lặng rơi về intro
+      // bình thường (không chặn bằng lỗi cứng vì link phòng có thể đã cũ).
+      return;
+    }
+    const hostRec = await getPlayerRecord(room.host_player_id);
+    pendingRoomInvite = { roomId, hostName: hostRec ? hostRec.name : 'một người bạn' };
+    roomInviteBanner.innerHTML = '👥 <b>' + escapeHtml(pendingRoomInvite.hostName) + '</b> mời bạn vào phòng chơi cùng!';
+    roomInviteBanner.classList.add('show');
+    startBtn.textContent = '▶️ Vào phòng của ' + pendingRoomInvite.hostName;
+    refreshNameInputVisibility();
+  }
+
+  function log_roomJoinFailed(){
+    // Phòng không tồn tại/đã hết hạn — im lặng rơi về màn intro bình thường
+    // (không chặn người chơi bằng lỗi cứng vì link phòng có thể đã cũ).
+    currentRoomId = null;
+  }
+
+  function showRoomWaitScreen(roomId){
+    introScreen.classList.add('hide');
+    roomWaitScreen.classList.add('show');
+    roomCodeDisplay.textContent = roomId;
+    updateRoomHostUI();
+  }
+
+  function hideRoomWaitScreen(){
+    roomWaitScreen.classList.remove('show');
+  }
+
+  // Dọn sạch trạng thái "ai đang bị nhắm/vừa bị nhắm" TRƯỚC khi resetState()
+  // tạo boss mới cho ván này — bắt buộc gọi trước resetState() mỗi khi bắt
+  // đầu 1 ván phòng chung (kể cả lần đầu lẫn "Chơi lại cả phòng"), để
+  // bossAnchor() bên trong resetState() không vô tình dùng lại giá trị cũ
+  // từ ván trước (ví dụ currentTargetPlayerId của người đã rời phòng).
+  function resetRoomTargetingForHost(){
+    currentTargetPlayerId = null;
+    lastAmbientAnchorId = roomPlayerIds[0] || playerId;
+  }
+
+  async function startRoomMatchForEveryone(){
+    // resetState() (chạy 1 lần lúc load trang, xem cuối file) có thể chưa
+    // kịp chạy nếu host bấm "Bắt đầu" ngay tức khắc sau khi khách vừa mở
+    // link phòng — chờ tối đa vài trăm ms cho state sẵn sàng để tránh lỗi
+    // runtime khi gán state.gameStarted trên object chưa tồn tại.
+    if(typeof state === 'undefined' || !state){ setTimeout(startRoomMatchForEveryone, 100); return; }
+
+    if(isRoomHost){
+      roomPlayerIds = Object.keys(roomChannel.presenceState()).map(key => {
+        const meta = roomChannel.presenceState()[key][0];
+        return meta ? meta.playerId : key;
+      });
+      if(!roomPlayerIds.includes(playerId)) roomPlayerIds.push(playerId);
+      deskLayout = generateDeskLayout(roomPlayerIds);
+      myDesk = deskLayout[playerId] || {x:0, y:0};
+      roomMode = 'host';
+      roomFinishedPlayerIds = new Set();
+      roomMatchResults = {};
+      roomChannel.send({ type:'broadcast', event:'match_start', payload:{ deskLayout, playerIds: roomPlayerIds } });
+      resetRoomTargetingForHost();
+      renderTeammates();
+    } else if(roomMode !== 'solo' && !deskLayout){
+      // Đã biết mình đang trong phòng (currentRoomId set) nhưng chưa nhận
+      // match_start broadcast (khác kênh với postgres_changes vừa báo
+      // playing, không đảm bảo thứ tự tới) — chờ tối đa vài trăm ms.
+      setTimeout(startRoomMatchForEveryone, 100);
+      return;
+    }
+
+    // Bắt buộc reset lại state (lives/personalTime/elapsed/mode...) VÀ boss
+    // mỗi lần hàm này chạy — kể cả lần đầu (state lúc đó vẫn là state mặc
+    // định từ lúc load trang, reset lại vô hại) VÀ đặc biệt là lần "Chơi
+    // lại cả phòng" (state lúc đó là state ĐÃ CHƠI XONG của ván trước —
+    // không reset sẽ vào ván mới với 0 mạng/personalTime đầy, thua ngay lập
+    // tức). resetState() tự đọc roomMode để tạo boss đúng kiểu (host mô
+    // phỏng cục bộ quanh bossAnchor(), guest chờ broadcast).
+    resetState();
+    hideRoomWaitScreen();
+    state.gameStarted = true;
+    state.lastTick = performance.now();
+    introScreen.classList.add('hide');
+    transitionPhase('game');
+    monitorEl.classList.add('roomShrink'); // nhường chỗ thấy bàn đồng nghiệp
+    sizeMonitorToField(); // targetRatio đổi theo roomShrink — tính lại ngay
+    try{ if(!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){}
+  }
+
+  // Chủ phòng rời đi giữa trận — không có host-migration ở bước này (giới
+  // hạn đã biết, chấp nhận được cho quy mô 1 file HTML không backend riêng).
+  // Kết thúc trận nhẹ nhàng cho người còn lại thay vì để họ kẹt màn hình chờ
+  // broadcast không bao giờ tới nữa.
+  // "Chơi lại" sau 1 ván trong phòng chung → về chơi solo. Phòng chung không
+  // hỗ trợ replay-cùng-phòng ở bước này (đã dùng xong vòng đời: host dừng
+  // broadcast khi mọi người finish, layout bàn không còn ý nghĩa cho ván mới)
+  // — muốn chơi chung lại thì tạo/vào phòng mới từ màn intro như bình thường.
+  function resetRoomModeForReplay(){
+    if(roomMode === 'solo') return;
+    if(roomChannel){ try{ sb.removeChannel(roomChannel); }catch(e){} roomChannel = null; }
+    roomMode = 'solo';
+    currentRoomId = null;
+    isRoomHost = false;
+    deskLayout = null;
+    myDesk = {x:0, y:0};
+    roomPlayerIds = [];
+    roomFinishedPlayerIds = new Set();
+    currentTargetPlayerId = null;
+    lastAmbientAnchorId = null;
+    teammatePlayerStates = {};
+    roomMatchResults = {};
+    teammatesLayer.innerHTML = '';
+    monitorEl.classList.remove('roomShrink');
+    sizeMonitorToField(); // targetRatio đổi theo roomShrink — tính lại ngay
+    try{
+      const url = new URL(location.href);
+      url.searchParams.delete('room');
+      history.replaceState(null, '', url.toString());
+    }catch(e){}
+  }
+
+  async function handleHostDisconnected(){
+    if(!state || !state.running) return;
+    endGame(false, 'host_left');
+    if(roomChannel){ try{ await sb.removeChannel(roomChannel); }catch(e){} roomChannel = null; }
+    roomMode = 'solo';
+    currentRoomId = null;
+    isRoomHost = false;
+    teammatePlayerStates = {};
+    roomMatchResults = {};
+    teammatesLayer.innerHTML = '';
+    monitorEl.classList.remove('roomShrink');
+    sizeMonitorToField(); // targetRatio đổi theo roomShrink — tính lại ngay
+  }
+
+  createRoomBtn.addEventListener('click', createRoom);
+
+  roomStartBtn.addEventListener('click', async ()=>{
+    if(!isRoomHost || !currentRoomId) return;
+    // RPC tự xác thực lại requester = host_player_id ở server (xem
+    // start_room_match trong supabase/schema.sql mục 2f) — isRoomHost ở
+    // trên chỉ là kiểm tra UI, không phải nguồn tin cậy thật.
+    const { error } = await sb.rpc('start_room_match', { p_room_id: currentRoomId, p_requester_id: playerId });
+    if(error) return;
+    // Host tự chuyển màn ngay — client khác chuyển khi nhận postgres_changes.
+    startRoomMatchForEveryone();
+  });
+
+  roomLeaveBtn.addEventListener('click', async ()=>{
+    if(roomChannel){ try{ await sb.removeChannel(roomChannel); }catch(e){} roomChannel = null; }
+    currentRoomId = null;
+    isRoomHost = false;
+    roomMode = 'solo';
+    deskLayout = null;
+    myDesk = {x:0, y:0};
+    roomPlayerIds = [];
+    roomFinishedPlayerIds = new Set();
+    currentTargetPlayerId = null;
+    lastAmbientAnchorId = null;
+    teammatePlayerStates = {};
+    roomMatchResults = {};
+    teammatesLayer.innerHTML = '';
+    monitorEl.classList.remove('roomShrink');
+    sizeMonitorToField(); // targetRatio đổi theo roomShrink — tính lại ngay
+    try{
+      const url = new URL(location.href);
+      url.searchParams.delete('room');
+      history.replaceState(null, '', url.toString());
+    }catch(e){}
+    hideRoomWaitScreen();
+    introScreen.classList.remove('hide');
+  });
+
+  roomCopyLinkBtn.addEventListener('click', async ()=>{
+    try{ await navigator.clipboard.writeText(location.href); showToastIn(roomToast, '✅ Đã copy link phòng!'); }
+    catch(e){}
+  });
+
+  (function checkRoomFromUrl(){
+    const params = new URLSearchParams(location.search);
+    const roomId = params.get('room');
+    if(roomId) prepareRoomInvite(roomId);
+  })();
+
+  /* ---------- Thách đấu người quen (?challenge=<playerId>) ----------
+     Lớp mỏng "ngữ cảnh xã hội" phủ lên link chia sẻ đã có — KHÔNG real-time,
+     KHÔNG cần room. Chỉ đọc thẳng bestScore của người đã gửi link qua
+     getPlayerRecord() (đã có, dùng cho leaderboard), hiện ngay ở màn intro
+     để tạo mục tiêu cụ thể ("vượt qua điểm của Khánh") thay vì leaderboard
+     ẩn danh chung. */
+  let challengerId = null;
+  (function checkChallengeFromUrl(){
+    const params = new URLSearchParams(location.search);
+    const id = params.get('challenge');
+    if(!id || id === playerId) return; // không tự thách đấu chính mình
+    challengerId = id;
+    const tryShow = async ()=>{
+      if(!sb){ setTimeout(tryShow, 150); return; }
+      const rec = await getPlayerRecord(id);
+      if(!rec || !rec.bestScore) return; // link cũ/id không có dữ liệu — im lặng bỏ qua
+      challengeBanner.innerHTML = '⚔️ <b>' + escapeHtml(rec.name||'Một người bạn') + '</b> vừa đạt <b>' + rec.bestScore.toFixed(1) + 's</b> — thử vượt qua chưa?';
+      challengeBanner.classList.add('show');
+    };
+    tryShow();
+  })();
+
+  function buildChallengeLink(){
+    const url = new URL(location.href);
+    url.searchParams.set('challenge', playerId);
+    url.searchParams.delete('room');
+    return url.toString();
+  }
+
+  async function maybeShowChallengeBackButton(myBestScore){
+    // Sau khi người được thách đấu chơi xong: nếu họ VƯỢT điểm người đã gửi
+    // link, gợi ý thách đấu ngược lại — vòng lặp xã hội tự nối tiếp, không
+    // cần trạng thái phòng/real-time gì thêm.
+    if(!challengerId || !sb) return null;
+    const opponent = await getPlayerRecord(challengerId);
+    if(opponent && myBestScore > (opponent.bestScore||0)) return opponent;
+    return null;
+  }
+
+  /* ---------- Behaviour analytics (aggregated, privacy-conscious) ----------
+     Kept as a handful of FIXED aggregate rows (not one row per event) even
+     though Postgres has no document cap forcing that — unbounded per-event
+     logging would still be wasteful and unnecessary for what this needs.
+     - analytics_access_hours: which hour of day people open the game.
+     - analytics_screen_time: average time spent on intro / gameplay / result.
+     - analytics_heatmap (screen='intro'|'game'): a coarse 10x10 grid of
+       where the cursor spends time on each screen (mouse position bucketed,
+       not raw coordinates — cheap to store, still useful as a heatmap).
+     - Anonymous: keyed by the same random per-browser playerId already used
+       for the leaderboard, never tied to any real identity beyond the nickname
+       the player typed in themselves. */
+  let screenPhase = 'intro';
+  let phaseStartTs = performance.now();
+  let mouseBuckets = {};
+  let lastMouseSample = 0;
+
+  function sampleMouseAt(clientX, clientY){
+    const now = performance.now();
+    if(now - lastMouseSample < 150) return;
+    lastMouseSample = now;
+    const col = Math.max(0, Math.min(9, Math.floor(clientX / window.innerWidth * 10)));
+    const row = Math.max(0, Math.min(9, Math.floor(clientY / window.innerHeight * 10)));
+    const key = col + '_' + row;
+    mouseBuckets[key] = (mouseBuckets[key]||0) + 1;
+  }
+  document.addEventListener('mousemove', (e)=> sampleMouseAt(e.clientX, e.clientY));
+  document.addEventListener('touchmove', (e)=>{
+    if(e.touches && e.touches[0]) sampleMouseAt(e.touches[0].clientX, e.touches[0].clientY);
+  }, { passive:true });
+
+  // Gọi RPC tăng nguyên tử (increment_*, xem supabase/schema.sql mục 2d)
+  // thay vì select-rồi-update phía client như trước — pattern cũ có race
+  // condition thật khi nhiều người chơi cùng ghi vào 1 dòng chung (người ghi
+  // sau đè mất phần cộng của người ghi trước), càng rõ khi traffic tăng đột
+  // biến. RPC làm phép cộng ngay trong Postgres nên luôn đúng dù bao nhiêu
+  // người gọi cùng lúc.
+  async function recordAccessHour(){
+    if(!sb) return;
+    try{
+      await sb.rpc('increment_access_hour', { p_hour: new Date().getHours() });
+    }catch(e){ /* best-effort */ }
+    try{
+      // Bảng theo ngày (xem schema.sql mục 2e): dùng GIỜ VN cố định (dịch
+      // UTC+7), khác bảng cộng-dồn cũ ở trên vẫn cố ý giữ new Date().getHours()
+      // (giờ local trình duyệt) để không đổi hành vi/dữ liệu tích luỹ đã có.
+      const nowVn = new Date(Date.now() + 7*3600*1000);
+      await sb.rpc('increment_access_hour_daily', { p_date_key: vnDateKeyPadded(new Date()), p_hour: nowVn.getUTCHours() });
+    }catch(e){ /* best-effort */ }
+  }
+
+  async function flushScreenTime(phaseName, durationMs){
+    if(!sb || durationMs < 200) return; // ignore near-instant transitions (noise)
+    try{
+      await sb.rpc('increment_screen_time', { p_phase: phaseName, p_duration_ms: durationMs });
+    }catch(e){ /* best-effort */ }
+    try{
+      await sb.rpc('increment_screen_time_daily', { p_date_key: vnDateKeyPadded(new Date()), p_phase: phaseName, p_duration_ms: durationMs });
+    }catch(e){ /* best-effort */ }
+  }
+
+  async function flushHeatmap(screenName, buckets){
+    if(!sb || Object.keys(buckets).length === 0) return;
+    try{
+      await sb.rpc('increment_heatmap', { p_screen: screenName, p_buckets: buckets });
+    }catch(e){ /* best-effort */ }
+    try{
+      await sb.rpc('increment_heatmap_weekly', { p_week_key: vnWeekKey(new Date()), p_screen: screenName, p_buckets: buckets });
+    }catch(e){ /* best-effort */ }
+  }
+
+  function transitionPhase(nextPhase){
+    const duration = performance.now() - phaseStartTs;
+    const finishedPhase = screenPhase;
+    const finishedBuckets = mouseBuckets;
+    flushScreenTime(finishedPhase, duration);
+    flushHeatmap(finishedPhase === 'result' ? 'game' : finishedPhase, finishedBuckets);
+    screenPhase = nextPhase;
+    phaseStartTs = performance.now();
+    mouseBuckets = {};
+  }
+  window.addEventListener('beforeunload', ()=>{ transitionPhase(screenPhase); });
+
+  async function recordSharedSession(score, elapsedTime){
+    if(!sb) return null;
+    try{
+      const prev = (await getPlayerRecord(playerId)) || { currentStreak:0, longestStreak:0, lastVisit:null };
+      const name = getPlayerName() || 'Người chơi ẩn danh';
+      // Tính streak dựa trên lastVisit CŨ — phải tính trước khi submitMatchResult
+      // ghi đè last_visit thành "bây giờ", nếu không sẽ luôn thấy gapDays=0.
+      const wasStreakBefore = prev.currentStreak||0;
+      const { currentStreak, longestStreak } = computeStreak(prev.lastVisit, prev.currentStreak, prev.longestStreak);
+      // sessionCount/totalCorrectTime/avgScore/bestScore giờ do SERVER cộng
+      // dồn từ delta (score, elapsedTime) của riêng ván này — client không
+      // còn tự tính rồi gửi thẳng con số tổng nữa (xem submit_match_result
+      // trong supabase/schema.sql mục 2f).
+      const result = await submitMatchResult(playerId, name, score, elapsedTime, currentStreak, longestStreak);
+      if(!result) return null;
+      try{
+        await sb.from('sessions').insert({ player_id: playerId, variant: UI_VARIANT, score, play_time: elapsedTime });
+      }catch(e2){ /* best-effort, không ảnh hưởng leaderboard chính */ }
+      return { sessionCount: result.sessionCount, avgScore: result.avgScore, bestScore: result.bestScore, currentStreak, longestStreak, streakJustIncreased: currentStreak > wasStreakBefore };
+    }catch(e){ return null; }
+  }
+
+  async function fetchLeaderboardRows(){
+    // Server-side ORDER BY + rank-by-count now that we're on real Postgres —
+    // decide how many rows to show: top 5 if the player is already near the
+    // top, otherwise everyone from #1 down through (player's rank + 10).
+    const { rank, total } = await getPlayerRank(playerId);
+    const displayCount = (rank && rank > 5) ? Math.min(rank + 10, total) : Math.min(5, total);
+    const docs = await getTopPlayers(displayCount);
+    return { docs, rank, total };
+  }
+
+  function renderLeaderboardRows(docs, rank, total, extraMeta){
+    if(docs.length === 0) return '<div id="lbLoading">Chưa có ai chơi cả, làm người đầu tiên nào!</div>';
+    let html = '<div class="lbScrollWrap">' + docs.map((p,i)=>{
+      const d = p.data; const mine = p.id === playerId;
+      const meta = extraMeta ? (' · tốt nhất ' + (d.bestScore||0).toFixed(1) + 's') : '';
+      return '<div class="lbRow'+(mine?' me':'')+'"><div class="lbRank">#'+(i+1)+'</div>'
+        + '<div><div class="lbName">'+escapeHtml(d.name||'Ẩn danh')+(mine?' (bạn)':'')+'</div><div class="lbMeta">'+(d.sessionCount||0)+' ván'+meta+'</div></div>'
+        + '<div class="lbScore">'+(d.avgScore||0).toFixed(1)+'s</div></div>';
+    }).join('') + '</div>';
+    if(rank && rank > docs.length){
+      html += '<div style="text-align:center;font-size:12px;color:#8a6d1f;margin-top:6px;">📊 Bạn đang xếp hạng #'+rank+' / '+total+' người chơi</div>';
+    }
+    return html;
+  }
+
+  async function buildInlineLeaderboardHTML(){
+    if(!sb){
+      return '<div style="text-align:center;color:#999;font-size:12px;margin-top:6px;">Mở link chia sẻ của game để so tài với bạn bè trên bảng xếp hạng chung!</div>';
+    }
+    try{
+      const { docs, rank, total } = await fetchLeaderboardRows();
+      return '<div class="leaderboard-title" style="text-align:center;">🏆 Bảng Xếp Hạng</div>' + renderLeaderboardRows(docs, rank, total, false);
+    }catch(e){
+      return '<div style="text-align:center;color:#999;font-size:12px;margin-top:6px;">Không tải được bảng xếp hạng, thử lại sau nhé.</div>';
+    }
+  }
+
+  function scrollToMyRow(container){
+    const mine = container.querySelector('.lbRow.me');
+    if(mine) mine.scrollIntoView({ block:'center' });
+  }
+
+  async function renderLeaderboardTop(){
+    lbBody.innerHTML = '<div id="lbLoading">Đang tải...</div>';
+    if(!sb){
+      lbBody.innerHTML = '<div id="lbLoading">Chưa kết nối bảng xếp hạng chung.<br>Mở link đã chia sẻ của game để xem bảng xếp hạng thật với bạn bè nhé!</div>';
+      return;
+    }
+    try{
+      const { docs, rank, total } = await fetchLeaderboardRows();
+      lbBody.innerHTML = renderLeaderboardRows(docs, rank, total, true);
+      scrollToMyRow(lbBody);
+    }catch(e){
+      lbBody.innerHTML = '<div id="lbLoading">Không tải được bảng xếp hạng, thử lại sau nhé.</div>';
+    }
+  }
+
+  async function renderLeaderboardMe(){
+    lbBody.innerHTML = '<div id="lbLoading">Đang tải...</div>';
+    if(!sb){
+      const lb = loadLeaderboard();
+      lbBody.innerHTML = lb.count>0
+        ? '<div class="lbRow me"><div class="lbRank">—</div><div><div class="lbName">Bạn (chỉ trên máy này)</div><div class="lbMeta">'+lb.count+' ván</div></div><div class="lbScore">'+(lb.total/lb.count).toFixed(1)+'s</div></div>'
+        : '<div id="lbLoading">Bạn chưa chơi ván nào.</div>';
+      return;
+    }
+    try{
+      const p = await getPlayerRecord(playerId);
+      if(!p){ lbBody.innerHTML = '<div id="lbLoading">Bạn chưa có dữ liệu — chơi 1 ván để bắt đầu nhé!</div>'; return; }
+      const { rank, total } = await getPlayerRank(playerId);
+      const rankText = rank ? '#'+rank+' / '+total+' người chơi' : 'Chưa xếp hạng';
+      lbBody.innerHTML = '<div class="lbRow me"><div class="lbRank">'+(rank ? '#'+rank : '—')+'</div>'
+        + '<div><div class="lbName">'+escapeHtml(p.name||'Bạn')+'</div><div class="lbMeta">'+rankText+'</div></div>'
+        + '<div class="lbScore">'+(p.avgScore||0).toFixed(1)+'s</div></div>'
+        + '<div class="stats-box" style="margin-top:10px;">'
+        + '<div class="stats-row"><span>Tổng số ván đã chơi:</span><b>'+(p.sessionCount||0)+'</b></div>'
+        + '<div class="stats-row"><span>Điểm tốt nhất:</span><b>'+(p.bestScore||0).toFixed(1)+'s</b></div>'
+        + '<div class="stats-row"><span>Tổng thời gian đã chơi:</span><b>'+Math.floor((p.totalPlayTime||0)/60)+' phút</b></div>'
+        + '</div>';
+    }catch(e){
+      lbBody.innerHTML = '<div id="lbLoading">Không tải được dữ liệu của bạn.</div>';
+    }
+  }
+
+  function openLeaderboard(tab){
+    lbModal.classList.add('show');
+    document.querySelectorAll('.lbTabBtn').forEach(b=>b.classList.toggle('active', b.dataset.tab===tab));
+    if(tab==='me') renderLeaderboardMe(); else renderLeaderboardTop();
+  }
+
+  // Dừng ván đang chơi dở NGAY, không đợi thắng/thua/hết giờ mới ra được
+  // nút "Chơi lại" — không tính điểm (không gọi endGame()/không ghi
+  // leaderboard), vì đây là người chơi TỰ Ý bỏ ngang, khác với thua cuộc.
+  // Nếu đang trong phòng chung, cũng rời phòng luôn — dừng ván đồng nghĩa
+  // không tiếp tục chơi chung phần còn lại của trận đó nữa.
+  function stopMatchEarly(){
+    if(!state || !state.gameStarted || !state.running) return;
+    if(!confirm('Dừng ván hiện tại? Điểm ván này sẽ KHÔNG được tính.')) return;
+    state.running = false;
+    state.gameStarted = false;
+    // Dừng giữa chừng ván tutorial: coi như chưa học xong, bấm "Bắt Đầu" lại
+    // sẽ chạy lại từ bước 1 sạch sẽ (thay vì kẹt ở giữa nếu chỉ tắt cờ mà
+    // không dọn — resetState() ở startBtn handler tạo boss mới nên an toàn).
+    tutorialActive = false;
+    if(roomMode !== 'solo') resetRoomModeForReplay();
+    transitionPhase('intro');
+    introScreen.classList.remove('hide');
+    showRecordLine();
+  }
+  hudStopBtn.addEventListener('click', stopMatchEarly);
+
+  hudTrophyBtn.addEventListener('click', ()=>openLeaderboard('top'));
+  lbCloseBtn.addEventListener('click', ()=>lbModal.classList.remove('show'));
+  document.querySelectorAll('.lbTabBtn').forEach(b=>{
+    b.addEventListener('click', ()=>openLeaderboard(b.dataset.tab));
+  });
+  const SHARE_TEXT = 'Thử xem bạn né sếp giỏi cỡ nào — đấu điểm với mình nhé! 🕵️';
+  function showToastIn(toastEl, msg){
+    toastEl.textContent = msg;
+    setTimeout(()=>{ if(toastEl.textContent===msg) toastEl.textContent=''; }, 3000);
+  }
+  async function copyShareLink(){
+    try{ await navigator.clipboard.writeText(location.href); return true; }
+    catch(e){ return false; }
+  }
+  function wireShareButtons(fbBtn, zaloBtn, copyBtn, nativeBtn, toastEl){
+    fbBtn.addEventListener('click', ()=>{
+      const url = 'https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(location.href);
+      window.open(url, '_blank');
+    });
+    zaloBtn.addEventListener('click', ()=>{
+      const url = 'https://sp.zalo.me/share?u=' + encodeURIComponent(location.href) + '&d=' + encodeURIComponent(SHARE_TEXT);
+      window.open(url, '_blank');
+    });
+    copyBtn.addEventListener('click', async ()=>{
+      const ok = await copyShareLink();
+      showToastIn(toastEl, ok ? '✅ Đã copy link — dán vào bio/story Instagram hoặc TikTok nhé!' : 'Không copy được, thử giữ và copy link trên thanh địa chỉ nhé.');
+    });
+    nativeBtn.addEventListener('click', async ()=>{
+      const shareData = { title: 'TAB: Né Sếp', text: SHARE_TEXT, url: location.href };
+      try{
+        if(navigator.share){ await navigator.share(shareData); }
+        else{
+          const ok = await copyShareLink();
+          showToastIn(toastEl, ok ? '✅ Đã copy link! Gửi cho bạn bè nhé' : 'Không copy được link.');
+        }
+      }catch(e){ /* user cancelled share sheet, ignore */ }
+    });
+  }
+  wireShareButtons(shareFb, shareZalo, shareCopy, shareNative, shareToast);
+  wireShareButtons(el('mShareFb'), el('mShareZalo'), el('mShareCopy'), el('mShareNative'), el('mShareToast'));
+
+  /* ---------- Modal dismissal edge cases: X button, backdrop click, Esc key.
+     A result screen isn't mandatory like the intro — a player who doesn't
+     want to replay must be able to leave it with no forced next action.
+     Closing never restarts the game; it just hides the modal and leaves a
+     small floating "▶️" button so the player can start a new round later
+     whenever they want, instead of needing to refresh the page. */
+  const replayFab = el('replayFab');
+  function closeResultModal(){
+    modal.classList.remove('show');
+    replayFab.classList.add('show');
+  }
+  modalCloseX.addEventListener('click', closeResultModal);
+  modal.addEventListener('click', (e)=>{ if(e.target === modal) closeResultModal(); });
+  replayFab.addEventListener('click', ()=>{
+    replayFab.classList.remove('show');
+    resetRoomModeForReplay();
+    resetState();
+    state.gameStarted = true;
+    renderScreen();
+    updateHUD();
+    transitionPhase('game');
+    requestAnimationFrame(tick);
+  });
+  lbCloseX.addEventListener('click', ()=>lbModal.classList.remove('show'));
+  lbModal.addEventListener('click', (e)=>{ if(e.target === lbModal) lbModal.classList.remove('show'); });
+  window.addEventListener('keydown', (e)=>{
+    if(e.key !== 'Escape') return;
+    if(lbModal.classList.contains('show')){ lbModal.classList.remove('show'); }
+    else if(modal.classList.contains('show')){ closeResultModal(); }
+  });
+
+  const howToPlayToggle = el('howToPlayToggle'), introStepsEl = el('introSteps');
+  howToPlayToggle.addEventListener('click', ()=>{
+    const willOpen = !introStepsEl.classList.contains('open');
+    introStepsEl.classList.toggle('open', willOpen);
+    howToPlayToggle.textContent = willOpen ? '🔼 Thu gọn' : '❓ Xem cách chơi chi tiết';
+  });
+
+  nameInput.value = getPlayerName();
+  nameInput.addEventListener('change', ()=> savePlayerName(nameInput.value.trim()));
+
+  const FUNNY_NAME_SUGGESTIONS = [
+    'Heo Mập Mập', 'Rắn 2 Đuôi', 'Gấu Trúc Lười', 'Cú Đêm Văn Phòng',
+    'Vịt Xàm Xí', 'Mèo Béo IT', 'Ninja Trốn Việc', 'Sói Cô Đơn KPI'
+  ];
+  // Tách thành hàm vì cần gọi lại từ prepareRoomInvite() — quyết định "có
+  // hỏi tên hay không" phụ thuộc CẢ VÀO việc đây có phải lời mời phòng hay
+  // không, nhưng checkRoomFromUrl()/prepareRoomInvite() chạy bất đồng bộ
+  // (await query Supabase) nên chưa kịp set pendingRoomInvite tại thời điểm
+  // script chạy tới đây theo thứ tự đồng bộ ban đầu.
+  function refreshNameInputVisibility(){
+    if(pendingRoomInvite){
+      // Được mời vào phòng — LUÔN cho xác nhận/sửa tên trước khi vào, kể cả
+      // đã có tên lưu sẵn (người chơi có thể muốn đổi tên khác cho lần này).
+      nameInputWrap.style.display = '';
+      return;
+    }
+    if(getPlayerName()){
+      // Chơi bình thường (không qua lời mời) — chỉ hỏi tên lần đầu.
+      nameInputWrap.style.display = 'none';
+    } else {
+      nameInputWrap.style.display = '';
+      const shownNames = FUNNY_NAME_SUGGESTIONS.slice().sort(()=>Math.random()-0.5).slice(0,4);
+      nameInput.placeholder = 'VD: ' + shownNames[0];
+      nameSuggestions.innerHTML = shownNames.map(n=>'<span class="nameChip">🎲 '+n+'</span>').join('');
+      nameSuggestions.querySelectorAll('.nameChip').forEach((chip, i)=>{
+        chip.addEventListener('click', ()=>{ nameInput.value = shownNames[i]; savePlayerName(shownNames[i]); });
+      });
+    }
+  }
+  refreshNameInputVisibility();
+
+  initSharedDb();
+
+  let state, boss;
+  let bossDist = Infinity; // khoảng cách Sếp mới nhất, cập nhật mỗi tick — dùng lại khi toggleMode() cần kiểm tra bắt ngay
+  let isMyTurnToBeAtRisk = true; // xem computeMyBossView() — solo luôn true, phòng chung chỉ true khi mình là target
+
+  /* ---------- "1 Sếp chung": tâm quy chiếu cho AI Sếp ----------
+     Solo: luôn {0,0} (người chơi = gốc), công thức AI dưới đây không đổi so
+     với trước. Host: neo theo bàn của người đang/ vừa bị nhắm — xem quyết
+     định "ambient lượn quanh người vừa bị nhắm gần nhất". Guest không gọi
+     hàm này (không tự mô phỏng AI). */
+  function bossAnchor(){
+    if(roomMode !== 'host') return {x:0, y:0};
+    const anchorId = currentTargetPlayerId || lastAmbientAnchorId || roomPlayerIds[0];
+    return (deskLayout && deskLayout[anchorId]) || {x:0, y:0};
+  }
+
+  /* ---------- "1 Sếp chung": ai đang là mục tiêu kế tiếp của Sếp ----------
+     Chỉ host gọi. Loại người đã xong ván/đã rời phòng, tránh lặp lại đúng
+     người vừa nhắm liền trước nếu còn người khác để chọn. */
+  function pickNextTargetPlayerId(){
+    const candidates = roomPlayerIds.filter(id => !roomFinishedPlayerIds.has(id));
+    if(candidates.length === 0) return null;
+    if(candidates.length === 1) return candidates[0];
+    const pool = candidates.filter(id => id !== currentTargetPlayerId);
+    const from = pool.length > 0 ? pool : candidates;
+    return from[Math.floor(Math.random()*from.length)];
+  }
+
+  /* ---------- "1 Sếp chung": rải vị trí bàn ngẫu nhiên, không chồng lấn ----------
+     Chỉ host gọi, 1 lần duy nhất lúc bấm "Bắt đầu" — kết quả Broadcast cho cả
+     phòng dùng chung, không tính lại giữa trận.
+     Xếp đều trên 1 vành tròn (góc = i × 2π/n) + jitter nhỏ, thay vì random
+     thuần rejection-sampling cũ. Random thuần từng gây ~33% ván có chồng lấn
+     ở 6 người (đo bằng mô phỏng offline) vì với random độc lập, xác suất 2
+     điểm rơi gần nhau tăng nhanh theo N — xếp đều loại bỏ hẳn rủi ro đó vì
+     khoảng cách giữa 2 điểm LIỀN KỀ trên vành được đảm bảo bằng hình học,
+     không phải may rủi.
+     Bán kính vành PHẢI lớn hơn mức lý thuyết tối thiểu (chord = 2R×sin(π/n)
+     ≥ minSpacing) một khoảng bù đúng bằng jitterRadius, và góc mỗi người
+     phải chừa biên 2×jitterAngle — nếu không, jitter có thể kéo 2 điểm liền
+     kề lại gần nhau hơn minSpacing dù công thức "không jitter" tính đủ chỗ
+     (đã kiểm chứng: thiếu bù jitter → tới 52% ván lỗi ở N=6, có bù → 0%).
+     Toạ độ cực (không phải random x/y hình vuông) — hình vuông tạo khoảng
+     cách đường chéo lớn hơn nhiều so với cạnh, dễ đẩy người ở 2 góc đối diện
+     ra ngoài field nhìn thấy được của nhau (bug đã gặp: 1 người biến mất
+     trong phòng 3 người). */
+  function generateDeskLayout(playerIds){
+    const layout = {};
+    const n = playerIds.length;
+    if(n === 0) return layout;
+    const jitterA = CONFIG.roomDeskJitterAngle, jitterR = CONFIG.roomDeskJitterRadius;
+    const worstAngleGap = (2*Math.PI/n) - 2*jitterA;
+    // n=1: không có cặp nào để so khoảng cách — đặt ngay tâm (r=0), bỏ qua
+    // công thức chord (worstAngleGap sẽ là 2π, vô nghĩa cho n=1).
+    const neededR = n <= 1 ? 0
+      : Math.min(CONFIG.roomDeskMaxRadius, CONFIG.roomDeskMinSpacing / (2*Math.sin(Math.max(worstAngleGap,0.01)/2)) + jitterR);
+    playerIds.forEach((id, i) => {
+      const ang = n <= 1 ? 0 : i * (2*Math.PI/n) + rand(-jitterA, jitterA);
+      const r = n <= 1 ? 0 : neededR + rand(-jitterR, jitterR);
+      // y chia ellipseRatio vì toạ độ game có y "nén" (mét thật của y = y ×
+      // ellipseRatio, xem computeMyBossView/worldToScreenPx) — nhờ vậy các bàn
+      // nằm trên vòng tròn THẬT bán kính r mét, khoảng cách tối thiểu/tối đa
+      // giữa 2 bàn đúng bằng số đã thiết kế ở mọi góc nhìn.
+      layout[id] = { x: Math.cos(ang) * r, y: Math.sin(ang) * r / CONFIG.ellipseRatio };
+    });
+    return layout;
+  }
+
+  function resetState(){
+    pickViewAngle();
+    state = { mode:'personal', lives: CONFIG.maxLives, personalTime:0, correctTime:0, elapsed:0, running:true, gameStarted:false, lastTick: performance.now(),
+      workTheme: pick(WORK_THEMES), personalTheme: pick(PERSONAL_THEMES) };
+    state.workData = genWorkData(state.workTheme);
+    if(roomMode === 'guest'){
+      // Chưa nhận boss_state đầu tiên — placeholder trơ, không có netX/netY
+      // nên tick() sẽ chưa nội suy gì cho tới khi broadcast đầu tiên tới
+      // (xem listener 'boss_state' set netX/netY, và khối nội suy trong tick()).
+      boss = { x:0, y:0, target:{x:0,y:0}, speed:0, wasClose:false, forced:false, targetPlayerId:null, nextCheckAt:Infinity };
+    } else {
+      // solo hoặc host: mô phỏng cục bộ. Host neo quanh bossAnchor() (gốc khi
+      // roomMode !== 'host' nên công thức solo không đổi).
+      const anchor = bossAnchor();
+      const ang0 = rand(0, Math.PI*2);
+      boss = { x: anchor.x + Math.cos(ang0)*5, y: anchor.y + Math.sin(ang0)*5, target:{x:0,y:0}, speed:1.0, wasClose:false, forced:false, targetPlayerId:null, nextCheckAt: rand(2.5,4.5) };
+      pickAmbientTarget();
+    }
+  }
+
+  function difficultyT(){ return Math.min(1, state.elapsed / CONFIG.difficultyRampSeconds); }
+
+  function pickAmbientTarget(){
+    if(roomMode === 'host' && currentTargetPlayerId){
+      // Vừa kết thúc 1 lần forced-approach — người đó trở thành tâm ambient
+      // kế tiếp (quyết định: "lượn quanh người vừa bị nhắm gần nhất").
+      lastAmbientAnchorId = currentTargetPlayerId;
+    }
+    currentTargetPlayerId = null;
+    if(boss) boss.targetPlayerId = null;
+    const anchor = bossAnchor();
+    const t = difficultyT();
+    const nearProb = lerp(CONFIG.ambientNearBiasProbStart, CONFIG.ambientNearBiasProbEnd, t);
+    const near = Math.random() < nearProb;
+    const ang = rand(0, Math.PI*2);
+    if(near){
+      const dist = rand(CONFIG.ambientNearMin, CONFIG.ambientNearMax);
+      boss.target = { x: anchor.x + Math.cos(ang)*dist, y: anchor.y + Math.sin(ang)*dist };
+    } else {
+      const dist = rand(CONFIG.ambientBoundsMin, CONFIG.ambientBoundsMax);
+      boss.target = { x: anchor.x + Math.cos(ang)*dist, y: anchor.y + Math.sin(ang)*dist };
+    }
+    const sr = [lerp(CONFIG.speedAmbientStart[0],CONFIG.speedAmbientEnd[0],t), lerp(CONFIG.speedAmbientStart[1],CONFIG.speedAmbientEnd[1],t)];
+    boss.speed = rand(sr[0], sr[1]);
+    boss.forced = false;
+  }
+
+  // Hint "Sếp lại gần!" chỉ nên hiện cho ĐÚNG người đang bị nhắm — tách khỏi
+  // forceCloseApproach() vì hàm đó chỉ chạy trên máy host, còn hint phải hiện
+  // trên máy của người đang là target (có thể là 1 guest khác). Gọi từ solo's
+  // forceCloseApproach() trực tiếp, và từ guest's boss_state handler khi phát
+  // hiện mình vừa trở thành target (xem joinRoomChannel()).
+  function maybeShowApproachHint(gentleSpeed){
+    if(!hasSeenHint(HINT_APPROACH)){
+      if(gentleSpeed !== undefined) boss.speed = gentleSpeed;
+      showCoachmark('👀 Sếp lại gần! Bấm Tab ngay khi Sếp còn ≤ 1m', 5000);
+      markHintSeen(HINT_APPROACH);
+    }
+  }
+
+  function forceCloseApproach(){
+    let anchor = {x:0, y:0};
+    if(roomMode === 'host'){
+      currentTargetPlayerId = pickNextTargetPlayerId();
+      if(currentTargetPlayerId === null) return; // không còn ai để nhắm — bỏ qua, vẫn ambient
+      boss.targetPlayerId = currentTargetPlayerId;
+      anchor = bossAnchor();
+    }
+    const t = difficultyT();
+    const ang = rand(0, Math.PI*2);
+    const dist = rand(CONFIG.checkTargetMin, CONFIG.checkTargetMax);
+    boss.target = { x: anchor.x + Math.cos(ang)*dist, y: anchor.y + Math.sin(ang)*dist };
+    const sr = [lerp(CONFIG.speedCheckStart[0],CONFIG.speedCheckEnd[0],t), lerp(CONFIG.speedCheckStart[1],CONFIG.speedCheckEnd[1],t)];
+    boss.speed = rand(sr[0], sr[1]);
+    boss.forced = true;
+    if(roomMode === 'solo'){
+      // First close approach this browser has ever seen: go gentle (slowest
+      // speed in the range) so there's real time to notice and react.
+      maybeShowApproachHint(sr[0]);
+      // Tutorial ép (bước 2): còn chậm hơn cả mức "gentle" thường lệ, để
+      // người chơi có đủ thời gian nhìn vòng tròn khoảng cách co lại và hiểu
+      // ý nghĩa của nó trước khi phải phản xạ bấm Tab (bước 3, xem catchPlayer()).
+      if(tutorialActive) boss.speed = sr[0] * 0.5;
+    } else if(roomMode === 'host' && currentTargetPlayerId === playerId){
+      // Host tự là target của chính mình — hint áp dụng y hệt solo.
+      maybeShowApproachHint(sr[0]);
+    }
+  }
+
+  function scheduleNextCheck(){
+    const t = difficultyT();
+    const gapMin = lerp(CONFIG.checkGapStart[0], CONFIG.checkGapEnd[0], t);
+    const gapMax = lerp(CONFIG.checkGapStart[1], CONFIG.checkGapEnd[1], t);
+    boss.nextCheckAt = state.elapsed + rand(gapMin, gapMax);
+  }
+
+  function renderScreen(){
+    if(state.mode === 'work'){
+      screenEl.innerHTML = buildWorkHTML(state.workTheme, state.workData);
+      monitorEl.classList.add('glow-work'); monitorEl.classList.remove('glow-personal');
+    } else {
+      screenEl.innerHTML = buildPersonalHTML(state.personalTheme);
+      monitorEl.classList.add('glow-personal'); monitorEl.classList.remove('glow-work');
+    }
+    // Trong phòng chung: mỗi lần màn hình CỦA MÌNH đổi nội dung (đổi mode/ván
+    // mới), báo cho đồng nghiệp biết để họ cập nhật màn hình mini của mình.
+    broadcastMyPlayerState();
+  }
+
+  function toggleMode(){
+    if(!state.running || !state.gameStarted) return;
+    state.mode = state.mode === 'work' ? 'personal' : 'work';
+    renderScreen();
+    switcherOverlay.classList.add('show');
+    beep(state.mode==='personal'?520:340, 0.08, 'square', 0.05);
+    setTimeout(()=>switcherOverlay.classList.remove('show'), 140);
+    hideCoachmark();
+
+    // Bước 1 của tutorial ép (xem startBtn handler + nhãn "màn xem phim" hiện
+    // sẵn từ lúc bắt đầu ván): người chơi vừa bấm Tab LẦN ĐẦU trong ván đầu
+    // tiên — bất kể đổi sang mode nào, đây là tín hiệu "đã hiểu nút Tab dùng
+    // để làm gì", nên thả Sếp ra (bước 2) ngay, không cần chờ mode cụ thể.
+    if(tutorialActive){
+      boss.forced = false; // mở khoá — forceCloseApproach() tự nhiên trong tick() có thể chạy lại
+      scheduleNextCheck();
+    }
+
+    // Sếp đã đứng trong catchRadius từ trước (boss.wasClose=true nên tick()
+    // không bắt lại) — nếu người chơi CHỦ ĐỘNG đổi sang personal ngay lúc đó,
+    // vẫn phải bị bắt: đây là hành vi mới, không phải "đứng yên trong vùng
+    // nguy hiểm" mà cơ chế rearm (wasClose) được thiết kế để bỏ qua.
+    // Trong phòng chung: chỉ áp dụng nếu mình đang thực sự là target của Sếp
+    // (người khác tuyệt đối an toàn dù Sếp đứng gần bàn họ trên màn hình).
+    if(state.mode === 'personal' && bossDist <= CONFIG.catchRadius && state.running && isMyTurnToBeAtRisk){
+      boss.wasClose = true;
+      catchPlayer();
+    }
+  }
+
+  function updateHUD(){
+    livesEl.textContent = '❤️'.repeat(Math.max(0,state.lives)) + '🖤'.repeat(CONFIG.maxLives - Math.max(0,state.lives));
+    const pct = Math.min(100, (state.personalTime / CONFIG.targetPersonalTime) * 100);
+    progressFill.style.width = pct + '%';
+    progressText.textContent = Math.floor(state.personalTime) + ' / ' + CONFIG.targetPersonalTime + 's';
+    const remain = Math.max(0, CONFIG.matchDuration - state.elapsed);
+    const m = Math.floor(remain/60), s = Math.floor(remain%60);
+    clockEl.textContent = m + ':' + String(s).padStart(2,'0');
+  }
+
+  /* ---------- "1 Sếp chung": "Kết quả phòng này" trong modal kết thúc ván ----------
+     Khác với bảng xếp hạng chung (toàn game, gồm cả 6 seed ảo + người lạ) —
+     đây chỉ so sánh giữa những người vừa chơi cùng phòng, cập nhật dần khi
+     từng người finish (không cần đợi tất cả xong mới hiện). */
+  function broadcastMyFinishResult(won, score){
+    if(roomMode === 'solo' || !roomChannel) return;
+    const payload = { playerId, name: getPlayerName() || 'Người chơi ẩn danh', score, won };
+    roomMatchResults[playerId] = payload;
+    roomChannel.send({ type:'broadcast', event:'player_finished', payload });
+  }
+
+  function renderRoomMatchResults(){
+    const box = el('modalRoomResults');
+    if(!box) return;
+    const ids = Object.keys(roomMatchResults);
+    if(ids.length === 0){ box.innerHTML = ''; return; }
+    const sorted = ids.map(id=>roomMatchResults[id]).sort((a,b)=>b.score-a.score);
+    const rows = sorted.map(r=>{
+      const mine = r.playerId === playerId;
+      const tag = r.won ? '🏆' : '💤';
+      return '<div class="stats-row"' + (mine?' style="font-weight:700;color:#c1272d;"':'') + '>'
+        + '<span>' + tag + ' ' + escapeHtml(r.name) + (mine?' (bạn)':'') + '</span><b>' + r.score.toFixed(1) + 's</b></div>';
+    }).join('');
+    const waiting = roomPlayerIds.length - ids.length;
+    box.innerHTML = '<div class="stats-box"><div style="font-weight:700;font-size:12.5px;margin-bottom:4px;">👥 Kết quả phòng này</div>'
+      + rows
+      + (waiting > 0 ? '<div style="font-size:11px;color:#999;margin-top:4px;">Đang chờ ' + waiting + ' người chơi xong...</div>' : '')
+      + '</div>';
+  }
+
+  // Nút "Chơi lại cả phòng" CHỈ hiện khi TẤT CẢ mọi người trong phòng đã
+  // finish (kể cả host) — nếu host bấm khi người khác còn đang chơi dở,
+  // match_start mới sẽ ghi đè deskLayout/boss của họ trong khi UI vẫn đang
+  // hiển thị ván cũ, gây lệch dữ liệu nghiêm trọng. Gọi lại hàm này mỗi khi
+  // có thêm người finish (broadcast player_finished tới) để tự động hiện
+  // nút đúng lúc, không cần đóng/mở lại modal.
+  function renderRoomReplayUI(){
+    const replayEl = el('modalRoomReplay');
+    if(!replayEl || roomMode === 'solo') return;
+    const allFinished = roomFinishedPlayerIds.size >= roomPlayerIds.length;
+    if(!allFinished){
+      const waiting = roomPlayerIds.length - roomFinishedPlayerIds.size;
+      replayEl.innerHTML = '<div style="margin-top:10px; font-size:12px; color:#8a6d1f; text-align:center;">Đang chờ ' + waiting + ' người chơi khác hoàn thành...</div>';
+      return;
+    }
+    if(isRoomHost){
+      replayEl.innerHTML = '';
+      const btn = document.createElement('button');
+      btn.textContent = '🔁 Chơi lại cả phòng';
+      btn.style.cssText = 'margin-top:10px; width:100%; font-family:var(--body); font-weight:700; font-size:13px; padding:10px; border-radius:8px; border:1.5px solid #2563eb; background:#e8f0fe; color:#1e3a6d; cursor:pointer;';
+      btn.addEventListener('click', ()=>{
+        modal.classList.remove('show');
+        startRoomMatchForEveryone();
+      });
+      replayEl.appendChild(btn);
+    } else {
+      replayEl.innerHTML = '<div style="margin-top:10px; font-size:12px; color:#8a6d1f; text-align:center;">Đang chờ chủ phòng bắt đầu ván mới...</div>';
+    }
+  }
+
+  /* ---------- "1 Sếp chung": khoảng cách/toạ độ Sếp NHÌN TỪ GÓC CỦA MÌNH ----------
+     Dùng chung cho solo/host/guest — điểm mấu chốt để không phải viết 3 bản
+     game loop riêng. Solo: myDesk={0,0} nên bx,by = boss.x,boss.y y hệt trước
+     đây (không đổi hành vi solo). Phòng chung: dịch toạ độ tuyệt đối của Sếp
+     (boss.x/y, chung cho cả phòng) về hệ quy chiếu "mình đứng ở tâm" — đúng
+     framing mà toàn bộ code render/catch-check phía dưới đã giả định sẵn. */
+  function computeMyBossView(){
+    const bx = boss.x - myDesk.x, by = boss.y - myDesk.y;
+    const dist = Math.hypot(bx, by * CONFIG.ellipseRatio);
+    const atRisk = roomMode === 'solo' || boss.targetPlayerId === playerId;
+    return { dist, bx, by, isMyTurnToBeAtRisk: atRisk };
+  }
+
+  /* ---------- "1 Sếp chung": trạng thái màn hình của TỪNG đồng nghiệp ----------
+     Khác với boss_state (chỉ host gửi, tần suất cao) — mode/theme là của
+     riêng từng người nên MỌI client tự Broadcast trạng thái màn hình của
+     chính mình, chỉ khi nó thực sự đổi (bấm Tab hoặc bắt đầu ván), không
+     theo tick — rất nhẹ vì mode không đổi liên tục. */
+  let teammatePlayerStates = {}; // { [playerId]: {mode, workTheme, workData, personalTheme} }
+
+  function broadcastMyPlayerState(){
+    if(roomMode === 'solo' || !roomChannel || !state) return;
+    roomChannel.send({ type:'broadcast', event:'player_state', payload:{
+      playerId, mode: state.mode, workTheme: state.workTheme, workData: state.workData, personalTheme: state.personalTheme
+    }});
+  }
+
+  // Xây khung monitor mini rỗng — nội dung bên trong (work/personal) được
+  // updateTeammateScreen() đổ vào .tmScreenInner mỗi khi player_state tới,
+  // tái dùng nguyên buildWorkHTML/buildPersonalHTML của màn hình chính.
+  function updateTeammateScreen(id){
+    const unit = teammatesLayer.querySelector('.teammateUnit[data-player-id="'+id+'"]');
+    if(!unit) return;
+    const inner = unit.querySelector('.tmScreenInner');
+    const st = teammatePlayerStates[id];
+    if(!inner || !st) return;
+    inner.innerHTML = st.mode === 'work'
+      ? buildWorkHTML(st.workTheme, st.workData || {})
+      : buildPersonalHTML(st.personalTheme);
+  }
+
+  /* ---------- "1 Sếp chung": vẽ bàn đồng đội trên cùng hệ vòng tròn elip ----------
+     Vị trí bàn cố định suốt trận (deskLayout không đổi) nên chỉ cần dựng DOM
+     1 lần khi nhận match_start; mỗi khi target đổi chỉ toggle class, không
+     rebuild — tránh động vào DOM ở tần suất broadcast boss_state (~15Hz).
+     Nội dung màn hình mini cập nhật riêng qua player_state (xem listener). */
+  function renderTeammates(){
+    teammatesLayer.innerHTML = '';
+    if(!deskLayout) return;
+    const presence = roomChannel ? roomChannel.presenceState() : {};
+    const nameOf = id => {
+      for(const key in presence){
+        const meta = presence[key] && presence[key][0];
+        if(meta && meta.playerId === id) return meta.name || 'Ẩn danh';
+      }
+      return 'Ẩn danh';
+    };
+    // Monitor mini có kích thước px cố định (thiết kế ở baseline
+    // metersToPxX=90) nhưng khoảng cách giữa các bàn co giãn theo bề rộng
+    // màn hình thật (recomputeFieldScale()) — ở màn hẹp (mobile), khoảng
+    // cách bằng pixel giữa 2 bàn có thể nhỏ hơn cả kích thước monitor mini,
+    // gây chồng lấn. Scale monitor mini theo đúng tỷ lệ đó để khoảng cách
+    // hình học và kích thước UI luôn tỷ lệ thuận, không bao giờ chồng lấn.
+    const tmScale = Math.max(0.4, Math.min(1, metersToPxX / 90));
+    Object.keys(deskLayout).forEach(id => {
+      if(id === playerId) return;
+      const desk = deskLayout[id];
+      const { px, py, scale: depthScale } = worldToScreenPx(desk.x - myDesk.x, desk.y - myDesk.y);
+      const unit = document.createElement('div');
+      unit.className = 'teammateUnit';
+      unit.dataset.playerId = id;
+      unit.style.transform = 'translate(calc(-50% + ' + px + 'px), calc(-50% + ' + py + 'px))';
+      unit.innerHTML = '<div class="tmScale" style="transform:translate(-50%,-50%) scale(' + (tmScale * depthScale) + ')"><div class="tmMonitor"><div class="tmScreen"><div class="tmScreenInner"></div></div></div><div class="tmName">' + escapeHtml(nameOf(id)) + '</div></div>';
+      teammatesLayer.appendChild(unit);
+      if(teammatePlayerStates[id]) updateTeammateScreen(id);
+    });
+    updateTeammateTargetHighlight();
+    // Vừa dựng khung xong — báo trạng thái màn hình của MÌNH cho người mới
+    // vào/vừa render lại biết ngay, không phải chờ tới lần đổi mode kế tiếp.
+    broadcastMyPlayerState();
+  }
+
+  function updateTeammateTargetHighlight(){
+    teammatesLayer.querySelectorAll('.teammateUnit').forEach(unit => {
+      const id = unit.dataset.playerId;
+      unit.classList.toggle('targeted', roomMode !== 'solo' && boss.targetPlayerId === id);
+      unit.classList.toggle('finished', roomFinishedPlayerIds.has(id));
+    });
+  }
+
+  /* ---------- Position the boss unit physically inside the proximity field.
+     Same two-axis scale as the rings, so the elliptical "dist" passed in
+     (used for catch-radius/rearm logic and the number shown) always matches
+     exactly which drawn ring the boss visually stands on. ---------- */
+  function updateBossPosition(dist, bx, by){
+    const { px, py, scale: depthScale } = worldToScreenPx(bx, by);
+    // 2 transform tách riêng thay vì 'calc(-50% + Npx)' gộp chung: offset
+    // -50% cố định giữ nguyên, chỉ phần translate3d(px,py,0) đổi mỗi frame
+    // — tránh buộc trình duyệt parse lại chuỗi calc() 60 lần/giây.
+    bossUnit.style.transform = 'translate(-50%, -50%) translate3d(' + px + 'px, ' + py + 'px, 0) scale(' + depthScale + ')';
+
+    bossDistTag.textContent = dist.toFixed(1) + ' m';
+    bossDistTag.classList.toggle('danger', dist <= 1.5);
+    bossDistTag.classList.toggle('warn', dist > 1.5 && dist <= 3);
+
+    radarAlert.classList.toggle('show', boss.forced);
+    // Coachmark bước 1 (lúc startBtn) đã tự ẩn sau 6s từ trước khi Sếp thực
+    // sự lại gần — người chơi lúc này chỉ còn #hint tĩnh ở cuối màn hình,
+    // quá xa tầm mắt đang dán vào Sếp/banner đỏ giữa màn hình (phản hồi
+    // test tay thật: đọc không kịp/không để ý). Bước 2: hiện lại coachmark,
+    // ngắn gọn hơn (người chơi đang căng thẳng, không có thời gian đọc câu
+    // dài) đúng lúc banner "Sếp đang lại gần" vừa bật, chỉ 1 lần/ván.
+    if(tutorialActive && boss.forced && !tutorialProximityWarned){
+      tutorialProximityWarned = true;
+      showCoachmark('🚨 Sếp lại gần rồi — bấm TAB ngay!', 4000);
+    }
+    if(performance.now() > bossAngryUntil){
+      setBossFace(boss.forced ? 'alert' : 'calm');
+    }
+    const vig = dist < 3 ? Math.max(0, (3-dist)/3) : 0;
+    vignette.style.boxShadow = 'inset 0 0 ' + (40+vig*60) + 'px ' + (8+vig*20) + 'px rgba(220,38,38,' + (vig*0.55) + ')';
+    sceneEl.style.filter = 'brightness(' + (1 - vig*0.14) + ')';
+  }
+
+  /* ---------- Ad slot trung lập ----------
+     KHÔNG gắn cứng AdSense/brand deal/network nào — chỉ là hạ tầng chỗ
+     trống + hàm nạp nội dung, để quyết định network cụ thể (khi có traffic
+     thật để quyết định) không phải sửa lại HTML/CSS, chỉ cần gọi hàm này
+     với nội dung tương ứng. Hiện tại không nơi nào trong code gọi
+     renderAdSlot(html) với html khác rỗng, nên #adSlot luôn ẩn — game chạy
+     y hệt như chưa có gì thay đổi cho tới khi ai đó chủ động bật nó lên.
+     Nhãn "Quảng cáo" luôn tự thêm, không thể tắt — minh bạch với người chơi
+     là bắt buộc (và thường là yêu cầu của chính network như AdSense), đặt
+     ở đây một lần để nhánh nào gọi cũng không quên. */
+  function renderAdSlot(html){
+    if(!html){
+      adSlot.classList.remove('has-content');
+      adSlot.innerHTML = '';
+      return;
+    }
+    adSlot.classList.add('has-content');
+    adSlot.innerHTML = '<div class="ad-slot-label">Quảng cáo</div>' + html;
+  }
+
+  function endGame(won, reason){
+    state.running = false;
+    // Tutorial ép chỉ kéo dài đúng 1 ván solo, thắng hay thua đều tính là
+    // "đã học" — không lặp lại ở ván kế tiếp kể cả khi người chơi bấm "Chơi
+    // lại" ngay trong modal kết quả.
+    if(tutorialActive){
+      tutorialActive = false;
+      markHintSeen(HINT_TUTORIAL_DONE);
+    }
+    if(roomMode !== 'solo') roomFinishedPlayerIds.add(playerId);
+    modal.classList.add('show');
+    transitionPhase('result');
+    renderAdSlot(null); // chỗ gọi renderAdSlot(html) khi đã chọn network — xem comment ở định nghĩa hàm
+    if(won){
+      modalTitle.textContent = '🎉 Hết giờ, về nhà an toàn!';
+      modalText.textContent = 'Bạn đã đạt ' + CONFIG.targetPersonalTime + ' giây làm việc riêng mà không bị bắt quá tay. Tay đổi tab thần sầu!';
+      beep(523,0.12,'sine',0.05); setTimeout(()=>beep(659,0.12,'sine',0.05),120); setTimeout(()=>beep(784,0.18,'sine',0.05),240);
+    } else if(reason === 'caught'){
+      modalTitle.textContent = '😬 Bị sếp bắt tại trận!';
+      modalText.textContent = 'Bạn đã hết mạng vì để sếp lại gần dưới 1m mà chưa kịp chuyển tab. Canh sếp sát hơn nhé!';
+    } else if(reason === 'host_left'){
+      // Không có host-migration ở bước này — phòng mất nguồn điều khiển Sếp
+      // chung thì kết thúc nhẹ nhàng cho người còn lại thay vì treo màn hình.
+      modalTitle.textContent = '📡 Phòng đã ngắt kết nối';
+      modalText.textContent = 'Chủ phòng đã rời đi nên ván chơi chung dừng lại. Bạn có thể tạo phòng mới hoặc chơi 1 mình.';
+    } else {
+      modalTitle.textContent = '⏰ Hết giờ làm';
+      modalText.textContent = 'Bạn mới tích lũy được ' + Math.floor(state.personalTime) + '/' + CONFIG.targetPersonalTime + ' giây việc riêng. Cố né sếp nhiều hơn để đạt chỉ tiêu!';
+    }
+    const lb = recordSession(state.correctTime);
+    const avg = (lb.total/lb.count).toFixed(1);
+    let rows = '<div class="stats-row"><span>Điểm ván này (thời gian chơi đúng):</span><b>'+state.correctTime.toFixed(1)+'s</b></div>';
+    rows += '<div class="stats-row"><span>Trung bình của bạn ('+lb.count+' ván):</span><b>'+avg+'s/ván</b></div>';
+    modalStats.innerHTML = '<div class="stats-box">'+rows+'</div><div id="modalRoomResults"></div><div id="modalRoomReplay"></div><div id="modalLB">Đang tải bảng xếp hạng...</div>';
+    if(roomMode !== 'solo' && reason !== 'host_left'){
+      broadcastMyFinishResult(won, state.correctTime);
+      renderRoomMatchResults();
+      renderRoomReplayUI();
+    }
+
+    if(sb){
+      recordSharedSession(state.correctTime, state.elapsed).then(async (result)=>{
+        if(result && result.streakJustIncreased){
+          const streakEl = document.createElement('div');
+          streakEl.style.cssText = 'margin-top:8px; font-size:12.5px; font-weight:700; color:#c1272d; text-align:center;';
+          streakEl.textContent = streakMilestoneText(result.currentStreak);
+          modalStats.appendChild(streakEl);
+        }
+        if(result){
+          const beatenOpponent = await maybeShowChallengeBackButton(result.bestScore);
+          const challengeEl = document.createElement('button');
+          challengeEl.id = 'challengeFriendBtn';
+          challengeEl.style.cssText = 'margin-top:10px; width:100%; font-family:var(--body); font-weight:700; font-size:13px; padding:10px; border-radius:8px; border:1.5px solid #f2b705; background:#fff3d6; color:#5a4a1f; cursor:pointer;';
+          challengeEl.textContent = beatenOpponent
+            ? '⚔️ Bạn vừa vượt qua ' + (beatenOpponent.name||'đối thủ') + '! Thách đấu ngược lại'
+            : '⚔️ Thách đấu bạn bè bằng điểm này';
+          challengeEl.addEventListener('click', async ()=>{
+            try{ await navigator.clipboard.writeText(buildChallengeLink()); challengeEl.textContent = '✅ Đã copy link thách đấu!'; }
+            catch(e){}
+          });
+          modalStats.appendChild(challengeEl);
+        }
+        const html = await buildInlineLeaderboardHTML();
+        const lbEl = el('modalLB');
+        if(lbEl){ lbEl.innerHTML = html; scrollToMyRow(lbEl); }
+      });
+    } else {
+      const lbEl = el('modalLB');
+      if(lbEl) lbEl.innerHTML = '<div style="text-align:center;color:#999;font-size:12px;margin-top:6px;">Mở link chia sẻ của game để so tài với bạn bè trên bảng xếp hạng chung!</div>';
+    }
+  }
+
+  // Xử lý bị bắt khi đang "personal" và Sếp đã ở trong catchRadius. Tách riêng
+  // khỏi tick() để toggleMode() cũng gọi được: nếu Sếp đang gần sẵn khi người
+  // chơi CHỦ ĐỘNG bấm Tab sang personal, phải bắt ngay — không phải chỉ bắt
+  // lúc khoảng cách vừa tụt xuống dưới ngưỡng (xem lời gọi trong toggleMode()).
+  function catchPlayer(){
+    state.lives -= 1;
+    state.mode = 'work';
+    renderScreen();
+    flashEl.classList.remove('hit'); void flashEl.offsetWidth; flashEl.classList.add('hit');
+    monitorRig.classList.remove('shake'); void monitorRig.offsetWidth; monitorRig.classList.add('shake');
+    catchPopup.classList.remove('pop'); void catchPopup.offsetWidth; catchPopup.classList.add('pop');
+    setBossFace('angry');
+    bossAngryUntil = performance.now() + 1100;
+    showBossBubble(pick(SCOLD_LINES), 1300);
+    beep(140, 0.3, 'sawtooth', 0.09);
+    if(tutorialActive){
+      // Bước 3: người phỏng vấn thật đã nhầm "màn hình laptop hiện ra = bị
+      // bắt", trong khi thực chất laptop là do NGƯỜI CHƠI tự bấm Tab, còn bị
+      // bắt là do bấm TRỄ. Nói thẳng nguyên nhân — cause-and-effect — thay vì
+      // chỉ nhắc lại mẹo chung chung như hint cũ ở dưới.
+      showCoachmark('❌ Bị bắt vì chưa kịp bấm Tab trước khi Sếp vào 1m — không phải vì đổi màn hình', 5500);
+      markHintSeen(HINT_CATCH);
+    } else if(!hasSeenHint(HINT_CATCH)){
+      showCoachmark('💡 Mẹo: bấm Tab NGAY khi Sếp chạm mốc 1m, đừng đợi số về 0', 5500);
+      markHintSeen(HINT_CATCH);
+    }
+    if(state.lives <= 0){ endGame(false, 'caught'); }
+  }
+
+  function tick(now){
+    // "1 Sếp chung": host phải tiếp tục mô phỏng + Broadcast Sếp cho cả phòng
+    // NGAY CẢ SAU KHI chính host đã endGame() (state.running=false) — người
+    // khác trong phòng có thể vẫn đang chơi dở. Vì vậy khối này chạy TRƯỚC
+    // guard "!state.running" bên dưới, độc lập với vòng đời state của host.
+    if(roomMode === 'host' && boss){
+      const hostDt = Math.min(0.05, (now - (tick._lastHostTick || now))/1000);
+      tick._lastHostTick = now;
+      const hostElapsedForDifficulty = state ? state.elapsed : 0;
+
+      if(!boss.forced && hostElapsedForDifficulty >= boss.nextCheckAt){
+        forceCloseApproach();
+        scheduleNextCheck();
+      }
+      const dx = boss.target.x - boss.x, dy = boss.target.y - boss.y;
+      const dToTarget = Math.hypot(dx,dy);
+      if(dToTarget < 0.12){
+        pickAmbientTarget();
+      } else {
+        boss.x += (dx/dToTarget) * boss.speed * hostDt;
+        boss.y += (dy/dToTarget) * boss.speed * hostDt;
+      }
+
+      const allFinished = roomFinishedPlayerIds.size >= roomPlayerIds.length;
+      if(!allFinished){
+        const nowMs = performance.now();
+        if(nowMs - lastBroadcastAt >= 1000/CONFIG.roomBroadcastHz){
+          lastBroadcastAt = nowMs;
+          roomChannel.send({ type:'broadcast', event:'boss_state', payload:{
+            x: boss.x, y: boss.y, forced: boss.forced, targetPlayerId: currentTargetPlayerId,
+            finishedPlayerIds: Array.from(roomFinishedPlayerIds)
+          }});
+        }
+      }
+    }
+
+    if(!state.gameStarted || !state.running){ requestAnimationFrame(tick); return; }
+    if(roomMode === 'guest'){
+      window.__tickGaps = window.__tickGaps || [];
+      if(window.__lastTickAt) window.__tickGaps.push(Math.round(now - window.__lastTickAt));
+      window.__lastTickAt = now;
+      if(window.__tickGaps.length % 90 === 0){
+        const g = window.__tickGaps.slice(-90);
+        console.log('[debug tick gaps ms, last 90]', 'avg=', Math.round(g.reduce((a,b)=>a+b,0)/g.length), 'max=', Math.max(...g));
+      }
+    }
+    const dt = Math.min(0.05, (now - state.lastTick)/1000);
+    state.lastTick = now;
+    state.elapsed += dt;
+
+    if(state.mode === 'personal') state.personalTime += dt;
+
+    if(roomMode !== 'guest' && roomMode !== 'host'){
+      // Solo: mô phỏng y hệt trước đây (host đã tự chạy khối riêng ở trên).
+      // Tutorial ép bước 1: boss.forced=true chỉ khoá forceCloseApproach() gọi
+      // lại (chọn target MỚI), KHÔNG tự chặn việc trôi tới target hiện có —
+      // nên phải chặn di chuyển ở đây bằng tutorialActive riêng, cho tới khi
+      // toggleMode() mở khoá boss.forced=false (xem đó để biết thời điểm thả).
+      if(!(tutorialActive && boss.forced)){
+        if(!boss.forced && state.elapsed >= boss.nextCheckAt){
+          forceCloseApproach();
+          scheduleNextCheck();
+        }
+        const dx = boss.target.x - boss.x, dy = boss.target.y - boss.y;
+        const dToTarget = Math.hypot(dx,dy);
+        if(dToTarget < 0.12){
+          pickAmbientTarget();
+        } else {
+          boss.x += (dx/dToTarget) * boss.speed * dt;
+          boss.y += (dy/dToTarget) * boss.speed * dt;
+        }
+      }
+    }
+
+    // Guest: nội suy — boss.netX/netY là vị trí đích mới nhất từ broadcast
+    // (~15Hz), boss.x/y tiến dần tới đó mỗi frame (~60fps) thay vì giật
+    // sang thẳng, để chuyển động mượt tương đương host. Hệ số 12 nghĩa là
+    // "đuổi kịp" phần lớn khoảng cách trong ~1-2 lần broadcast — đủ nhanh để
+    // không bị trễ tay khi Sếp đổi hướng đột ngột, đủ mượt để không giật.
+    if(roomMode === 'guest' && boss.netX !== undefined){
+      const lerpFactor = Math.min(1, dt * 12);
+      boss.x += (boss.netX - boss.x) * lerpFactor;
+      boss.y += (boss.netY - boss.y) * lerpFactor;
+    }
+
+    const view = computeMyBossView();
+    bossDist = view.dist;
+    isMyTurnToBeAtRisk = view.isMyTurnToBeAtRisk;
+    updateBossPosition(view.dist, view.bx, view.by);
+    maybeFootstep(view.dist, state.elapsed);
+
+    // Điểm "thời gian chơi đúng" vẫn cộng dồn không điều kiện dù đang an toàn
+    // tuyệt đối hay không — để so sánh ngang hàng với điểm chơi solo (quyết
+    // định: không gate correctTime theo việc có đang bị nhắm hay không).
+    const isCorrect = (state.mode === 'work' && view.dist <= CONFIG.catchRadius) || (state.mode === 'personal' && view.dist > CONFIG.catchRadius);
+    if(isCorrect) state.correctTime += dt;
+
+    if(view.isMyTurnToBeAtRisk){
+      if(view.dist <= CONFIG.catchRadius && !boss.wasClose){
+        boss.wasClose = true;
+        if(state.mode === 'personal'){
+          catchPlayer();
+        } else {
+          beep(660, 0.1, 'sine', 0.03);
+          safePopup.textContent = pick(PRAISE_LINES);
+          safePopup.classList.remove('pop'); void safePopup.offsetWidth; safePopup.classList.add('pop');
+        }
+      } else if(view.dist > CONFIG.rearmRadius){
+        boss.wasClose = false;
+      }
+    }
+
+    updateHUD();
+
+    if(state.personalTime >= CONFIG.targetPersonalTime){ endGame(true); }
+    else if(state.elapsed >= CONFIG.matchDuration){ endGame(false, 'timeout'); }
+
+    requestAnimationFrame(tick);
+  }
+
+  window.addEventListener('keydown', (e)=>{
+    if(e.key === 'Tab'){ e.preventDefault(); toggleMode(); }
+  });
+  tabBtn.addEventListener('click', toggleMode);
+
+  startBtn.addEventListener('click', ()=>{
+    const nm = nameInput.value.trim();
+    if(nm) savePlayerName(nm);
+    if(sb){ ensurePlayerDoc(); }
+    if(pendingRoomInvite){
+      // Đã có lời mời phòng đang chờ (link ?room=<id>) — nút này giờ đóng
+      // vai trò "Vào phòng của X" thay vì bắt đầu solo, xem prepareRoomInvite().
+      joinExistingRoom(pendingRoomInvite.roomId);
+      return;
+    }
+    introScreen.classList.add('hide');
+    state.gameStarted = true;
+    state.lastTick = performance.now();
+    transitionPhase('game');
+    try{ if(!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){}
+
+    // Ván solo đầu tiên của trình duyệt này: giữ Sếp đứng yên xa (boss.forced
+    // = true chặn forceCloseApproach() tự nhiên trong tick()) cho đến khi
+    // người chơi tự bấm Tab ít nhất 1 lần — dạy bằng hành động thay vì chữ.
+    // roomMaxPlayers check không cần vì startBtn chỉ dẫn tới solo, không phải
+    // room (room đi qua joinExistingRoom ở nhánh pendingRoomInvite phía trên).
+    if(!hasSeenHint(HINT_TUTORIAL_DONE)){
+      tutorialActive = true;
+      tutorialProximityWarned = false;
+      boss.forced = true; // khoá forceCloseApproach() tự động trong tick()
+      // Mặc định mode ban đầu luôn là 'personal' (xem resetState()) — tận
+      // dụng đúng lúc đó để dạy bước 4 (ý nghĩa màn hình) GỘP LUÔN với bước 1
+      // (nút Tab dùng để làm gì), vì 2 sự thật này chỉ đúng đồng thời ở đây:
+      // đang xem phim + cần biết Tab để né Sếp sau này.
+      showCoachmark('🎬 Đây là màn "xem phim" của bạn. Lát Sếp lại gần, bấm TAB để đổi sang màn làm việc nhé!', 6000);
+    } else if(window.matchMedia('(max-width:480px)').matches && !hasSeenHint(HINT_TAB_BTN)){
+      // Màn hẹp (điện thoại) không có phím Tab vật lý — chỉ có nút bấm dưới
+      // màn hình, dễ bị bỏ sót lúc mới vào game. Chỉ dạy 1 lần duy nhất, chỉ
+      // trên màn hẹp, ngay khi bắt đầu ván đầu tiên (người chơi cũ đã qua
+      // tutorial ép ở trên rồi nên không hiện đè lên nhau).
+      showCoachmark('👇 Bấm nút này để đổi màn hình làm việc/riêng tư', 4000);
+      markHintSeen(HINT_TAB_BTN);
+    }
+  });
+
+  modalBtn.addEventListener('click', ()=>{
+    modal.classList.remove('show');
+    replayFab.classList.remove('show');
+    resetRoomModeForReplay();
+    resetState();
+    state.gameStarted = true;
+    renderScreen();
+    updateHUD();
+    transitionPhase('game');
+    requestAnimationFrame(tick);
+  });
+
+  showRecordLine();
+  resetState();
+  renderScreen();
+  updateHUD();
+  setBossFace('calm');
+  requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>
