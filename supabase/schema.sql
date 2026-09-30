@@ -426,6 +426,18 @@ grant execute on function increment_heatmap_weekly(text, text, jsonb) to anon, a
 -- được 100% việc gọi RPC lặp lại để "cày" điểm hợp lệ nhanh hơn chơi thật.
 -- Việc đó cần rate-limit hoặc xác thực server-side đầy đủ (giai đoạn sau).
 
+-- Lớp phòng thủ thứ 2 cho tên người chơi (lớp 1 là escapeHtml() ở client):
+-- bỏ control character (C0/C1), zero-width và ký tự đảo chiều bidi (dùng để
+-- giả mạo/ẩn tên trên leaderboard), rồi cắt khoảng trắng đầu/cuối.
+create or replace function sanitize_player_name(p_name text)
+returns text
+language sql
+immutable
+as $$
+  select btrim(regexp_replace(coalesce(p_name, ''),
+    '[\u0001-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]', '', 'g'));
+$$;
+
 -- Khởi tạo player lần đầu / chỉ đổi tên — KHÔNG cộng điểm (khác với
 -- submit_match_result). Tách riêng để không nhầm "vào game lần đầu" với
 -- "vừa chơi xong 1 ván 0 điểm" (2 việc khác nhau: cái trước không tăng
@@ -437,7 +449,8 @@ security definer
 set search_path = public
 as $$
 begin
-  if char_length(coalesce(p_name, '')) > 40 then
+  p_name := sanitize_player_name(p_name);
+  if char_length(p_name) > 40 then
     raise exception 'name too long';
   end if;
 
@@ -489,7 +502,8 @@ begin
   if p_score > p_play_time then
     raise exception 'score cannot exceed play_time: score=%, play_time=%', p_score, p_play_time;
   end if;
-  if char_length(coalesce(p_name, '')) > 40 then
+  p_name := sanitize_player_name(p_name);
+  if char_length(p_name) > 40 then
     raise exception 'name too long';
   end if;
 

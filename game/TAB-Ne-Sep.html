@@ -2434,7 +2434,7 @@
       unit.className = 'teammateUnit';
       unit.dataset.playerId = id;
       unit.style.transform = 'translate(calc(-50% + ' + px + 'px), calc(-50% + ' + py + 'px))';
-      unit.innerHTML = '<div class="tmScale" style="transform:translate(-50%,-50%) scale(' + tmScale + ')"><div class="tmMonitor"><div class="tmScreen"><div class="tmScreenInner"></div></div></div><div class="tmName">' + nameOf(id) + '</div></div>';
+      unit.innerHTML = '<div class="tmScale" style="transform:translate(-50%,-50%) scale(' + tmScale + ')"><div class="tmMonitor"><div class="tmScreen"><div class="tmScreenInner"></div></div></div><div class="tmName">' + escapeHtml(nameOf(id)) + '</div></div>';
       teammatesLayer.appendChild(unit);
       if(teammatePlayerStates[id]) updateTeammateScreen(id);
     });

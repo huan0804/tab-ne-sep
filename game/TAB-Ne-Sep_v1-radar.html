@@ -793,6 +793,13 @@
   }
 
   /* ---------- Leaderboard (localStorage) ---------- */
+  // Tên người chơi do client tự đặt (server không lọc HTML) — luôn escape trước khi nối vào innerHTML.
+  function escapeHtml(s){
+    const d = document.createElement('div');
+    d.textContent = s == null ? '' : String(s);
+    return d.innerHTML;
+  }
+
   function loadLeaderboard(){
     try{
       const total = parseFloat(localStorage.getItem('atd_total')||'0');
@@ -1053,7 +1060,7 @@
       const d = p.data; const mine = p.id === playerId;
       const meta = extraMeta ? (' · tốt nhất ' + (d.bestScore||0).toFixed(1) + 's') : '';
       return '<div class="lbRow'+(mine?' me':'')+'"><div class="lbRank">#'+(i+1)+'</div>'
-        + '<div><div class="lbName">'+(d.name||'Ẩn danh')+(mine?' (bạn)':'')+'</div><div class="lbMeta">'+(d.sessionCount||0)+' ván'+meta+'</div></div>'
+        + '<div><div class="lbName">'+escapeHtml(d.name||'Ẩn danh')+(mine?' (bạn)':'')+'</div><div class="lbMeta">'+(d.sessionCount||0)+' ván'+meta+'</div></div>'
         + '<div class="lbScore">'+(d.avgScore||0).toFixed(1)+'s</div></div>';
     }).join('') + '</div>';
     if(rank && rank > docs.length){
@@ -1109,7 +1116,7 @@
       const { rank, total } = await getPlayerRank(playerId);
       const rankText = rank ? '#'+rank+' / '+total+' người chơi' : 'Chưa xếp hạng';
       lbBody.innerHTML = '<div class="lbRow me"><div class="lbRank">'+(rank ? '#'+rank : '—')+'</div>'
-        + '<div><div class="lbName">'+(p.name||'Bạn')+'</div><div class="lbMeta">'+rankText+'</div></div>'
+        + '<div><div class="lbName">'+escapeHtml(p.name||'Bạn')+'</div><div class="lbMeta">'+rankText+'</div></div>'
         + '<div class="lbScore">'+(p.avgScore||0).toFixed(1)+'s</div></div>'
         + '<div class="stats-box" style="margin-top:10px;">'
         + '<div class="stats-row"><span>Tổng số ván đã chơi:</span><b>'+(p.sessionCount||0)+'</b></div>'
