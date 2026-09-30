@@ -2,11 +2,27 @@
 
 > File này ghi lại trạng thái dự án để tiếp tục ở phiên làm việc sau. Cập nhật mỗi khi có tiến triển lớn, dọn bớt phần đã lỗi thời để tránh phình to.
 
-## Trạng thái hiện tại (2026-09-23)
+## Trạng thái hiện tại (2026-09-23, phiên chiều)
 
-**Vừa vá thêm: stored XSS qua tên người chơi (chưa push, xem mục 0 bên dưới).** Phát hiện qua review bảo mật (đối chiếu OWASP Top 10, không dùng lại toàn bộ Playwright). Chưa cần chạy lại `schema.sql` cho fix này — chỉ sửa phía client.
+**✅ Đã chạy `schema.sql` thành công trên Supabase production** — việc ưu tiên cao nhất từ phiên trước đã xong. Verify: `select proname from pg_proc where proname in ('ensure_player','submit_match_result','start_room_match')` → đúng 3 dòng. Gặp 2 lỗi CHECK constraint chặn giữa chừng khi chạy, cả hai đã xử lý:
+- `players_avg_score_range` bị chặn bởi 1 dòng rác thật (id `06d8871f-...`, tên "tunnDavaoDa"): `avg_score≈1 tỷ`, `total_correct_time≈100 tỷ`, `best_score=30` (hợp lệ). Đây là dấu vết khai thác lỗ hổng RLS cũ (mục 1 dưới đây, `ff94716`) — sửa điểm trực tiếp qua REST trước khi RPC tồn tại. Đã reset dòng này về 0 (giữ lại id/tên, không xoá hẳn, để không phá liên kết `sessions.player_id` nếu có).
+- `sessions_score_range`/`sessions_play_time_range` (`<=65`) bị chặn bởi 10 dòng **thật, hợp lệ**: `play_time≈120s`, `created_at=2026-09-19` — đúng giai đoạn `CONFIG.matchDuration` còn là 120s trước khi rút xuống 60s cùng ngày. Khác hẳn trường hợp `players` (rác giả mạo) — đây là lịch sử thật, nên **nới biên lên 125** (120s + 5s buffer) thay vì xoá dữ liệu. Đã sửa trong `schema.sql`, đã push (`c22b732`).
 
-**⚠️ VIỆC QUAN TRỌNG NHẤT CẦN LÀM NGAY Ở PHIÊN SAU: chạy `schema.sql` trên Supabase SQL Editor production.** Code đã push (`ff94716`) nhưng RPC `ensure_player`/`submit_match_result`/`start_room_match` mới CHƯA tồn tại trên DB thật — cho tới khi chạy SQL, ghi điểm/tạo phòng trên production sẽ lỗi (fail gracefully, không crash UI, nhưng leaderboard/room không hoạt động). Sau khi chạy, verify bằng `select proname from pg_proc where proname in ('ensure_player','submit_match_result','start_room_match')` → phải ra đúng 3 dòng, rồi chơi thử 1 ván thật để xác nhận điểm lên leaderboard.
+**✅ Thêm coachmark bước 2 cho tutorial ép ván đầu** (`59c8cbe`, **CHƯA test tay thật**) — phát hiện qua test tay: coachmark bước 1 (lúc bắt đầu ván) tự ẩn sau 6s, thường trước khi Sếp thực sự lại gần; lúc đó người chơi chỉ còn `#hint` tĩnh ở cuối màn hình, quá xa tầm mắt đang dán vào Sếp/banner đỏ giữa màn hình. Thêm coachmark thứ 2 ngắn gọn ("🚨 Sếp lại gần rồi — bấm TAB ngay!"), hiện đúng 1 lần/ván tại đúng lúc banner "Sếp đang lại gần" bật lên, dùng lại hệ thống `#coachmark` có sẵn (gần đáy scene, trên nút Tab). **CẦN TEST Ở PHIÊN SAU**: xoá `localStorage.atd_tutorialDone`, chơi lại ván đầu, xác nhận coachmark hiện đúng lúc/đúng chỗ, không đè UI khác.
+
+**✅ (2026-09-30, đã commit; phần góc nhìn CHƯA test tay) Góc nhìn riêng mỗi người + sanitize tên RPC**:
+- `pickViewAngle()` (gọi đầu `resetState()`): mỗi ván bốc `viewRatio` ∈ [`viewTiltMin`,`viewTiltMax`]=[1.4,2.4] (độ dẹt vòng) và `viewRot` ∈ [0,2π) (hướng xoay Sếp/bàn đồng nghiệp quanh bàn mình). Ván tutorial đầu giữ góc gốc. Chỉ đổi cách VẼ (`worldToScreenPx`); `dist` vẫn = `hypot(bx, by*ellipseRatio)` nên bất biến theo góc nhìn, không cần đồng bộ giữa các máy.
+- `generateDeskLayout` chia `y` cho `ellipseRatio` để bàn nằm trên vòng tròn THẬT (mét thật = `y*ellipseRatio`). Ở góc gốc, vị trí bàn trên màn hình y hệt cũ. **Hệ quả cần biết**: Sếp giờ vẽ đúng vòng ứng với số mét (trước đây `py=by*mPxY` nhưng `dist` nhân y thêm 1.4 nên Sếp tiến theo chiều dọc bị tính "1m" khi còn ở ~0.71 vòng 1m trên hình). Gameplay/dist không đổi, chỉ hình Sếp đi dọc xa hơn 1.4×.
+- Verify: Playwright headless (ván tutorial vòng 1.4, ván thường ~2.0, không lỗi JS). **Chưa test room nhiều máy** — cần mở 2-3 tab kiểm tra bàn đồng nghiệp không chồng/không tràn màn ở mọi góc, đặc biệt mobile.
+- `sanitize_player_name()` trong `schema.sql` (bỏ control char, zero-width, bidi; áp trong `ensure_player` + `submit_match_result`). **✅ Đã chạy schema.sql trên production (2026-09-30), verify `select sanitize_player_name(E'  A<U+200B>B<U+202E>C<U+0007>D  ')` → `ABCD`.**
+- Vá thêm (cả `v1-radar`: leaderboard chưa escape tên): tên đồng nghiệp trong `renderTeammates()` (`tmName`) trước đây nối vào `innerHTML` không escape → đã bọc `escapeHtml()`.
+
+**Việc dở, chưa hoàn thành thêm (tương lai)**:
+- Rate-limit/xác thực server-side đầy đủ cho các RPC `submit_match_result` (hiện chỉ chặn giá trị vượt biên game, không chặn "cày điểm" bằng gọi RPC lặp lại hợp lệ).
+
+---
+
+**Vừa vá thêm: stored XSS qua tên người chơi.** Phát hiện qua review bảo mật (đối chiếu OWASP Top 10, không dùng lại toàn bộ Playwright).
 
 **Đã push lên GitHub, tất cả trên production tại `https://tab-ne-sep.vercel.app/play`:**
 
@@ -23,7 +39,6 @@
 **Đã xác nhận qua test thật trên điện thoại**: không còn tràn màn hình, nút Dừng rõ ràng, banner xoay ngang đã gỡ. **Chưa xác nhận**: lag khi chơi thật (vòng test trước có cải thiện nhưng chưa test lại sau các thay đổi mới nhất), bàn phím ở màn nhập tên, tutorial ép + monitor scale + RLS fix mới (2026-09-23) chưa có ai test tay thật trên điện thoại/production ngoài Playwright headless.
 
 **Việc dở, chưa hoàn thành**:
-- Chạy `schema.sql` trên Supabase production cho RLS fix (mục 1 ở trên) — ưu tiên cao nhất, làm trước mọi việc khác ở phiên sau.
 - Tích hợp Facebook Share Dialog (menu Messenger/WhatsApp/Nhóm...) — cần Facebook App ID, user bị lỗi xác minh số điện thoại đã gắn tài khoản Facebook chính, quyết định **bỏ qua**, giữ nguyên `sharer.php` hiện tại (vẫn hoạt động bình thường).
 - 2 dòng debug log cũ vẫn còn trong code (`[debug boss_state gaps]` ~dòng 1258, `[debug tick gaps]` ~dòng 2399) — chưa xoá, chờ xác nhận hết lag mới xoá.
 - **Canvas POC cho vùng field (vòng tròn khoảng cách)** — branch `canvas-poc` (commit `1efb0a3`, KHÔNG merge vào master). Đã chuyển 3 ring 1/2/3m từ DOM (`buildProxRings()`) sang `<canvas id="fieldCanvas">`, verify qua Playwright (render đúng desktop+mobile, không lỗi, room creation vẫn hoạt động). Benchmark đo được: frame time gameplay bình thường KHÔNG đổi (16.58ms vs 16.64ms, vì ring không vẽ lại mỗi frame) — chỉ nhanh hơn ở resize-storm (~0.27ms vs ~0.46ms, không đáng kể). **Khuyến nghị: không đáng merge ở scope hiện tại** — làm nửa vời (chỉ ring) không giải quyết dứt điểm lớp bug "đồng bộ tay nhiều nguồn toạ độ" (đã xảy ra 2 lần: `#monitor` và `.teammateUnit`), muốn giải quyết triệt để phải chuyển cả Sếp + bàn đồng nghiệp sang canvas, chi phí viết lại lớn hơn nhiều. Giữ branch lại để **user tự test tay các phiên tới** trước khi quyết định merge/xoá hẳn.

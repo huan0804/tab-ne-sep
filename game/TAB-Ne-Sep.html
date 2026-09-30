@@ -642,6 +642,12 @@
     difficultyRampSeconds: 40,
     fieldRangeMeters: 3, // outermost distance ellipse drawn = this many meters
     ellipseRatio: 1.4, // X:Y — how flattened the proximity field is (floor-plan tilt)
+    // Mỗi ván mỗi người bốc ngẫu nhiên 1 góc nhìn riêng (độ dẹt vòng + hướng
+    // xoay của Sếp/đồng nghiệp quanh bàn mình). Chỉ đổi cách VẼ — khoảng cách
+    // thật (computeMyBossView().dist) tính trên sàn thật nên không đổi theo
+    // góc nhìn. Sàn 1.4 = đúng ellipseRatio gốc (không bao giờ ít dẹt hơn
+    // hiện tại, vì vòng ngoài đã bị cắt bởi chiều cao scene).
+    viewTiltMin: 1.4, viewTiltMax: 2.4,
     // ---- Chơi cùng bạn: 1 Sếp chung (Bước 2) ----
     // roomDeskMaxRadius là bán kính rải bàn quanh 1 tâm chung — mỗi người
     // luôn là tâm màn hình CỦA CHÍNH HỌ (field 3m quanh họ), nên khoảng cách
@@ -692,13 +698,43 @@
 
   // px-per-meter on the X axis, sized so the outermost ring nearly reaches the
   // side columns. Recomputed on load/resize since it depends on scene width.
-  let metersToPxX = 90, metersToPxY = metersToPxX / CONFIG.ellipseRatio;
+  // viewRatio/viewRot: góc nhìn riêng của người chơi này ở ván hiện tại (xem
+  // pickViewAngle()). Mặc định = góc gốc (ratio 1.4, không xoay).
+  let viewRatio = CONFIG.ellipseRatio, viewRot = 0;
+  let metersToPxX = 90, metersToPxY = metersToPxX / viewRatio;
   function recomputeFieldScale(){
     const sceneW = sceneEl.clientWidth;
     const usableHalfWidth = sceneW * 0.42; // leave the side columns clear
     metersToPxX = Math.max(50, usableHalfWidth / CONFIG.fieldRangeMeters);
-    metersToPxY = metersToPxX / CONFIG.ellipseRatio;
+    metersToPxY = metersToPxX / viewRatio;
     sizeMonitorToField();
+  }
+
+  // Đổi vector lệch trong toạ độ game (dx, dy — cùng hệ với boss.x/y và
+  // deskLayout) sang pixel trên màn hình THEO GÓC NHÌN CỦA MÌNH. dy nhân
+  // ellipseRatio để về mét thật trên sàn (đúng công thức dist ở
+  // computeMyBossView), xoay theo viewRot, rồi chiếu xuống màn hình bằng
+  // đúng tỉ lệ dẹt viewRatio mà các vòng đang dùng → Sếp/bàn đồng nghiệp luôn
+  // nằm đúng vòng mà số mét hiển thị nói, ở mọi góc nhìn.
+  function worldToScreenPx(dx, dy){
+    const tz = dy * CONFIG.ellipseRatio;
+    const c = Math.cos(viewRot), s = Math.sin(viewRot);
+    return { px: (dx*c - tz*s) * metersToPxX, py: (dx*s + tz*c) * metersToPxY };
+  }
+
+  // Bốc góc nhìn mới cho ván này, rồi vẽ lại vòng + đồng nghiệp theo góc đó.
+  // Ván tutorial đầu tiên giữ góc gốc để hình minh hoạ hướng dẫn không đổi.
+  function pickViewAngle(){
+    if(hasSeenHint(HINT_TUTORIAL_DONE)){
+      viewRatio = CONFIG.viewTiltMin + Math.random() * (CONFIG.viewTiltMax - CONFIG.viewTiltMin);
+      viewRot = Math.random() * Math.PI * 2;
+    } else {
+      viewRatio = CONFIG.ellipseRatio;
+      viewRot = 0;
+    }
+    metersToPxY = metersToPxX / viewRatio;
+    buildProxRings();
+    if(roomMode !== 'solo') renderTeammates();
   }
 
   // #monitor trước đây có kích thước cố định bằng CSS clamp()/cqw, hoàn toàn
@@ -2148,12 +2184,17 @@
     playerIds.forEach((id, i) => {
       const ang = n <= 1 ? 0 : i * (2*Math.PI/n) + rand(-jitterA, jitterA);
       const r = n <= 1 ? 0 : neededR + rand(-jitterR, jitterR);
-      layout[id] = { x: Math.cos(ang) * r, y: Math.sin(ang) * r };
+      // y chia ellipseRatio vì toạ độ game có y "nén" (mét thật của y = y ×
+      // ellipseRatio, xem computeMyBossView/worldToScreenPx) — nhờ vậy các bàn
+      // nằm trên vòng tròn THẬT bán kính r mét, khoảng cách tối thiểu/tối đa
+      // giữa 2 bàn đúng bằng số đã thiết kế ở mọi góc nhìn.
+      layout[id] = { x: Math.cos(ang) * r, y: Math.sin(ang) * r / CONFIG.ellipseRatio };
     });
     return layout;
   }
 
   function resetState(){
+    pickViewAngle();
     state = { mode:'personal', lives: CONFIG.maxLives, personalTime:0, correctTime:0, elapsed:0, running:true, gameStarted:false, lastTick: performance.now(),
       workTheme: pick(WORK_THEMES), personalTheme: pick(PERSONAL_THEMES) };
     state.workData = genWorkData(state.workTheme);
@@ -2428,8 +2469,7 @@
     Object.keys(deskLayout).forEach(id => {
       if(id === playerId) return;
       const desk = deskLayout[id];
-      const px = (desk.x - myDesk.x) * metersToPxX;
-      const py = (desk.y - myDesk.y) * metersToPxY;
+      const { px, py } = worldToScreenPx(desk.x - myDesk.x, desk.y - myDesk.y);
       const unit = document.createElement('div');
       unit.className = 'teammateUnit';
       unit.dataset.playerId = id;
@@ -2457,8 +2497,7 @@
      (used for catch-radius/rearm logic and the number shown) always matches
      exactly which drawn ring the boss visually stands on. ---------- */
   function updateBossPosition(dist, bx, by){
-    const px = bx * metersToPxX;
-    const py = by * metersToPxY;
+    const { px, py } = worldToScreenPx(bx, by);
     // 2 transform tách riêng thay vì 'calc(-50% + Npx)' gộp chung: offset
     // -50% cố định giữ nguyên, chỉ phần translate3d(px,py,0) đổi mỗi frame
     // — tránh buộc trình duyệt parse lại chuỗi calc() 60 lần/giây.
