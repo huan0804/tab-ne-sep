@@ -2154,6 +2154,7 @@
 
   let state, boss;
   let bossDist = Infinity; // khoảng cách Sếp mới nhất, cập nhật mỗi tick — dùng lại khi toggleMode() cần kiểm tra bắt ngay
+  let prevBossForced = false; // phát hiện thời điểm Sếp BẮT ĐẦU 1 lần áp sát mới (xem tick())
   let isMyTurnToBeAtRisk = true; // xem computeMyBossView() — solo luôn true, phòng chung chỉ true khi mình là target
 
   /* ---------- "1 Sếp chung": tâm quy chiếu cho AI Sếp ----------
@@ -2289,7 +2290,9 @@
     }
     const t = difficultyT();
     const ang = rand(0, Math.PI*2);
-    const dist = rand(CONFIG.checkTargetMin, CONFIG.checkTargetMax);
+    // checkTarget* là khoảng cách THẬT (mét); toạ độ game có y nén nên chia cho
+    // hệ số elip — nếu không, đích hướng dọc có thể nằm ngoài catchRadius.
+    const dist = rand(CONFIG.checkTargetMin, CONFIG.checkTargetMax) / Math.hypot(Math.cos(ang), Math.sin(ang)*CONFIG.ellipseRatio);
     boss.target = { x: anchor.x + Math.cos(ang)*dist, y: anchor.y + Math.sin(ang)*dist };
     const sr = [lerp(CONFIG.speedCheckStart[0],CONFIG.speedCheckEnd[0],t), lerp(CONFIG.speedCheckStart[1],CONFIG.speedCheckEnd[1],t)];
     boss.speed = rand(sr[0], sr[1]);
@@ -2771,6 +2774,10 @@
     if(isCorrect) state.correctTime += dt;
 
     if(view.isMyTurnToBeAtRisk){
+      // Sếp vừa bắt đầu áp sát mới mà đang ngoài catchRadius: nạp lại ngay, không
+      // chờ ra tới rearmRadius — Sếp bị kéo vào lần áp sát kế tiếp quá nhanh nên
+      // hiếm khi kịp ra xa 1.8m, khiến ~40% lần áp sát không tính là mối đe doạ.
+      if(boss.forced && !prevBossForced && view.dist > CONFIG.catchRadius) boss.wasClose = false;
       if(view.dist <= CONFIG.catchRadius && !boss.wasClose){
         boss.wasClose = true;
         if(state.mode === 'personal'){
@@ -2785,6 +2792,7 @@
       }
     }
 
+    prevBossForced = boss.forced;
     updateHUD();
 
     if(state.personalTime >= CONFIG.targetPersonalTime){ endGame(true); }
