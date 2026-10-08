@@ -231,6 +231,7 @@
   .modalCloseX{position:absolute; top:10px; right:10px; width:30px; height:30px; border-radius:50%; border:none; background:#eee2; background:rgba(0,0,0,0.06); color:#555; font-size:15px; cursor:pointer; display:flex; align-items:center; justify-content:center; line-height:1;}
   .modalCloseX:hover{background:rgba(0,0,0,0.12);}
   .lbInviteRowSmall{display:grid; grid-template-columns:repeat(4,1fr); gap:6px; margin-top:8px;}
+  #homeBtn{display:block; margin:10px auto 0; background:none; border:none; font-family:var(--body); font-size:13px; font-weight:700; color:#8a6d1f; text-decoration:underline; cursor:pointer; padding:6px;}
   #replayFab{position:absolute; bottom:70px; right:16px; z-index:45; width:56px; height:56px; border-radius:50%; border:none; background:#c1272d; color:#fff; font-size:22px; cursor:pointer; box-shadow:0 8px 20px rgba(193,39,45,0.5); display:none; align-items:center; justify-content:center;}
   #replayFab.show{display:flex;}
   #modalCard h2{ font-family:var(--display); font-size:24px; margin:0 0 8px; }
@@ -610,6 +611,7 @@
       <div class="bossPhotoRow"><img class="bossPhotoThumb" alt=""><button type="button" class="bossPhotoBtn">📷 Thêm ảnh Sếp</button><button type="button" class="bossPhotoClear" title="Xoá ảnh Sếp">🗑️</button></div>
       <div class="bossPhotoMsg"></div>
       <button id="modalBtn">Chơi lại</button>
+      <button id="homeBtn">🏠 Về trang chủ (chọn Solo / Chơi nhóm)</button>
     </div>
   </div>
 
@@ -2963,6 +2965,21 @@
     updateHUD();
     transitionPhase('game');
     requestAnimationFrame(tick);
+  });
+
+  // Về màn hình đầu (chọn Solo / Tạo phòng / đổi ảnh Sếp) thay vì bắt buộc vào
+  // lại ván solo như "Chơi lại". Rời phòng chung nếu đang ở trong phòng, và
+  // dựng lại state sạch để nút Bắt Đầu / Tạo phòng ở màn đầu chạy như lần đầu.
+  el('homeBtn').addEventListener('click', ()=>{
+    modal.classList.remove('show');
+    replayFab.classList.remove('show');
+    resetRoomModeForReplay();
+    resetState();
+    renderScreen();
+    updateHUD();
+    transitionPhase('intro');
+    introScreen.classList.remove('hide');
+    showRecordLine();
   });
 
   showRecordLine();
