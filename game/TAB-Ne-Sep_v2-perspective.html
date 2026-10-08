@@ -338,6 +338,15 @@
   @keyframes pulseBtn{ 0%,100%{transform:scale(1);} 50%{transform:scale(1.045);} }
 
   /* ---------- Chơi cùng bạn: tạo/vào phòng, màn chờ ---------- */
+  .bossPhotoRow{display:flex; align-items:center; justify-content:center; gap:8px; margin:10px auto 0;}
+  .bossPhotoThumb{display:none; width:34px; height:34px; border-radius:50%; object-fit:cover; border:2px solid #55483a;}
+  .bossPhotoRow.has .bossPhotoThumb{display:block;}
+  .bossPhotoBtn, .bossPhotoClear{font-family:var(--body); font-weight:700; font-size:12.5px; padding:7px 12px; border-radius:10px; border:1.5px solid #8a6d1f; background:#fff; color:#8a6d1f; cursor:pointer;}
+  .bossPhotoClear{display:none; border-color:#aaa; color:#777;}
+  .bossPhotoRow.has .bossPhotoClear{display:inline-block;}
+  .bossPhotoMsg{text-align:center; font-size:11px; color:#8a6d1f; margin-top:4px; min-height:14px;}
+  #bossFaceSvgWrap img.bossPhoto{width:100%; height:100%; object-fit:cover; display:block;}
+  #bossFaceCard.angry img.bossPhoto{filter:saturate(1.8) contrast(1.1) sepia(0.35) hue-rotate(-35deg);}
   #createRoomBtn{display:block; margin:10px auto 0; font-family:var(--body); font-weight:700; font-size:13px; padding:9px 16px; border-radius:10px; border:1.5px solid #2563eb; background:#fff; color:#2563eb; cursor:pointer;}
   #roomWaitScreen{position:absolute; inset:0; z-index:80; display:none; align-items:center; justify-content:center; background:rgba(20,18,30,0.86); padding:16px;}
   #roomWaitScreen.show{display:flex;}
@@ -444,6 +453,7 @@
 </head>
 <body>
 <div id="stage">
+  <input type="file" id="bossPhotoInput" accept="image/*" hidden>
 
   <div id="introScreen">
     <div id="introCard">
@@ -459,6 +469,8 @@
       <div id="recordLine"></div>
       <button id="startBtn">▶️ Bắt Đầu Chơi</button>
       <button id="createRoomBtn">👥 Chơi cùng bạn (tạo phòng)</button>
+      <div class="bossPhotoRow"><img class="bossPhotoThumb" alt=""><button type="button" class="bossPhotoBtn">📷 Thêm ảnh Sếp</button><button type="button" class="bossPhotoClear" title="Xoá ảnh Sếp">🗑️</button></div>
+      <div class="bossPhotoMsg"></div>
       <button id="howToPlayToggle">❓ Xem cách chơi chi tiết</button>
       <div class="introSteps" id="introSteps">
         <div class="introStep"><div class="stepNum">1</div><div class="stepIcon">📺</div><div class="stepText">Màn hình của bạn đang chiếu <b>phim vui</b>. Càng xem lâu, bạn càng được điểm cao!</div></div>
@@ -595,6 +607,8 @@
       </div>
       <div id="mShareToast" style="text-align:center; font-size:11px; color:#8a6d1f; margin-top:6px; min-height:14px;"></div>
       <div id="adSlot" class="ad-slot"></div>
+      <div class="bossPhotoRow"><img class="bossPhotoThumb" alt=""><button type="button" class="bossPhotoBtn">📷 Thêm ảnh Sếp</button><button type="button" class="bossPhotoClear" title="Xoá ảnh Sếp">🗑️</button></div>
+      <div class="bossPhotoMsg"></div>
       <button id="modalBtn">Chơi lại</button>
     </div>
   </div>
@@ -910,12 +924,105 @@
       + '</svg>';
   }
   let bossAngryUntil = 0;
+
+  /* ---------- Ảnh Sếp tự chọn ----------
+     Chỉ lưu cục bộ (localStorage, JPEG vuông 192px ~10-15KB), KHÔNG tải lên
+     server và KHÔNG đồng bộ qua phòng chung: mỗi người tự thấy ảnh Sếp mình
+     chọn trên màn hình của chính mình. Thay phần MẶT trong vòng tròn; biểu
+     cảm calm/alert/angry vẫn thể hiện qua viền/rung/đỏ của #bossFaceCard. */
+  const BOSS_PHOTO_KEY = 'atd_bossPhoto';
+  const BOSS_PHOTO_SIZE = 192, BOSS_PHOTO_MAX_BYTES = 15 * 1024 * 1024;
+  let bossPhotoUrl = null;
+  try{ bossPhotoUrl = localStorage.getItem(BOSS_PHOTO_KEY) || null; }catch(e){}
+  // Giá trị này đi thẳng vào img.src — chỉ nhận đúng dạng do chính mình tạo ra
+  // (localStorage có thể bị sửa tay).
+  if(bossPhotoUrl && !/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(bossPhotoUrl)) bossPhotoUrl = null;
+
+  let lastBossFaceKey = null, lastBossFaceState = 'calm';
   function setBossFace(state){
-    bossFaceSvgWrap.innerHTML = bossFace(state);
+    lastBossFaceState = state;
     bossFaceCard.classList.toggle('angry', state==='angry');
     bossFaceCard.classList.toggle('alert', state==='alert');
     bossFaceCard.classList.toggle('calm', state==='calm');
+    // Được gọi mỗi tick — chỉ dựng lại nội dung khi trạng thái/ảnh thật sự đổi
+    // (đặc biệt với <img>, tránh nháy và decode lại mỗi frame).
+    const key = bossPhotoUrl ? 'photo' : state;
+    if(key === lastBossFaceKey) return;
+    lastBossFaceKey = key;
+    if(bossPhotoUrl){
+      const img = new Image();
+      img.className = 'bossPhoto'; img.alt = ''; img.src = bossPhotoUrl;
+      bossFaceSvgWrap.textContent = '';
+      bossFaceSvgWrap.appendChild(img);
+    } else {
+      bossFaceSvgWrap.innerHTML = bossFace(state);
+    }
   }
+
+  const bossPhotoInput = el('bossPhotoInput');
+  let bossPhotoMsgTimer = null;
+  function showBossPhotoMsg(msg){
+    document.querySelectorAll('.bossPhotoMsg').forEach(m => m.textContent = msg);
+    clearTimeout(bossPhotoMsgTimer);
+    bossPhotoMsgTimer = setTimeout(()=>refreshBossPhotoUI(), 4000);
+  }
+  function refreshBossPhotoUI(){
+    document.querySelectorAll('.bossPhotoRow').forEach(row => {
+      row.classList.toggle('has', !!bossPhotoUrl);
+      row.querySelector('.bossPhotoBtn').textContent = bossPhotoUrl ? '📷 Đổi ảnh Sếp' : '📷 Thêm ảnh Sếp';
+      const th = row.querySelector('.bossPhotoThumb');
+      if(bossPhotoUrl) th.src = bossPhotoUrl; else th.removeAttribute('src');
+    });
+    document.querySelectorAll('.bossPhotoMsg').forEach(m => {
+      m.textContent = bossPhotoUrl ? '' : 'Ảnh chỉ lưu trên máy bạn, không tải lên đâu cả.';
+    });
+    lastBossFaceKey = null;
+    setBossFace(lastBossFaceState);
+  }
+  // Cắt vuông ở giữa + thu nhỏ — giữ dung lượng lưu trữ nhỏ dù ảnh gốc là ảnh chụp lớn.
+  function fileToBossPhoto(file){
+    return new Promise((resolve, reject)=>{
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = ()=>{
+        try{
+          const c = document.createElement('canvas');
+          c.width = c.height = BOSS_PHOTO_SIZE;
+          const ctx = c.getContext('2d');
+          const m = Math.min(img.naturalWidth, img.naturalHeight);
+          ctx.fillStyle = '#2a2118'; ctx.fillRect(0, 0, BOSS_PHOTO_SIZE, BOSS_PHOTO_SIZE);
+          ctx.drawImage(img, (img.naturalWidth-m)/2, (img.naturalHeight-m)/2, m, m, 0, 0, BOSS_PHOTO_SIZE, BOSS_PHOTO_SIZE);
+          resolve(c.toDataURL('image/jpeg', 0.85));
+        }catch(err){ reject(err); }
+        finally{ URL.revokeObjectURL(url); }
+      };
+      img.onerror = ()=>{ URL.revokeObjectURL(url); reject(new Error('decode')); };
+      img.src = url;
+    });
+  }
+  document.querySelectorAll('.bossPhotoBtn').forEach(b => b.addEventListener('click', ()=>bossPhotoInput.click()));
+  document.querySelectorAll('.bossPhotoClear').forEach(b => b.addEventListener('click', ()=>{
+    bossPhotoUrl = null;
+    try{ localStorage.removeItem(BOSS_PHOTO_KEY); }catch(e){}
+    refreshBossPhotoUI();
+  }));
+  bossPhotoInput.addEventListener('change', async ()=>{
+    const file = bossPhotoInput.files && bossPhotoInput.files[0];
+    bossPhotoInput.value = ''; // cho phép chọn lại đúng file đó lần sau
+    if(!file) return;
+    if(!file.type.startsWith('image/')){ showBossPhotoMsg('⚠️ Vui lòng chọn file ảnh.'); return; }
+    if(file.size > BOSS_PHOTO_MAX_BYTES){ showBossPhotoMsg('⚠️ Ảnh quá lớn (tối đa 15MB).'); return; }
+    try{
+      bossPhotoUrl = await fileToBossPhoto(file);
+    }catch(e){
+      showBossPhotoMsg('⚠️ Không đọc được ảnh này, thử ảnh JPG/PNG khác.');
+      return;
+    }
+    let saved = true;
+    try{ localStorage.setItem(BOSS_PHOTO_KEY, bossPhotoUrl); }catch(e){ saved = false; }
+    refreshBossPhotoUI();
+    if(!saved) showBossPhotoMsg('Đã dùng ảnh, nhưng không lưu được — mở lại game sẽ mất.');
+  });
 
   const SCOLD_LINES = [
     'Làm gì đó?? Xem phim giờ làm à?!',
@@ -2862,6 +2969,7 @@
   resetState();
   renderScreen();
   updateHUD();
+  refreshBossPhotoUI();
   setBossFace('calm');
   requestAnimationFrame(tick);
 })();
