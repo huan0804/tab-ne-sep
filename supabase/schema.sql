@@ -664,3 +664,572 @@ on conflict (id) do update set
   avg_score = excluded.avg_score,
   best_score = excluded.best_score,
   total_play_time = excluded.total_play_time;
+
+-- ============================================================
+-- 5. HARDENING (2026-10) — xác thực chủ sở hữu, rate-limit, validate đầu vào
+-- ============================================================
+-- Bối cảnh: không có Supabase Auth, publishable key nằm công khai trong HTML,
+-- và cột players.id hiển thị công khai (leaderboard) → mô hình cũ "playerId là
+-- danh tính" cho phép BẤT KỲ AI chỉ cần biết id của người khác là đổi được
+-- tên, đẩy điểm, cướp quyền host phòng của họ. Mục này đóng các lỗ hổng đó:
+--   5.1 Secret theo từng người chơi: client sinh chuỗi ngẫu nhiên 256-bit lưu
+--       trong localStorage, gửi kèm mỗi RPC ghi; server chỉ lưu SHA-256 của nó
+--       (bảng player_secrets, không ai đọc được qua API). Người đầu tiên gửi
+--       secret cho 1 id sẽ "chiếm" id đó; từ đó chỉ đúng secret mới ghi được.
+--       Hạn chế đã biết: các dòng players CŨ (trước khi có secret) chưa có chủ —
+--       ai gọi RPC với id đó TRƯỚC khi chủ thật quay lại sẽ chiếm được.
+--   5.2 Rate-limit theo IP (header của PostgREST) và theo người chơi.
+--   5.3 Validate chặt đầu vào các RPC analytics (trước đây nhận text/jsonb tự
+--       do → tạo vô hạn dòng, JSON phình vô hạn, đầu độc số liệu trung bình).
+--   5.4 Điểm số bị chặn theo THỜI GIAN THỰC (play_time ≤ thời gian thật đã
+--       trôi qua kể từ lần ghi trước/lần vào game) → không "cày" điểm bằng
+--       cách gọi RPC dồn dập; streak do server kẹp, không tin client.
+--   5.5 Đóng đường ghi trực tiếp: bỏ policy INSERT của sessions/rooms (chuyển
+--       sang RPC), thu hồi quyền ghi bảng của anon/authenticated.
+
+alter table players add column if not exists last_submit_at timestamptz;
+
+-- Bảng bí mật: bật RLS và KHÔNG có policy nào → anon/authenticated không đọc
+-- hay ghi được; chỉ hàm security definer bên dưới truy cập.
+create table if not exists player_secrets (
+  player_id text primary key references players(id) on delete cascade,
+  secret_hash text not null,
+  created_at timestamptz not null default now()
+);
+alter table player_secrets enable row level security;
+revoke all on player_secrets from anon, authenticated;
+
+-- Bộ đếm rate-limit. unlogged: không cần bền, nhanh hơn, mất khi crash cũng không sao.
+create unlogged table if not exists rate_limits (
+  key text primary key,
+  window_start timestamptz not null,
+  hits integer not null
+);
+alter table rate_limits enable row level security;
+revoke all on rate_limits from anon, authenticated;
+
+-- ---------- helper nội bộ (KHÔNG cấp quyền cho anon) ----------
+create or replace function client_ip()
+returns text
+language plpgsql
+stable
+as $$
+declare
+  h json;
+  ip text;
+begin
+  begin
+    h := current_setting('request.headers', true)::json;
+  exception when others then
+    return null;
+  end;
+  if h is null then return null; end if;
+  ip := coalesce(nullif(h->>'cf-connecting-ip', ''), nullif(split_part(coalesce(h->>'x-forwarded-for', ''), ',', 1), ''));
+  return nullif(btrim(ip), '');
+end;
+$$;
+
+-- Tăng bộ đếm cho khoá p_key; vượt p_max trong cửa sổ p_window thì từ chối.
+-- Lưu ý: khi RAISE, cả transaction rollback nên lần bị từ chối không làm tăng
+-- bộ đếm — số lần được chấp nhận trong 1 cửa sổ không bao giờ vượt p_max.
+create or replace function rate_limit(p_key text, p_max integer, p_window interval)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_hits integer;
+begin
+  if random() < 0.02 then
+    delete from rate_limits where window_start < now() - interval '1 day';
+  end if;
+  insert into rate_limits (key, window_start, hits) values (p_key, now(), 1)
+  on conflict (key) do update set
+    hits = case when rate_limits.window_start < now() - p_window then 1 else rate_limits.hits + 1 end,
+    window_start = case when rate_limits.window_start < now() - p_window then now() else rate_limits.window_start end
+  returning hits into v_hits;
+  if v_hits > p_max then
+    raise exception 'rate limit exceeded' using errcode = 'P0001';
+  end if;
+end;
+$$;
+
+-- Rate-limit theo IP — bỏ qua nếu không đọc được IP (tránh nhốt chung mọi người
+-- vào 1 bộ đếm 'unknown').
+create or replace function rate_limit_ip(p_fn text, p_max integer, p_window interval)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_ip text := client_ip();
+begin
+  if v_ip is not null then
+    perform rate_limit('ip:' || v_ip || ':' || p_fn, p_max, p_window);
+  end if;
+end;
+$$;
+
+-- Xác thực chủ sở hữu playerId bằng secret (xem 5.1). Dòng players PHẢI đã
+-- tồn tại (khoá ngoại) — các RPC gọi hàm này sau khi đã đảm bảo có dòng.
+create or replace function player_auth(p_id text, p_secret text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_hash text;
+  v_stored text;
+begin
+  if p_id is null or p_id !~ '^[A-Za-z0-9_-]{6,64}$' or p_id like 'seed\_%' then
+    raise exception 'invalid player id' using errcode = '22023';
+  end if;
+  if p_secret is null or p_secret !~ '^[A-Za-z0-9]{32,128}$' then
+    raise exception 'invalid secret' using errcode = '22023';
+  end if;
+  if exists (select 1 from players where id = p_id and is_seed) then
+    raise exception 'forbidden' using errcode = '42501';
+  end if;
+  v_hash := encode(sha256(convert_to(p_secret, 'UTF8')), 'hex');
+  insert into player_secrets (player_id, secret_hash) values (p_id, v_hash)
+  on conflict (player_id) do nothing;
+  select secret_hash into v_stored from player_secrets where player_id = p_id;
+  if v_stored is distinct from v_hash then
+    raise exception 'forbidden' using errcode = '42501';
+  end if;
+end;
+$$;
+
+-- Tên người chơi: ngoài control/zero-width/bidi, bỏ luôn < > — lớp phòng thủ
+-- sâu thứ 3 chống HTML injection ngay từ nguồn (lớp 1 là escapeHtml() ở client).
+create or replace function sanitize_player_name(p_name text)
+returns text
+language sql
+immutable
+as $$
+  select btrim(regexp_replace(coalesce(p_name, ''),
+    '[\u0001-\u001f\u007f-\u009f​-‏‪-‮⁠-⁩﻿<>]', '', 'g'));
+$$;
+
+-- Kiểm tra JSON heatmap: lưới 10x10 nên khoá chỉ dạng "c_r" với c,r ∈ 0..9,
+-- tối đa 100 khoá, mỗi giá trị là số nguyên không âm ≤ 6 chữ số.
+create or replace function validate_heatmap_buckets(p_buckets jsonb)
+returns void
+language plpgsql
+immutable
+as $$
+declare
+  r record;
+begin
+  if p_buckets is null or jsonb_typeof(p_buckets) <> 'object' then
+    raise exception 'invalid buckets' using errcode = '22023';
+  end if;
+  if (select count(*) from jsonb_object_keys(p_buckets)) > 100 then
+    raise exception 'too many buckets' using errcode = '22023';
+  end if;
+  for r in select key, value from jsonb_each(p_buckets) loop
+    if r.key !~ '^[0-9]_[0-9]$' or jsonb_typeof(r.value) <> 'number' or r.value::text !~ '^[0-9]{1,6}$' then
+      raise exception 'invalid bucket entry' using errcode = '22023';
+    end if;
+  end loop;
+end;
+$$;
+
+-- Khoá ngày/tuần phải đúng định dạng VÀ nằm sát thời điểm hiện tại (giờ VN) —
+-- không cho tạo dòng cho ngày/tuần tuỳ ý.
+create or replace function validate_date_key(p_key text)
+returns void
+language plpgsql
+stable
+as $$
+declare
+  v_today date := (now() at time zone 'Asia/Ho_Chi_Minh')::date;
+begin
+  if p_key is null or p_key !~ '^\d{4}-\d{2}-\d{2}$' then
+    raise exception 'invalid date_key' using errcode = '22023';
+  end if;
+  begin
+    if abs(p_key::date - v_today) > 1 then
+      raise exception 'date_key out of range' using errcode = '22023';
+    end if;
+  exception when datetime_field_overflow or invalid_datetime_format then
+    raise exception 'invalid date_key' using errcode = '22023';
+  end;
+end;
+$$;
+
+create or replace function validate_week_key(p_key text)
+returns void
+language plpgsql
+stable
+as $$
+declare
+  v_year integer := extract(year from (now() at time zone 'Asia/Ho_Chi_Minh'))::integer;
+begin
+  if p_key is null or p_key !~ '^\d{4}-W\d{2}$' then
+    raise exception 'invalid week_key' using errcode = '22023';
+  end if;
+  if abs(substr(p_key, 1, 4)::integer - v_year) > 1 or substr(p_key, 7, 2)::integer not between 1 and 53 then
+    raise exception 'week_key out of range' using errcode = '22023';
+  end if;
+end;
+$$;
+
+create or replace function validate_duration_ms(p_ms double precision)
+returns void
+language plpgsql
+immutable
+as $$
+begin
+  if p_ms is null or p_ms = 'NaN'::double precision or p_ms < 0 or p_ms > 3600000 then
+    raise exception 'invalid duration' using errcode = '22023';
+  end if;
+end;
+$$;
+
+-- ---------- 5.3 RPC analytics: cùng chữ ký cũ, thêm validate + rate-limit ----------
+create or replace function increment_access_hour(p_hour int)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  col text := 'h' || p_hour::text;
+begin
+  perform rate_limit_ip('analytics', 600, interval '1 minute');
+  if p_hour is null or p_hour < 0 or p_hour > 23 then
+    raise exception 'invalid hour: %', p_hour;
+  end if;
+  execute format('update analytics_access_hours set %I = %I + 1, total = total + 1 where id = 1', col, col);
+end;
+$$;
+
+create or replace function increment_screen_time(p_phase text, p_duration_ms double precision)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  sum_col text := p_phase || '_sum';
+  count_col text := p_phase || '_count';
+begin
+  perform rate_limit_ip('analytics', 600, interval '1 minute');
+  if p_phase is null or p_phase not in ('intro', 'game', 'result') then
+    raise exception 'invalid phase: %', p_phase;
+  end if;
+  perform validate_duration_ms(p_duration_ms);
+  execute format(
+    'update analytics_screen_time set %I = %I + $1, %I = %I + 1 where id = 1',
+    sum_col, sum_col, count_col, count_col
+  ) using p_duration_ms;
+end;
+$$;
+
+create or replace function increment_heatmap(p_screen text, p_buckets jsonb)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  perform rate_limit_ip('analytics', 600, interval '1 minute');
+  if p_screen is null or p_screen not in ('intro', 'game') then
+    raise exception 'invalid screen: %', p_screen;
+  end if;
+  perform validate_heatmap_buckets(p_buckets);
+  update analytics_heatmap
+  set buckets = (
+    select jsonb_object_agg(
+      key,
+      coalesce((buckets->key)::int, 0) + coalesce((p_buckets->key)::int, 0)
+    )
+    from jsonb_object_keys(buckets || p_buckets) as key
+  )
+  where screen = p_screen;
+end;
+$$;
+
+create or replace function increment_access_hour_daily(p_date_key text, p_hour int)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  col text := 'h' || p_hour::text;
+begin
+  perform rate_limit_ip('analytics', 600, interval '1 minute');
+  perform validate_date_key(p_date_key);
+  if p_hour is null or p_hour < 0 or p_hour > 23 then
+    raise exception 'invalid hour: %', p_hour;
+  end if;
+  insert into analytics_access_hours_daily (date_key) values (p_date_key)
+  on conflict (date_key) do nothing;
+  execute format(
+    'update analytics_access_hours_daily set %I = %I + 1, total = total + 1 where date_key = $1',
+    col, col
+  ) using p_date_key;
+end;
+$$;
+
+create or replace function increment_screen_time_daily(p_date_key text, p_phase text, p_duration_ms double precision)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  sum_col text := p_phase || '_sum';
+  count_col text := p_phase || '_count';
+begin
+  perform rate_limit_ip('analytics', 600, interval '1 minute');
+  perform validate_date_key(p_date_key);
+  if p_phase is null or p_phase not in ('intro', 'game', 'result') then
+    raise exception 'invalid phase: %', p_phase;
+  end if;
+  perform validate_duration_ms(p_duration_ms);
+  insert into analytics_screen_time_daily (date_key) values (p_date_key)
+  on conflict (date_key) do nothing;
+  execute format(
+    'update analytics_screen_time_daily set %I = %I + $1, %I = %I + 1 where date_key = $2',
+    sum_col, sum_col, count_col, count_col
+  ) using p_duration_ms, p_date_key;
+end;
+$$;
+
+create or replace function increment_heatmap_weekly(p_week_key text, p_screen text, p_buckets jsonb)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  perform rate_limit_ip('analytics', 600, interval '1 minute');
+  perform validate_week_key(p_week_key);
+  if p_screen is null or p_screen not in ('intro', 'game') then
+    raise exception 'invalid screen: %', p_screen;
+  end if;
+  perform validate_heatmap_buckets(p_buckets);
+  insert into analytics_heatmap_weekly (week_key, screen) values (p_week_key, p_screen)
+  on conflict (week_key, screen) do nothing;
+  update analytics_heatmap_weekly
+  set buckets = (
+    select jsonb_object_agg(
+      key,
+      coalesce((buckets->key)::int, 0) + coalesce((p_buckets->key)::int, 0)
+    )
+    from jsonb_object_keys(buckets || p_buckets) as key
+  )
+  where week_key = p_week_key and screen = p_screen;
+end;
+$$;
+
+-- ---------- 5.1/5.2/5.4 RPC ghi người chơi — thêm p_secret ----------
+-- Chữ ký CŨ (không có p_secret) bị xoá ở cuối mục này để đóng hẳn đường cũ.
+create or replace function ensure_player(p_player_id text, p_name text, p_secret text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  perform rate_limit_ip('ensure_player', 120, interval '1 minute');
+  p_name := sanitize_player_name(p_name);
+  if char_length(p_name) > 40 then
+    raise exception 'name too long';
+  end if;
+  if not exists (select 1 from players where id = p_player_id) then
+    perform rate_limit_ip('new_player', 40, interval '1 hour'); -- chặn spam tạo hàng loạt người chơi
+    insert into players (id, name) values (p_player_id, coalesce(nullif(p_name, ''), 'Người chơi ẩn danh'))
+    on conflict (id) do nothing;
+  end if;
+  perform player_auth(p_player_id, p_secret); -- sai secret → rollback cả lệnh insert ở trên
+  perform rate_limit('pl:' || p_player_id || ':ensure', 30, interval '1 minute');
+  update players
+  set name = coalesce(nullif(p_name, ''), 'Người chơi ẩn danh'), last_visit = now()
+  where id = p_player_id;
+end;
+$$;
+
+create or replace function submit_match_result(
+  p_player_id text,
+  p_name text,
+  p_secret text,
+  p_score double precision,
+  p_play_time double precision,
+  p_current_streak int,
+  p_longest_streak int,
+  p_variant text default null
+)
+returns table(avg_score double precision, session_count int, best_score double precision)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_prev players%rowtype;
+  v_existed boolean;
+  v_session_count int;
+  v_total_correct double precision;
+  v_best double precision;
+  v_total_play double precision;
+  v_avg double precision;
+  v_cur int;
+  v_long int;
+  v_base timestamptz;
+  v_elapsed double precision;
+begin
+  perform rate_limit_ip('submit', 90, interval '1 minute');
+  if p_score is null or p_play_time is null or p_score = 'NaN'::double precision or p_play_time = 'NaN'::double precision
+     or p_score < 0 or p_score > 65 or p_play_time < 0 or p_play_time > 65 then
+    raise exception 'invalid score/play_time';
+  end if;
+  if p_score > p_play_time then
+    raise exception 'score cannot exceed play_time: score=%, play_time=%', p_score, p_play_time;
+  end if;
+  p_name := sanitize_player_name(p_name);
+  if char_length(p_name) > 40 then
+    raise exception 'name too long';
+  end if;
+
+  select exists (select 1 from players where id = p_player_id) into v_existed;
+  if not v_existed then
+    perform rate_limit_ip('new_player', 40, interval '1 hour');
+    insert into players (id, name) values (p_player_id, coalesce(nullif(p_name, ''), 'Người chơi ẩn danh'))
+    on conflict (id) do nothing;
+  end if;
+  perform player_auth(p_player_id, p_secret);
+  perform rate_limit('pl:' || p_player_id || ':submit', 12, interval '1 minute');
+
+  select * into v_prev from players where id = p_player_id for update;
+
+  -- 5.4: play_time không được vượt thời gian thật đã trôi qua kể từ lần ghi
+  -- kết quả trước (hoặc lần vào game gần nhất, nếu mới hơn) + 5s dung sai.
+  -- Chơi thật không bao giờ vượt thời gian thật (dt mỗi frame bị chặn ≤ 0.05s),
+  -- còn gọi RPC dồn dập để cày điểm thì bị chặn ở đây.
+  if v_existed then
+    v_base := greatest(coalesce(v_prev.last_submit_at, '-infinity'::timestamptz), v_prev.last_visit);
+    v_elapsed := extract(epoch from (now() - v_base));
+    if p_play_time > v_elapsed + 5 then
+      raise exception 'play_time exceeds elapsed real time' using errcode = 'P0001';
+    end if;
+  end if;
+
+  v_session_count := v_prev.session_count + 1;
+  v_total_correct := v_prev.total_correct_time + p_score;
+  v_total_play := v_prev.total_play_time + p_play_time;
+  v_best := greatest(v_prev.best_score, p_score);
+  v_avg := v_total_correct / v_session_count;
+
+  -- Streak: client chỉ ĐỀ XUẤT; server kẹp để không nhảy vọt (tối đa +1 mỗi
+  -- ván) và tự suy ra kỷ lục.
+  v_cur := least(greatest(coalesce(p_current_streak, 0), 0), coalesce(v_prev.current_streak, 0) + 1, 3650);
+  v_long := greatest(coalesce(v_prev.longest_streak, 0), v_cur);
+
+  update players set
+    name = coalesce(nullif(p_name, ''), v_prev.name),
+    session_count = v_session_count,
+    total_correct_time = v_total_correct,
+    avg_score = v_avg,
+    best_score = v_best,
+    total_play_time = v_total_play,
+    current_streak = v_cur,
+    longest_streak = v_long,
+    last_visit = now(),
+    last_submit_at = now()
+  where id = p_player_id;
+
+  if p_variant in ('ellipse', 'radar', 'perspective') then
+    insert into sessions (player_id, variant, score, play_time)
+    values (p_player_id, p_variant, p_score, p_play_time);
+  end if;
+
+  return query select v_avg, v_session_count, v_best;
+end;
+$$;
+
+-- ---------- Phòng chơi nhóm ----------
+create or replace function create_room(p_room_id text, p_player_id text, p_secret text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  perform rate_limit_ip('create_room', 30, interval '10 minutes');
+  if p_room_id is null or p_room_id !~ '^[A-HJ-NP-Z2-9]{6,8}$' then
+    raise exception 'invalid room id' using errcode = '22023';
+  end if;
+  perform player_auth(p_player_id, p_secret);
+  perform rate_limit('pl:' || p_player_id || ':room', 5, interval '10 minutes');
+  delete from rooms where created_at < now() - interval '1 day';
+  insert into rooms (id, host_player_id, status) values (p_room_id, p_player_id, 'waiting');
+end;
+$$;
+
+create or replace function start_room_match(p_room_id text, p_requester_id text, p_secret text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  perform player_auth(p_requester_id, p_secret);
+  update rooms set status = 'playing'
+  where id = p_room_id and host_player_id = p_requester_id and status = 'waiting';
+  if not found then
+    raise exception 'not authorized or invalid room state';
+  end if;
+end;
+$$;
+
+create or replace function claim_room_host(p_room_id text, p_new_host_id text, p_old_host_id text, p_secret text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  perform player_auth(p_new_host_id, p_secret);
+  update rooms set host_player_id = p_new_host_id
+  where id = p_room_id and host_player_id = p_old_host_id;
+  if not found then
+    raise exception 'not authorized or invalid room state';
+  end if;
+end;
+$$;
+
+-- ---------- 5.5 Đóng đường cũ ----------
+drop function if exists ensure_player(text, text);
+drop function if exists submit_match_result(text, text, double precision, double precision, int, int);
+drop function if exists start_room_match(text, text);
+drop function if exists claim_room_host(text, text, text);
+
+drop policy if exists "sessions: ai cũng ghi được" on sessions;
+drop policy if exists "sessions: ai cũng đọc được" on sessions; -- client không đọc sessions; không lộ lịch sử từng ván của từng người
+drop policy if exists "rooms: ai cũng tạo được" on rooms;
+
+-- Thu hồi quyền ghi trực tiếp mọi bảng public của anon/authenticated (RLS đã
+-- chặn, đây là lớp thứ 2). Chỉ còn đọc theo policy + gọi RPC security definer.
+revoke insert, update, delete, truncate on all tables in schema public from anon, authenticated;
+
+-- Quyền EXECUTE: mặc định Postgres cấp cho PUBLIC mọi hàm mới. Thu hồi hết,
+-- rồi chỉ cấp lại cho các RPC mà client thật sự gọi; helper nội bộ không cấp.
+revoke execute on all functions in schema public from public, anon, authenticated;
+
+grant execute on function ensure_player(text, text, text) to anon, authenticated;
+grant execute on function submit_match_result(text, text, text, double precision, double precision, int, int, text) to anon, authenticated;
+grant execute on function create_room(text, text, text) to anon, authenticated;
+grant execute on function start_room_match(text, text, text) to anon, authenticated;
+grant execute on function claim_room_host(text, text, text, text) to anon, authenticated;
+grant execute on function increment_access_hour(int) to anon, authenticated;
+grant execute on function increment_screen_time(text, double precision) to anon, authenticated;
+grant execute on function increment_heatmap(text, jsonb) to anon, authenticated;
+grant execute on function increment_access_hour_daily(text, int) to anon, authenticated;
+grant execute on function increment_screen_time_daily(text, text, double precision) to anon, authenticated;
+grant execute on function increment_heatmap_weekly(text, text, jsonb) to anon, authenticated;

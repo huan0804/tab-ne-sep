@@ -2,7 +2,24 @@
 
 > File này ghi lại trạng thái dự án để tiếp tục ở phiên làm việc sau. Cập nhật mỗi khi có tiến triển lớn, dọn bớt phần đã lỗi thời để tránh phình to.
 
-## Cập nhật 2026-10-08
+## Cập nhật 2026-10-08 (phiên tối) — RÀ SOÁT & TĂNG CƯỜNG BẢO MẬT
+
+**⚠️ VIỆC BẮT BUỘC SAU KHI PUSH: chạy lại `supabase/schema.sql` (mục 5 mới) trong Supabase SQL Editor ngay sau khi Vercel deploy xong.** Chữ ký RPC cũ bị xoá nên client mới và schema mới phải đi cùng nhau; chưa chạy SQL thì tạo phòng/ghi điểm sẽ lỗi (graceful, không crash). Schema đã chạy thử 2 lần liên tiếp trên Postgres thật (PGlite) + 50 test, nhưng CHƯA chạy trên Supabase production.
+
+Đã phát hiện & vá:
+- **XSS giữa người chơi** qua broadcast `player_state` (workData đồng đội nối thẳng innerHTML): dựng exploit thật → bản cũ chạy được mã trong trình duyệt nạn nhân, bản vá = 0. Mọi payload nhận qua mạng giờ qua `sanitize*`/`isSafeId`.
+- **Không có xác thực chủ playerId** (id công khai trên leaderboard): ai cũng đổi tên/đẩy điểm/cướp host người khác → thêm secret 256-bit/người (`player_secrets`, lưu SHA-256), mọi RPC ghi yêu cầu `p_secret`.
+- **Ghi trực tiếp**: bỏ INSERT của `sessions`/`rooms` (chuyển RPC `create_room`, `submit_match_result` tự ghi sessions), thu hồi quyền ghi của anon, ẩn đọc `sessions`.
+- **Analytics RPC**: validate date_key/week_key (trước đây tạo được vô hạn dòng), heatmap JSON (giới hạn khoá/giá trị), duration (âm/NaN/khổng lồ).
+- **Rate-limit** theo IP + theo người chơi; điểm bị chặn theo thời gian thật; streak kẹp ở server; tên bỏ `<>`.
+- **Triển khai**: `vercel.json` thêm CSP/X-Frame-Options/nosniff/Referrer/Permissions/COOP; `.vercelignore` (trước đó schema.sql, WORK_LOG, CLAUDE.md, docs đang public trên domain); supabase-js ghim 2.117.3 + SRI; `window.open` thêm noopener.
+- Bản `v1-radar` không còn được deploy (mã cũ, chưa tương thích RPC mới). `/play-2d` đã cập nhật cùng client.
+
+Rủi ro còn lại (đã biết, chưa giải quyết): (1) dòng `players` CŨ chưa có chủ — ai gọi RPC với id đó trước chủ thật sẽ chiếm (người chơi bị chiếm sẽ bị "forbidden", cần xoá localStorage để tạo id mới); (2) kênh Realtime không xác thực → kẻ biết mã phòng giả được tin nhắn host (không chạy được mã, không đụng điểm); (3) điểm vẫn do client tự tính → cheat "hoàn hảo theo thời gian thật" không chặn được nếu không có server mô phỏng; (4) CSP còn `'unsafe-inline'` vì game là 1 file inline.
+
+---
+
+## Cập nhật 2026-10-08 (phiên chiều)
 
 **✅ v2-perspective là bản chính.** `/play` (và alias `/play-3d`) → `game/TAB-Ne-Sep_v2-perspective.html` (phép chiếu pinhole thật, `UI_VARIANT='perspective'`); bản elip cũ `game/TAB-Ne-Sep.html` giữ ở `/play-2d` làm dự phòng. User đã test `/play-3d` và xác nhận ổn. Lưu ý: góc nhìn ngẫu nhiên mỗi ván (`pickViewAngle`) chỉ có ở bản elip, bản v2 dùng camera cố định. **Chưa test phòng nhiều máy trên v2.**
 

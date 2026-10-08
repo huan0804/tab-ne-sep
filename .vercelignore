@@ -1,0 +1,8 @@
+# Chỉ deploy phần game + vercel.json. Mọi thứ dưới đây là tài liệu/nội bộ/bản cũ,
+# không được phục vụ công khai trên domain (schema DB, nhật ký làm việc, hướng dẫn nội bộ...).
+supabase/
+docs/
+.claude/
+*.md
+# Bản radar cũ: không còn route, mã cũ (chưa vá các RPC mới) — không cần phục vụ.
+game/TAB-Ne-Sep_v1-radar.html

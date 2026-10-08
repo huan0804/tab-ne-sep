@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Be+Vietnam+Pro:ital,wght@0,400;0,500;0,600;0,700;1,500&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js" integrity="sha384-BWcjm9OdFth9TbhCxZPdm+gAOUMAzQy9nmTs12ioXdCcbVnJaPMn+fMUoQCLt60R" crossorigin="anonymous"></script>
 <style>
   :root{
     --wall:#f4f6f8; --wall-dark:#e2e6ea; --wood:#ffffff; --wood-dark:#c9ced4;
@@ -1378,7 +1378,7 @@
   // REST API trực tiếp, không cần chơi game.
   async function ensurePlayerRecord(id, name){
     try{
-      await sb.rpc('ensure_player', { p_player_id: id, p_name: name });
+      await sb.rpc('ensure_player', { p_player_id: id, p_name: name, p_secret: getPlayerSecret() });
     }catch(e){ /* best-effort */ }
   }
 
@@ -1391,8 +1391,8 @@
   async function submitMatchResult(id, name, score, playTime, currentStreak, longestStreak){
     try{
       const { data, error } = await sb.rpc('submit_match_result', {
-        p_player_id: id, p_name: name, p_score: score, p_play_time: playTime,
-        p_current_streak: currentStreak||0, p_longest_streak: longestStreak||0
+        p_player_id: id, p_name: name, p_secret: getPlayerSecret(), p_score: score, p_play_time: playTime,
+        p_current_streak: currentStreak||0, p_longest_streak: longestStreak||0, p_variant: UI_VARIANT
       });
       if(error || !data || !data[0]) return null;
       const row = data[0];
@@ -1470,6 +1470,27 @@
   }
 
   const playerId = getPlayerId();
+  // Bí mật của người chơi (256-bit ngẫu nhiên, chỉ ở máy này) — gửi kèm mọi RPC ghi
+  // để server chứng minh "đúng chủ playerId" (server chỉ lưu SHA-256, xem schema.sql
+  // mục 5.1). Chỉ playerId thì không đủ vì id hiển thị công khai trên leaderboard.
+  let memorySecret = null;
+  function getPlayerSecret(){
+    try{
+      let s = localStorage.getItem('atd_playerSecret');
+      if(!s || !/^[A-Za-z0-9]{32,128}$/.test(s)){
+        const a = new Uint8Array(32); crypto.getRandomValues(a);
+        s = Array.from(a, b => b.toString(16).padStart(2,'0')).join('');
+        localStorage.setItem('atd_playerSecret', s);
+      }
+      return s;
+    }catch(e){
+      if(!memorySecret){
+        const a = new Uint8Array(32); crypto.getRandomValues(a);
+        memorySecret = Array.from(a, b => b.toString(16).padStart(2,'0')).join('');
+      }
+      return memorySecret;
+    }
+  }
   // ---- Supabase project config ----
   // Publishable key is safe to ship in client code by design — real access
   // control lives in the database's Row Level Security policies (see
@@ -1597,9 +1618,12 @@
     roomChannel.on('broadcast', { event: 'match_start' }, ({ payload }) => {
       if(roomMode === 'host') return; // host đã tự dựng layout của chính mình
       const wasAlreadyInRoom = roomMode === 'guest';
-      deskLayout = payload.deskLayout;
+      const safeLayout = sanitizeDeskLayout(payload && payload.deskLayout);
+      if(!safeLayout) return; // payload lạ/độc hại — bỏ qua
+      deskLayout = safeLayout;
       myDesk = deskLayout[playerId] || {x:0, y:0};
-      roomPlayerIds = payload.playerIds || Object.keys(deskLayout);
+      roomPlayerIds = sanitizeIdList(payload.playerIds, CONFIG.roomMaxPlayers + 2);
+      if(roomPlayerIds.length === 0) roomPlayerIds = Object.keys(deskLayout);
       roomMode = 'guest';
       roomMatchResults = {};
       renderTeammates();
@@ -1617,8 +1641,10 @@
       }
     });
 
-    roomChannel.on('broadcast', { event: 'boss_state' }, ({ payload }) => {
+    roomChannel.on('broadcast', { event: 'boss_state' }, ({ payload: rawPayload }) => {
       if(roomMode === 'host' || !boss) return;
+      const payload = sanitizeBossState(rawPayload);
+      if(!payload) return;
       const nowDbg = performance.now();
       window.__bossStateGaps = window.__bossStateGaps || [];
       if(window.__lastBossStateAt) window.__bossStateGaps.push(Math.round(nowDbg - window.__lastBossStateAt));
@@ -1664,16 +1690,20 @@
     // Trạng thái màn hình (mode/theme) của TỪNG người — mỗi client tự gửi
     // của riêng mình khi đổi mode (xem broadcastMyPlayerState()), không phải
     // chỉ host, vì mỗi người điều khiển mode của chính họ.
-    roomChannel.on('broadcast', { event: 'player_state' }, ({ payload }) => {
-      if(payload.playerId === playerId) return; // bỏ qua broadcast của chính mình
-      teammatePlayerStates[payload.playerId] = payload;
-      updateTeammateScreen(payload.playerId);
+    roomChannel.on('broadcast', { event: 'player_state' }, ({ payload: rawPayload }) => {
+      const st = sanitizePlayerState(rawPayload);
+      if(!st || st.playerId === playerId) return; // bỏ qua payload lạ và broadcast của chính mình
+      if(!(st.playerId in teammatePlayerStates) && Object.keys(teammatePlayerStates).length >= CONFIG.roomMaxPlayers + 2) return; // chặn phình bộ nhớ
+      teammatePlayerStates[st.playerId] = st;
+      updateTeammateScreen(st.playerId);
     });
 
     // "Kết quả phòng này" trong modal kết thúc ván — mỗi người tự báo điểm
     // của mình khi finish, mọi client tích luỹ để hiện bảng so sánh riêng
     // giữa những người cùng phòng (khác với bảng xếp hạng chung toàn game).
-    roomChannel.on('broadcast', { event: 'player_finished' }, ({ payload }) => {
+    roomChannel.on('broadcast', { event: 'player_finished' }, ({ payload: rawPayload }) => {
+      const payload = sanitizeFinished(rawPayload);
+      if(!payload) return;
       roomMatchResults[payload.playerId] = payload;
       roomFinishedPlayerIds.add(payload.playerId);
       renderRoomMatchResults();
@@ -1682,7 +1712,9 @@
 
     // Ai đó (không phải host) bấm "Xin chơi lại" sau khi xong ván — host cần
     // biết để quyết định bắt đầu; mọi người thấy danh sách ai đã sẵn sàng.
-    roomChannel.on('broadcast', { event: 'replay_request' }, ({ payload }) => {
+    roomChannel.on('broadcast', { event: 'replay_request' }, ({ payload: rawPayload }) => {
+      if(!rawPayload || !isSafeId(rawPayload.playerId)) return;
+      const payload = { playerId: rawPayload.playerId, name: remoteText(rawPayload.name, 40, 'Ẩn danh') };
       roomReplayRequests.set(payload.playerId, payload.name || 'Ẩn danh');
       renderRoomReplayUI();
     });
@@ -1716,7 +1748,7 @@
     if(nm) savePlayerName(nm);
     await ensurePlayerDoc();
     const roomId = genRoomCode();
-    const { error } = await sb.from('rooms').insert({ id: roomId, host_player_id: playerId, status: 'waiting' });
+    const { error } = await sb.rpc('create_room', { p_room_id: roomId, p_player_id: playerId, p_secret: getPlayerSecret() });
     if(error){ alert('Không tạo được phòng, thử lại nhé.'); return; }
     currentRoomId = roomId;
     isRoomHost = true;
@@ -1933,7 +1965,7 @@
     // Cố gắng cập nhật rooms.host_player_id ở DB (best-effort, fail graceful nếu
     // chưa chạy schema.sql có claim_room_host) để start_room_match còn dùng được.
     if(sb && currentRoomId){
-      sb.rpc('claim_room_host', { p_room_id: currentRoomId, p_new_host_id: playerId, p_old_host_id: oldHostId })
+      sb.rpc('claim_room_host', { p_room_id: currentRoomId, p_new_host_id: playerId, p_old_host_id: oldHostId, p_secret: getPlayerSecret() })
         .then(({ error }) => { if(!error) hostMigratedLocally = false; })
         .catch(()=>{});
     }
@@ -1946,7 +1978,7 @@
     // RPC tự xác thực lại requester = host_player_id ở server (xem
     // start_room_match trong supabase/schema.sql mục 2f) — isRoomHost ở
     // trên chỉ là kiểm tra UI, không phải nguồn tin cậy thật.
-    const { error } = await sb.rpc('start_room_match', { p_room_id: currentRoomId, p_requester_id: playerId });
+    const { error } = await sb.rpc('start_room_match', { p_room_id: currentRoomId, p_requester_id: playerId, p_secret: getPlayerSecret() });
     if(error && !hostMigratedLocally) return;
     // Host tự chuyển màn ngay — client khác chuyển khi nhận postgres_changes.
     startRoomMatchForEveryone();
@@ -2126,9 +2158,7 @@
       // trong supabase/schema.sql mục 2f).
       const result = await submitMatchResult(playerId, name, score, elapsedTime, currentStreak, longestStreak);
       if(!result) return null;
-      try{
-        await sb.from('sessions').insert({ player_id: playerId, variant: UI_VARIANT, score, play_time: elapsedTime });
-      }catch(e2){ /* best-effort, không ảnh hưởng leaderboard chính */ }
+      // Bản ghi sessions (A/B test) giờ do chính submit_match_result ghi ở server (p_variant) — client không còn INSERT trực tiếp.
       return { sessionCount: result.sessionCount, avgScore: result.avgScore, bestScore: result.bestScore, currentStreak, longestStreak, streakJustIncreased: currentStreak > wasStreakBefore };
     }catch(e){ return null; }
   }
@@ -2261,11 +2291,11 @@
   function wireShareButtons(fbBtn, zaloBtn, copyBtn, nativeBtn, toastEl){
     fbBtn.addEventListener('click', ()=>{
       const url = 'https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(location.href);
-      window.open(url, '_blank');
+      window.open(url, '_blank', 'noopener,noreferrer');
     });
     zaloBtn.addEventListener('click', ()=>{
       const url = 'https://sp.zalo.me/share?u=' + encodeURIComponent(location.href) + '&d=' + encodeURIComponent(SHARE_TEXT);
-      window.open(url, '_blank');
+      window.open(url, '_blank', 'noopener,noreferrer');
     });
     copyBtn.addEventListener('click', async ()=>{
       const ok = await copyShareLink();
@@ -2687,11 +2717,94 @@
     }});
   }
 
+
+  /* ---------- Dữ liệu từ NGƯỜI CHƠI KHÁC (Broadcast/Presence) = không tin cậy ----------
+     Bất kỳ ai vào được kênh phòng (biết mã phòng) đều gửi được payload tuỳ ý —
+     không có xác thực ở tầng Realtime. Trước đây workData của đồng đội được nối
+     thẳng vào innerHTML (XSS giữa người chơi). Mọi payload nhận qua mạng phải đi
+     qua các hàm dưới đây: chỉ giữ đúng kiểu/biên mong đợi, KHÔNG BAO GIỜ giữ
+     chuỗi tuỳ ý để đưa vào HTML. */
+  const REMOTE_TICKERS = ['VNM','FPT','HPG','MWG','VIC','VCB','MSN','GAS'];
+  function isSafeId(v){
+    return typeof v === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(v) && v.slice(0,2) !== '__' && v !== 'constructor' && v !== 'prototype';
+  }
+  function remoteNum(v, min, max, def){
+    return (typeof v === 'number' && Number.isFinite(v)) ? Math.min(max, Math.max(min, v)) : def;
+  }
+  function remoteNumStr(v, min, max, def){
+    return remoteNum(typeof v === 'string' ? parseFloat(v) : v, min, max, def).toFixed(1);
+  }
+  function remoteArr(a, len, min, max, def){
+    const out = [];
+    for(let i = 0; i < len; i++) out.push(remoteNum(Array.isArray(a) ? a[i] : undefined, min, max, def));
+    return out;
+  }
+  function remoteText(v, maxLen, def){
+    return typeof v === 'string' ? v.slice(0, maxLen) : def;
+  }
+  function sanitizeIdList(list, maxLen){
+    return Array.isArray(list) ? list.filter(isSafeId).slice(0, maxLen) : [];
+  }
+  // Dữ liệu màn hình làm việc của đồng đội → dựng lại hoàn toàn từ số đã kẹp biên
+  // (độ dài mảng cố định — cũng chặn Math.max(...mảng khổng lồ) làm tràn stack).
+  function sanitizeRemoteWorkData(theme, d){
+    d = (d && typeof d === 'object') ? d : {};
+    if(theme === 'excel'){
+      return { rev: remoteNumStr(d.rev,0,9999,100), cost: remoteNumStr(d.cost,0,9999,60), profit: remoteNumStr(d.profit,0,9999,40),
+        p1: remoteNumStr(d.p1,0,999,5), p2: remoteNumStr(d.p2,0,999,3), p3: remoteNumStr(d.p3,0,999,8),
+        q4: remoteNumStr(d.q4,0,9999,30), q5: remoteNumStr(d.q5,0,999,4), bars: remoteArr(d.bars,7,1,1000,50) };
+    }
+    if(theme === 'dashboard'){
+      return { kpi1: Math.floor(remoteNum(d.kpi1,0,99999,300)), kpi2: remoteNumStr(d.kpi2,0,100,5), kpi3: Math.floor(remoteNum(d.kpi3,0,99999,100)),
+        kpi4: remoteNumStr(d.kpi4,0,100,99), pts: remoteArr(d.pts,10,0,1000,10), bars: remoteArr(d.bars,8,1,1000,50),
+        donutPct: Math.floor(remoteNum(d.donutPct,0,100,50)) };
+    }
+    if(theme === 'stock'){
+      const wl = Array.isArray(d.watchlist) ? d.watchlist.slice(0,3) : [];
+      return { ticker: REMOTE_TICKERS.includes(d.ticker) ? d.ticker : 'VNM', price: remoteNumStr(d.price,0,99999,50),
+        pct: remoteNumStr(d.pct,-100,100,0), up: d.up === true, pts: remoteArr(d.pts,12,5,1000,50), vol: remoteArr(d.vol,14,1,1000,50),
+        watchlist: wl.map(w => ({ t: REMOTE_TICKERS.includes(w && w.t) ? w.t : 'FPT', pct: remoteNumStr(w && w.pct,-100,100,0) })) };
+    }
+    return {};
+  }
+  function sanitizePlayerState(p){
+    if(!p || typeof p !== 'object' || !isSafeId(p.playerId)) return null;
+    const workTheme = WORK_THEMES.includes(p.workTheme) ? p.workTheme : WORK_THEMES[0];
+    return { playerId: p.playerId, mode: p.mode === 'work' ? 'work' : 'personal', workTheme,
+      personalTheme: PERSONAL_THEMES.includes(p.personalTheme) ? p.personalTheme : PERSONAL_THEMES[0],
+      workData: sanitizeRemoteWorkData(workTheme, p.workData) };
+  }
+  function sanitizeDeskLayout(layout){
+    if(!layout || typeof layout !== 'object') return null;
+    const out = {};
+    let n = 0;
+    for(const id of Object.keys(layout)){
+      if(!isSafeId(id)) continue;
+      if(++n > CONFIG.roomMaxPlayers + 2) break;
+      const d = layout[id];
+      out[id] = { x: remoteNum(d && d.x, -10, 10, 0), y: remoteNum(d && d.y, -10, 10, 0) };
+    }
+    return n > 0 ? out : null;
+  }
+  function sanitizeBossState(p){
+    if(!p || typeof p !== 'object') return null;
+    return { x: remoteNum(p.x,-50,50,0), y: remoteNum(p.y,-50,50,0),
+      ht: (typeof p.ht === 'number' && Number.isFinite(p.ht) && p.ht >= 0 && p.ht < 1e13) ? p.ht : undefined,
+      forced: p.forced === true, targetPlayerId: isSafeId(p.targetPlayerId) ? p.targetPlayerId : null,
+      finishedPlayerIds: Array.isArray(p.finishedPlayerIds) ? sanitizeIdList(p.finishedPlayerIds, CONFIG.roomMaxPlayers + 2) : undefined };
+  }
+  function sanitizeFinished(p){
+    if(!p || typeof p !== 'object' || !isSafeId(p.playerId)) return null;
+    return { playerId: p.playerId, name: remoteText(p.name, 40, 'Ẩn danh'), score: remoteNum(p.score,0,65,0), won: p.won === true };
+  }
+
   // Xây khung monitor mini rỗng — nội dung bên trong (work/personal) được
   // updateTeammateScreen() đổ vào .tmScreenInner mỗi khi player_state tới,
   // tái dùng nguyên buildWorkHTML/buildPersonalHTML của màn hình chính.
   function updateTeammateScreen(id){
-    const unit = teammatesLayer.querySelector('.teammateUnit[data-player-id="'+id+'"]');
+    // Không ghép id vào selector CSS (id từ mạng) — duyệt phần tử và so sánh trực tiếp.
+    let unit = null;
+    for(const el2 of teammatesLayer.children){ if(el2.dataset && el2.dataset.playerId === id){ unit = el2; break; } }
     if(!unit) return;
     const inner = unit.querySelector('.tmScreenInner');
     const st = teammatePlayerStates[id];
