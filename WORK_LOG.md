@@ -13,6 +13,8 @@
 - Tutorial: làm tối phần không cần thiết (#tutorialDim, `setTutorialFocus`): bước 1 sáng màn hình + nút Tab, bước 2 thêm Sếp + vòng; tắt khi Tab lần 2/bị bắt/hết ván/14s. Sửa banner "SẾP ĐANG LẠI GẦN" hiện sớm.
 - Nội suy Sếp phía guest (snapshot interpolation), nút ❓ Hướng dẫn, "Về trang chủ", xin chơi lại tới host + chuyển host (xem các mục trước).
 
+**Tải Realtime (gói free Supabase = 100 tin/giây CẢ project, tính cả gửi lẫn nhận):** trước đây host phát vị trí Sếp 15Hz → phòng 5 người ~66 tin/giây (chỉ đủ ~1 phòng 5 người, ~7 người chơi phòng cùng lúc toàn game). Đã chuyển sang dead reckoning: host chỉ gửi khi đích/tốc độ/mục tiêu đổi + heartbeat 1s (`CONFIG.bossHeartbeatMs`), guest tự tính vị trí giữa các tin (`seg.sp !== undefined`), có độ lệch hiệu chỉnh tắt dần ~150ms khi đổi phân đoạn. Phòng 5 người còn ~6,7 tin/giây (~10x ít hơn). Đo trên trình duyệt thật + mạng giả lập giật, 7 cặp xen kẽ: độ giật P95 ~1,05 → ~0,43px, cú nhảy thật 31/2/3/1 → 0/0/0/0 (1 lượt đầu của bản mới có 24 cú nhảy chưa phân biệt được với rơi khung hình). Host cũ (còn stream 15Hz, không có tx/ty/sp) vẫn được guest mới hỗ trợ bằng nội suy. `/play-2d` KHÔNG đổi (vẫn 15Hz).
+
 **Việc còn mở:**
 - Test tay trên điện thoại/nhiều máy thật: tutorial làm tối, nhãn Sếp, phòng nhiều người, snapshot interpolation.
 - ~~Vòng lặp tick() bị nhân đôi mỗi lần "Chơi lại"~~ → ĐÃ SỬA: đo được 1→2→3→4 vòng/khung hình sau 3 lần chơi lại (vòng phụ dt=0 nên tốc độ game không đổi, nhưng nhân việc vẽ/HUD); nay `queueTick()` chỉ cho 1 lượt rAF chờ sẵn → luôn 1 vòng. Áp dụng cả `/play-2d`.

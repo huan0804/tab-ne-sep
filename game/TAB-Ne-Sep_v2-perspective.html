@@ -731,7 +731,11 @@
     // nhận chồng lấn vì không đủ diện tích hình học. Chặn ở UI thay vì để
     // xảy ra bug hiển thị (đã từng gặp: người biến mất khỏi màn hình nhau).
     roomMaxPlayers: 6,
-    roomBroadcastHz: 15, // tần suất host gửi vị trí Sếp cho cả phòng
+    // Host KHÔNG còn phát vị trí Sếp 15 lần/giây (66 tin/giây cho phòng 5 người — gói
+    // free của Supabase chỉ cho 100 tin/giây CẢ project, tính cả gửi lẫn nhận). Sếp đi
+    // thẳng tới đích với tốc độ không đổi nên chỉ cần gửi khi đích/tốc độ/mục tiêu đổi
+    // (dead reckoning) + 1 tin đồng bộ mỗi bossHeartbeatMs; mỗi máy tự tính vị trí ở giữa.
+    bossHeartbeatMs: 1000,
     // Guest vẽ Sếp "trong quá khứ" đúng ngần này ms và nội suy giữa 2 snapshot
     // đã nhận (snapshot interpolation) thay vì đuổi theo gói mới nhất — gói tới
     // không đều (jitter) không còn làm Sếp khựng/giật. ≈1.5 chu kỳ broadcast
@@ -1566,6 +1570,7 @@
   let currentTargetPlayerId = null;   // null = Sếp đang ambient, không nhắm ai
   let lastAmbientAnchorId = null;     // người vừa bị nhắm gần nhất — tâm ambient kế tiếp
   let lastBroadcastAt = 0;
+  let lastBossSent = null;            // trạng thái (đích/tốc độ/mục tiêu) của tin boss_state gần nhất — chỉ gửi khi nó đổi
   // Sau ván: ai (không phải host) đã bấm "Xin chơi lại" — Map id→tên, mọi client
   // đều theo dõi qua broadcast 'replay_request' để cùng thấy ai đã sẵn sàng.
   let roomReplayRequests = new Map();
@@ -1691,7 +1696,7 @@
         offs.push(performance.now() - payload.ht);
         if(offs.length > 40) offs.shift();
         boss.netOffset = Math.min.apply(null, offs);
-        snaps.push({ t: payload.ht, x: payload.x, y: payload.y });
+        snaps.push({ t: payload.ht, x: payload.x, y: payload.y, tx: payload.tx, ty: payload.ty, sp: (payload.tx !== undefined && payload.ty !== undefined) ? payload.sp : undefined });
         if(snaps.length > 30) snaps.shift();
       }
       boss.forced = payload.forced; boss.targetPlayerId = payload.targetPlayerId;
@@ -1851,6 +1856,7 @@
   // từ ván trước (ví dụ currentTargetPlayerId của người đã rời phòng).
   function resetRoomTargetingForHost(){
     roomTargetBag = [];
+    lastBossSent = null; // ván mới: gửi ngay trạng thái Sếp đầu tiên
     currentTargetPlayerId = null;
     lastAmbientAnchorId = roomPlayerIds[0] || playerId;
   }
@@ -2821,6 +2827,9 @@
     if(!p || typeof p !== 'object') return null;
     return { x: remoteNum(p.x,-50,50,0), y: remoteNum(p.y,-50,50,0),
       ht: (typeof p.ht === 'number' && Number.isFinite(p.ht) && p.ht >= 0 && p.ht < 1e13) ? p.ht : undefined,
+      tx: (typeof p.tx === 'number' && Number.isFinite(p.tx)) ? remoteNum(p.tx,-50,50,0) : undefined,
+      ty: (typeof p.ty === 'number' && Number.isFinite(p.ty)) ? remoteNum(p.ty,-50,50,0) : undefined,
+      sp: (typeof p.sp === 'number' && Number.isFinite(p.sp)) ? remoteNum(p.sp,0,10,0) : undefined,
       forced: p.forced === true, targetPlayerId: isSafeId(p.targetPlayerId) ? p.targetPlayerId : null,
       finishedPlayerIds: Array.isArray(p.finishedPlayerIds) ? sanitizeIdList(p.finishedPlayerIds, CONFIG.roomMaxPlayers + 2) : undefined };
   }
@@ -3116,10 +3125,15 @@
       const allFinished = roomFinishedPlayerIds.size >= roomPlayerIds.length;
       if(!allFinished){
         const nowMs = performance.now();
-        if(nowMs - lastBroadcastAt >= 1000/CONFIG.roomBroadcastHz){
+        const sigChanged = !lastBossSent || lastBossSent.tx !== boss.target.x || lastBossSent.ty !== boss.target.y
+          || lastBossSent.sp !== boss.speed || lastBossSent.forced !== boss.forced
+          || lastBossSent.tid !== currentTargetPlayerId || lastBossSent.fin !== roomFinishedPlayerIds.size;
+        if(sigChanged || nowMs - lastBroadcastAt >= CONFIG.bossHeartbeatMs){
           lastBroadcastAt = nowMs;
+          lastBossSent = { tx: boss.target.x, ty: boss.target.y, sp: boss.speed, forced: boss.forced, tid: currentTargetPlayerId, fin: roomFinishedPlayerIds.size };
           roomChannel.send({ type:'broadcast', event:'boss_state', payload:{
-            x: boss.x, y: boss.y, ht: performance.now(), forced: boss.forced, targetPlayerId: currentTargetPlayerId,
+            x: boss.x, y: boss.y, ht: nowMs, tx: boss.target.x, ty: boss.target.y, sp: boss.speed,
+            forced: boss.forced, targetPlayerId: currentTargetPlayerId,
             finishedPlayerIds: Array.from(roomFinishedPlayerIds)
           }});
         }
@@ -3181,7 +3195,30 @@
         : boss.offsetSmooth + (boss.netOffset - boss.offsetSmooth) * Math.min(1, dt * 2);
       const rt = now - boss.offsetSmooth - CONFIG.bossInterpDelayMs; // rt: thời điểm cần vẽ, theo đồng hồ host
       const last = snaps[snaps.length-1];
-      if(rt <= snaps[0].t){ boss.x = snaps[0].x; boss.y = snaps[0].y; }
+      let segIdx = snaps.length - 1;
+      while(segIdx > 0 && snaps[segIdx].t > rt) segIdx--;
+      const seg = snaps[segIdx];
+      if(seg.sp !== undefined){
+        // Dead reckoning: từ điểm xuất phát của phân đoạn (vị trí host tại seg.t), Sếp đi
+        // thẳng tới đích với tốc độ không đổi; host dừng/đổi đích khi còn <0.12 tới đích.
+        const dtS = Math.max(0, (rt - seg.t) / 1000);
+        const ddx = seg.tx - seg.x, ddy = seg.ty - seg.y, dd = Math.hypot(ddx, ddy);
+        let px = seg.x, py = seg.y;
+        if(dd > 0.12 && seg.sp > 0){
+          const travel = Math.min(seg.sp * dtS, dd - 0.12);
+          px += ddx / dd * travel; py += ddy / dd * travel;
+        }
+        // Đổi sang phân đoạn mới (đổi đích hoặc tin đồng bộ 1s/lần): hấp thụ sai lệch dự đoán
+        // bằng độ lệch tắt dần (~150ms) thay vì để Sếp nhảy tới vị trí đúng.
+        if(boss.activeSegT !== seg.t){
+          if(boss.activeSegT !== undefined){ boss.corrX = boss.x - px; boss.corrY = boss.y - py; }
+          boss.activeSegT = seg.t;
+        }
+        const decay = Math.exp(-dt / 0.15);
+        boss.corrX = (boss.corrX || 0) * decay; boss.corrY = (boss.corrY || 0) * decay;
+        boss.x = px + boss.corrX; boss.y = py + boss.corrY;
+      }
+      else if(rt <= snaps[0].t){ boss.x = snaps[0].x; boss.y = snaps[0].y; }
       else if(rt >= last.t){
         // Hết snapshot (gói trễ/mất): ngoại suy ngắn theo vận tốc 2 gói cuối, rồi giữ yên.
         const prev = snaps.length > 1 ? snaps[snaps.length-2] : null;
