@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 "TAB: Né Sếp" — a Vietnamese-language browser mini-game (office comedy: switch between fake work/personal screens to avoid being caught by a wandering "Boss"). Single-page HTML games, no build step, no package manager, no test suite.
 
-Production: `https://tab-ne-sep.vercel.app/play` (Vercel rewrites `/play` → `/game/TAB-Ne-Sep.html`, root `/` redirects to `/play`; see [vercel.json](vercel.json)).
+Production: `https://tab-ne-sep.vercel.app/play` (Vercel rewrites `/play` → `/game/TAB-Ne-Sep.html`, `/play-3d` → `/game/TAB-Ne-Sep_v2-perspective.html`, root `/` redirects to `/play`; see [vercel.json](vercel.json)).
 
 ## Commands
 
@@ -18,10 +18,14 @@ There is no build/lint/test tooling in this repo. Development loop is: edit the 
 
 ## Architecture
 
-### Two HTML variants, one actively maintained
+### Three HTML variants, one actively maintained
 
 - [game/TAB-Ne-Sep.html](game/TAB-Ne-Sep.html) — **current/production version**. Concentric ellipse distance rings drawn in-scene, room multiplayer ("1 Sếp chung"), streak system, challenge links, mobile UX fixes, daily/weekly analytics. This is the only file that receives new features.
 - [game/TAB-Ne-Sep_v1-radar.html](game/TAB-Ne-Sep_v1-radar.html) — original version with a separate corner radar HUD instead of in-scene rings. Kept only for bug fixes/icon/mobile parity — **do not port new features here** unless explicitly asked; it is intentionally behind.
+
+- [game/TAB-Ne-Sep_v2-perspective.html](game/TAB-Ne-Sep_v2-perspective.html) — experimental copy of the current version (`UI_VARIANT = 'perspective'`) that replaces the flat ellipse rings with a real pinhole projection (`cameraDist`/`cameraFH`). Served at `/play-3d`. Gameplay is unchanged because `dist` is computed in real metres. Not yet tested in multi-device rooms; it shares no code with the main file, so fixes must be ported manually.
+
+The current version also randomizes each player's view per match (`pickViewAngle()`: `viewRatio` ∈ [1.4, 2.4] ring flatness + `viewRot` rotation of Boss/colleague positions; the first tutorial match keeps the original angle). This only changes rendering (`worldToScreenPx`); `dist` is view-invariant, so nothing needs syncing between clients in a room.
 
 Each file is a single self-contained HTML document (inline CSS/JS, no framework, no bundler). Only external dependencies are Google Fonts and the Supabase JS UMD build via CDN `<script>` tag. When editing, work directly in the inline `<script>`/`<style>` blocks — there is no source-map indirection to worry about.
 
@@ -36,6 +40,7 @@ Schema highlights ([supabase/schema.sql](supabase/schema.sql)):
 - `analytics_access_hours` / `analytics_screen_time` / `analytics_heatmap` — all-time cumulative anonymous analytics, fixed single-row(s) tables.
 - `analytics_*_daily` / `analytics_heatmap_weekly` — parallel time-bucketed analytics added later (kept alongside the all-time tables, not a replacement) to answer DAU/MAU/cohort/funnel questions. Day/week keys are computed **client-side in fixed Vietnam time (UTC+7)** via `vnDateKeyPadded()`/`vnWeekKey()` and passed to RPCs as text — never derived from Postgres server timestamp, to avoid timezone drift if the server isn't UTC+7.
 - `increment_*` RPCs (`increment_access_hour[_daily]`, `increment_screen_time[_daily]`, `increment_heatmap[_weekly]`) — atomic counter increments (`x = x + n` inside one `UPDATE`, row-locked by Postgres) replacing an earlier select-then-update pattern from the client that had a real race condition (concurrent writers silently clobbering each other's increments under load). These are `security definer`; the client can no longer `UPDATE` the analytics tables directly, only call the RPCs via `supabase-js` `.rpc(...)`.
+- `sanitize_player_name()` is applied server-side inside the player-writing RPCs, in addition to client-side `escapeHtml()`.
 - RLS: public read/write by design (anon/publishable key) — this is a client-only game with no backend server, accepted tradeoff for a public mini-game with no sensitive data.
 
 ### Player identity & known constraints
