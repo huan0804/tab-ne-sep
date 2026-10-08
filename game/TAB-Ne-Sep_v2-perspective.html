@@ -117,6 +117,8 @@
   #bossDistTag{margin-top:2px; font-family:var(--mono); font-size:11px; font-weight:700; color:#eee; background:rgba(0,0,0,0.55); padding:2px 8px; border-radius:6px; white-space:nowrap; transition:background 0.15s,color 0.15s;}
   #bossDistTag.danger{ background:rgba(220,38,38,0.88); color:#fff; }
   #bossDistTag.warn{ background:rgba(245,158,11,0.88); color:#1c1c1c; }
+  #bossLabel.targetOther{background:rgba(255,236,179,0.92); color:#6b4a00;}
+  #bossLabel.targetMe{background:rgba(220,38,38,0.9); color:#fff;}
   #bossLabel{margin-top:1px; font-size:11px; color:#5a5142; background:rgba(255,255,255,0.7); padding:1px 6px; border-radius:5px; letter-spacing:0.03em; font-weight:600; white-space:nowrap;}
   #bossBubble{
     position:absolute; bottom:100%; left:50%; margin-bottom:6px; transform:translateX(-50%) scale(0.8); max-width:190px; min-width:120px;
@@ -2867,6 +2869,32 @@
      Same two-axis scale as the rings, so the elliptical "dist" passed in
      (used for catch-radius/rearm logic and the number shown) always matches
      exactly which drawn ring the boss visually stands on. ---------- */
+  // Phòng chung: cho mọi người biết Sếp đang kiểm tra AI (giữ cảm giác căng thẳng
+  // chung — số mét/vòng đỏ vẫn hiện cho tất cả như cũ, chỉ thêm nhãn để không bị
+  // hiểu nhầm "Sếp <1m mà không bắt mình"). Chỉ đụng DOM khi nhãn thật sự đổi.
+  let lastBossLabelKey = null;
+  function updateBossLabel(){
+    let key = 'default', text = 'SẾP TÙNG', cls = '';
+    const tid = boss && boss.targetPlayerId;
+    if(roomMode !== 'solo' && boss && boss.forced && tid){
+      if(tid === playerId){ key = 'me'; text = '🎯 Đang nhắm BẠN!'; cls = 'targetMe'; }
+      else {
+        let name = 'đồng đội';
+        const presence = roomChannel ? roomChannel.presenceState() : {};
+        for(const k in presence){
+          const meta = presence[k] && presence[k][0];
+          if(meta && meta.playerId === tid){ name = String(meta.name || name).slice(0, 14); break; }
+        }
+        key = 'o:' + name; text = '👀 Đang kiểm tra ' + name; cls = 'targetOther';
+      }
+    }
+    if(key === lastBossLabelKey) return;
+    lastBossLabelKey = key;
+    bossLabelEl.textContent = text; // textContent: tên đến từ mạng, không dùng innerHTML
+    bossLabelEl.className = cls;
+  }
+  const bossLabelEl = document.getElementById('bossLabel');
+
   function updateBossPosition(dist, bx, by){
     const { px, py, scale: depthScale } = worldToScreenPx(bx, by);
     // 2 transform tách riêng thay vì 'calc(-50% + Npx)' gộp chung: offset
@@ -2875,6 +2903,7 @@
     bossUnit.style.transform = 'translate(-50%, -50%) translate3d(' + px + 'px, ' + py + 'px, 0) scale(' + depthScale + ')';
 
     bossDistTag.textContent = dist.toFixed(1) + ' m';
+    updateBossLabel();
     bossDistTag.classList.toggle('danger', dist <= 1.5);
     bossDistTag.classList.toggle('warn', dist > 1.5 && dist <= 3);
 
