@@ -303,6 +303,17 @@
   .nameChip{font-family:var(--body); font-size:12px; font-weight:600; padding:5px 10px; border-radius:14px; border:1.5px solid #e0d6c0; background:#f8f3e6; color:#8a6d1f; cursor:pointer;}
   .nameChip:active{ transform:scale(0.95); }
   #recordLine{font-size:12px; color:#8a6d1f; margin-bottom:12px;}
+  /* Nút hướng dẫn: có khung + chữ như nút Dừng (nút chỉ có icon trên nền tối từng bị bỏ sót) */
+  #hudHelpBtn{display:flex; align-items:center; gap:4px; background:rgba(96,165,250,0.12); border:1.5px solid rgba(96,165,250,0.5); border-radius:8px; font-family:var(--body); font-size:11px; font-weight:600; color:#9cc7ff; cursor:pointer; padding:5px 10px;}
+  #hudHelpBtn:hover{background:rgba(96,165,250,0.25); color:#fff;}
+  #helpModal{position:absolute; inset:0; z-index:60; display:none; align-items:center; justify-content:center; background:rgba(10,10,12,0.8); padding:16px;}
+  #helpModal.show{display:flex;}
+  #helpCard{background:var(--paper); color:var(--ink); padding:24px 22px 20px; border-radius:14px; max-width:400px; width:100%; box-shadow:0 20px 60px rgba(0,0,0,0.5); max-height:92dvh; overflow-y:auto; position:relative;}
+  #helpCard h2{font-family:var(--display); font-size:21px; margin:0 0 12px; text-align:center; color:#c1272d;}
+  #helpCard .introSteps{margin-top:0;}
+  #helpNote{font-size:12px; color:#8a6d1f; text-align:center; min-height:0; margin:2px 0 10px;}
+  #helpReplayBtn{display:block; width:100%; font-family:var(--body); font-weight:700; font-size:13.5px; padding:11px 14px; border-radius:10px; border:none; background:#c1272d; color:#fff; cursor:pointer;}
+  #helpCloseBtn{display:block; margin:10px auto 0; background:none; border:none; font-family:var(--body); font-size:13px; font-weight:700; color:#8a6d1f; text-decoration:underline; cursor:pointer; padding:6px;}
   #hudTrophyBtn{background:none; border:none; font-size:20px; cursor:pointer; padding:2px 4px;}
   /* Trước đây chỉ 1 icon "⏹" màu xám nhạt trên nền tối — gần như vô hình,
      không ai nhận ra đó là nút bấm được (thiếu affordance: không có nền,
@@ -386,6 +397,8 @@
        (đã rút gọn từ "Dừng ván" ở mọi kích thước màn hình, xem #hud HTML)
        để nút luôn tự giải thích được, nhất quán giữa desktop và mobile. */
     #hudStopBtn{padding:5px 7px; font-size:13px;}
+    #hudHelpBtn{padding:5px 7px; font-size:13px;}
+    #hudHelpBtn .hudHelpLabel{display:none;}
     #progressWrap{min-width:100px;}
     .mouse, .succulent{display:none;}
     #tabBtn{padding:13px 20px;font-size:13px;min-height:44px; background:#c1272d; border-color:#e0454b; box-shadow:0 6px 16px rgba(193,39,45,0.4); animation:pulseTabBtn 1.8s ease-in-out infinite;}
@@ -505,6 +518,7 @@
   <div id="hud">
     <div id="title">Ca Làm Việc Của Minh</div>
     <button id="hudStopBtn" title="Dừng ván, không tính điểm">⏹ <span class="hudStopLabel">Dừng</span></button>
+    <button id="hudHelpBtn" title="Xem lại hướng dẫn chơi">❓ <span class="hudHelpLabel">Hướng dẫn</span></button>
     <button id="hudTrophyBtn" title="Bảng xếp hạng">🏆</button>
     <div class="hud-block">
       <div class="hud-label">MẠNG</div>
@@ -617,6 +631,17 @@
   </div>
 
   <button id="replayFab" title="Chơi lại">▶️</button>
+
+  <div id="helpModal">
+    <div id="helpCard">
+      <button id="helpCloseX" class="modalCloseX" aria-label="Đóng">✕</button>
+      <h2>❓ Hướng dẫn chơi</h2>
+      <div id="helpSteps" class="introSteps open"></div>
+      <div id="helpNote"></div>
+      <button id="helpReplayBtn">🎓 Chơi lại hướng dẫn từng bước</button>
+      <button id="helpCloseBtn">Đóng</button>
+    </div>
+  </div>
 
   <div id="lbModal">
     <div id="lbCard">
@@ -773,7 +798,7 @@
   // Bốc góc nhìn mới cho ván này, rồi vẽ lại vòng + đồng nghiệp theo góc đó.
   // Ván tutorial đầu tiên giữ góc gốc để hình minh hoạ hướng dẫn không đổi.
   function pickViewAngle(){
-    if(hasSeenHint(HINT_TUTORIAL_DONE)){
+    if(hasSeenHint(HINT_TUTORIAL_DONE) && !replayTutorialPending){
       viewRot = Math.random() * Math.PI * 2;
     } else {
       viewRatio = CONFIG.ellipseRatio;
@@ -876,7 +901,10 @@
   // Chỉ áp dụng cho solo — room/multiplayer có host điều khiển boss riêng,
   // ép boss đứng yên ở đó sẽ ảnh hưởng tới người chơi khác trong phòng.
   const HINT_TUTORIAL_DONE = 'atd_tutorialDone';
+  let replayTutorialPending = false; // true trong lúc resetState() của lần "Chơi lại hướng dẫn" — giữ góc nhìn gốc như ván đầu
+  let helpPaused = false;           // đang mở hộp hướng dẫn giữa ván solo → đóng băng ván
   let tutorialActive = false; // true = đang ở ván solo đầu tiên, chưa bấm Tab lần nào
+  let tutorialReleased = false; // đã bấm Tab lần đầu (Sếp được thả) — chỉ từ đó coachmark "Sếp lại gần" mới có nghĩa
   let tutorialProximityWarned = false; // coachmark bước 2 (Sếp lại gần) đã hiện chưa — chỉ hiện đúng 1 lần/ván
   function hasSeenHint(key){ try{ return localStorage.getItem(key) === '1'; }catch(e){ return true; } }
   function markHintSeen(key){ try{ localStorage.setItem(key, '1'); }catch(e){} }
@@ -2512,7 +2540,7 @@
   }
 
   function toggleMode(){
-    if(!state.running || !state.gameStarted) return;
+    if(!state.running || !state.gameStarted || helpPaused) return;
     state.mode = state.mode === 'work' ? 'personal' : 'work';
     renderScreen();
     switcherOverlay.classList.add('show');
@@ -2525,6 +2553,7 @@
     // tiên — bất kể đổi sang mode nào, đây là tín hiệu "đã hiểu nút Tab dùng
     // để làm gì", nên thả Sếp ra (bước 2) ngay, không cần chờ mode cụ thể.
     if(tutorialActive){
+      tutorialReleased = true;
       boss.forced = false; // mở khoá — forceCloseApproach() tự nhiên trong tick() có thể chạy lại
       scheduleNextCheck();
     }
@@ -2743,7 +2772,7 @@
     // test tay thật: đọc không kịp/không để ý). Bước 2: hiện lại coachmark,
     // ngắn gọn hơn (người chơi đang căng thẳng, không có thời gian đọc câu
     // dài) đúng lúc banner "Sếp đang lại gần" vừa bật, chỉ 1 lần/ván.
-    if(tutorialActive && boss.forced && !tutorialProximityWarned){
+    if(tutorialActive && tutorialReleased && boss.forced && !tutorialProximityWarned){
       tutorialProximityWarned = true;
       showCoachmark('🚨 Sếp lại gần rồi — bấm TAB ngay!', 4000);
     }
@@ -2913,6 +2942,7 @@
     }
 
     if(!state.gameStarted || !state.running){ requestAnimationFrame(tick); return; }
+    if(helpPaused){ state.lastTick = now; requestAnimationFrame(tick); return; } // hộp hướng dẫn đang mở: đóng băng ván solo
     if(roomMode === 'guest'){
       window.__tickGaps = window.__tickGaps || [];
       if(window.__lastTickAt) window.__tickGaps.push(Math.round(now - window.__lastTickAt));
@@ -3036,6 +3066,64 @@
   });
   tabBtn.addEventListener('click', toggleMode);
 
+  // Bước đầu của tutorial ép: dùng cho ván solo đầu tiên VÀ khi người chơi bấm
+  // "Chơi lại hướng dẫn" ở nút ❓ trên thanh HUD (xem startTutorialReplay()).
+  function startTutorialCoaching(){
+    tutorialActive = true;
+    tutorialProximityWarned = false;
+    boss.forced = true; // khoá forceCloseApproach() tự động trong tick()
+    // Mặc định mode ban đầu luôn là 'personal' (xem resetState()) — tận
+    // dụng đúng lúc đó để dạy bước 4 (ý nghĩa màn hình) GỘP LUÔN với bước 1
+    // (nút Tab dùng để làm gì), vì 2 sự thật này chỉ đúng đồng thời ở đây:
+    // đang xem phim + cần biết Tab để né Sếp sau này.
+    showCoachmark('🎬 Đây là màn "xem phim" của bạn. Lát Sếp lại gần, bấm TAB để đổi sang màn làm việc nhé!', 6000);
+  }
+
+  /* ---------- Nút ❓ Hướng dẫn trên thanh HUD ----------
+     Xem lại 4 bước hướng dẫn (dùng lại nội dung #introSteps) và/hoặc chơi lại
+     tutorial ép từng bước. Solo: ván bị đóng băng khi hộp đang mở. Trong phòng
+     chung: chỉ xem được chữ, KHÔNG đóng băng/rời phòng (ván vẫn chạy với mọi
+     người) — chơi lại tutorial chỉ có ở solo. */
+  const helpModal = el('helpModal'), helpStepsEl = el('helpSteps'), helpNoteEl = el('helpNote');
+  const helpReplayBtn = el('helpReplayBtn'), helpCloseBtn = el('helpCloseBtn');
+  function openHelp(){
+    helpStepsEl.innerHTML = el('introSteps').innerHTML;
+    const inRoom = roomMode !== 'solo';
+    const midMatch = !inRoom && state && state.gameStarted && state.running;
+    helpPaused = midMatch;
+    helpReplayBtn.style.display = inRoom ? 'none' : '';
+    helpNoteEl.textContent = inRoom
+      ? 'Bạn đang trong phòng chơi chung nên ván vẫn chạy tiếp. Hướng dẫn từng bước chỉ chơi lại được ở chế độ 1 mình.'
+      : (midMatch ? 'Ván đang tạm dừng. Chọn "Chơi lại hướng dẫn" sẽ bỏ ván hiện tại (không tính điểm).' : '');
+    helpCloseBtn.textContent = midMatch ? 'Tiếp tục chơi' : 'Đóng';
+    helpModal.classList.add('show');
+  }
+  function closeHelp(){
+    helpModal.classList.remove('show');
+    helpPaused = false;
+  }
+  function startTutorialReplay(){
+    closeHelp();
+    modal.classList.remove('show');
+    replayFab.classList.remove('show');
+    resetRoomModeForReplay(); // no-op ở solo
+    replayTutorialPending = true;
+    resetState();
+    replayTutorialPending = false;
+    renderScreen();
+    updateHUD();
+    state.gameStarted = true;
+    state.lastTick = performance.now();
+    transitionPhase('game');
+    startTutorialCoaching();
+  }
+  el('hudHelpBtn').addEventListener('click', openHelp);
+  el('helpCloseX').addEventListener('click', closeHelp);
+  helpCloseBtn.addEventListener('click', closeHelp);
+  helpModal.addEventListener('click', (e)=>{ if(e.target === helpModal) closeHelp(); });
+  helpReplayBtn.addEventListener('click', startTutorialReplay);
+  window.addEventListener('keydown', (e)=>{ if(e.key === 'Escape' && helpModal.classList.contains('show')) closeHelp(); });
+
   startBtn.addEventListener('click', ()=>{
     const nm = nameInput.value.trim();
     if(nm) savePlayerName(nm);
@@ -3058,14 +3146,7 @@
     // roomMaxPlayers check không cần vì startBtn chỉ dẫn tới solo, không phải
     // room (room đi qua joinExistingRoom ở nhánh pendingRoomInvite phía trên).
     if(!hasSeenHint(HINT_TUTORIAL_DONE)){
-      tutorialActive = true;
-      tutorialProximityWarned = false;
-      boss.forced = true; // khoá forceCloseApproach() tự động trong tick()
-      // Mặc định mode ban đầu luôn là 'personal' (xem resetState()) — tận
-      // dụng đúng lúc đó để dạy bước 4 (ý nghĩa màn hình) GỘP LUÔN với bước 1
-      // (nút Tab dùng để làm gì), vì 2 sự thật này chỉ đúng đồng thời ở đây:
-      // đang xem phim + cần biết Tab để né Sếp sau này.
-      showCoachmark('🎬 Đây là màn "xem phim" của bạn. Lát Sếp lại gần, bấm TAB để đổi sang màn làm việc nhé!', 6000);
+      startTutorialCoaching();
     } else if(window.matchMedia('(max-width:480px)').matches && !hasSeenHint(HINT_TAB_BTN)){
       // Màn hẹp (điện thoại) không có phím Tab vật lý — chỉ có nút bấm dưới
       // màn hình, dễ bị bỏ sót lúc mới vào game. Chỉ dạy 1 lần duy nhất, chỉ
