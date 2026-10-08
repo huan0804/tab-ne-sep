@@ -446,6 +446,50 @@
     #monitorRig{ bottom:24%; }
   }
 
+  /* Điện thoại NẰM NGANG (chiều cao ≤ 520px). Bố cục desktop làm HUD + thanh nút
+     chiếm ~1/3 chiều cao nên cảnh chơi chỉ còn ~265px (bàn đè hàng đồng nghiệp, Sếp
+     bị cắt ra ngoài). Ở đây: HUD 1 hàng mỏng, nút Tab nổi ở góc dưới phải (ngón cái
+     phải), bỏ dòng gợi ý → cảnh chơi chiếm gần hết màn hình. */
+  @media (orientation:landscape) and (max-height:520px){
+    #hud{padding:4px 12px; gap:10px; flex-wrap:nowrap;}
+    #hud #title{display:none;}
+    .hud-block{flex-direction:row; align-items:baseline; gap:6px; min-width:0;}
+    .hud-label{font-size:9px;}
+    .hud-value{font-size:15px;}
+    #lives{font-size:14px; letter-spacing:1px;}
+    #progressWrap{flex:1; min-width:110px; max-width:260px;}
+    #progressTrack{height:9px;}
+    #hudStopBtn, #hudHelpBtn{padding:4px 8px; font-size:12px;}
+    #hudHelpBtn .hudHelpLabel{display:inline;}
+    #controls{position:absolute; right:14px; bottom:12px; z-index:31; width:auto; padding:0; border:none; background:transparent;}
+    #hint{display:none;}
+    #tabBtn{padding:14px 26px; font-size:15px; min-height:52px; background:#c1272d; border-color:#e0454b; box-shadow:0 6px 18px rgba(193,39,45,0.5); animation:none;}
+    #tabBtn:active{background:#a01f24;}
+    #coachmark{bottom:78px;}
+    .mouse, .succulent{display:none;}
+    #introCard, #roomWaitCard, #helpCard, #modalCard, #lbCard{padding:14px 18px; max-height:96dvh;}
+    #introCard{max-width:520px;}
+    #introCard h1{font-size:19px; margin-bottom:4px;}
+    .introLead{font-size:12.5px; margin-bottom:8px;}
+    #recordLine{margin-bottom:6px;}
+    #nameSuggestions{margin-top:4px; gap:4px;}
+    .nameChip{font-size:11px; padding:3px 8px;}
+    #startBtn{padding:10px 26px; font-size:14px;}
+    #createRoomBtn{margin-top:6px; padding:7px 14px;}
+    .bossPhotoRow{margin-top:6px;}
+  }
+
+  /* Nhắc xoay ngang: chỉ hiện khi điện thoại đang dọc mà không khoá được hướng ngang
+     (iOS, trình duyệt trong app Zalo/Facebook…) — luôn có nút "Vẫn chơi dọc". */
+  #rotatePrompt{position:fixed; inset:0; z-index:200; display:none; flex-direction:column; align-items:center; justify-content:center; gap:14px; background:rgba(10,12,22,0.97); color:#fff; text-align:center; padding:24px;}
+  #rotatePrompt.show{display:flex;}
+  #rotatePhone{font-size:64px; line-height:1; animation:rotatePhone 2s ease-in-out infinite;}
+  @keyframes rotatePhone{0%,25%{transform:rotate(0deg);} 60%,100%{transform:rotate(-90deg);}}
+  #rotatePrompt h2{font-family:var(--display); font-size:22px; margin:0;}
+  #rotatePrompt p{font-size:13.5px; color:#c9c4b6; margin:0; max-width:300px; line-height:1.5;}
+  #rotateSkipBtn{margin-top:6px; font-family:var(--body); font-weight:700; font-size:13.5px; padding:10px 20px; border-radius:10px; border:1.5px solid rgba(255,255,255,0.4); background:transparent; color:#fff; cursor:pointer;}
+  @media (prefers-reduced-motion: reduce){ #rotatePhone{animation:none;} }
+
   /* Accessibility: visible focus states for keyboard nav */
   button:focus-visible{ outline:3px solid #7ec8ff; outline-offset:2px; }
 
@@ -481,6 +525,12 @@
 </head>
 <body>
 <div id="stage">
+  <div id="rotatePrompt">
+    <div id="rotatePhone">📱</div>
+    <h2>Xoay ngang điện thoại để chơi</h2>
+    <p>Game thiết kế cho màn hình ngang — nhìn Sếp và các vòng khoảng cách rõ hơn nhiều.</p>
+    <button id="rotateSkipBtn" type="button">Vẫn chơi dọc</button>
+  </div>
   <input type="file" id="bossPhotoInput" accept="image/*" hidden>
 
   <div id="introScreen">
@@ -804,7 +854,10 @@
   }
   function groundToScreen(X, Z){
     const { D, f, fh } = persp();
-    const depth = Math.max(D + Z, 0.8); // chặn điểm ở sau/sát camera (Sếp spawn xa ngoài màn)
+    // Chặn điểm ở sau/sát camera (Sếp spawn/lang thang xa ngoài màn). Sàn depth = mép GẦN của vòng
+    // ngoài cùng (D − fieldRangeMeters): trước đây chặn ở 0.8 → Sếp ở phía camera bị phóng to tới
+    // D/0.8 ≈ 5.6 lần, che kín cả màn hình điện thoại; giờ tối đa D/(D−3) ≈ 3 lần.
+    const depth = Math.max(D + Z, D - CONFIG.fieldRangeMeters - 0.05);
     return { px: f * X / depth, py: fh * (1/depth - 1/D), scale: D / depth };
   }
   function ringGeom(r){
@@ -920,6 +973,7 @@
   // ép boss đứng yên ở đó sẽ ảnh hưởng tới người chơi khác trong phòng.
   const HINT_TUTORIAL_DONE = 'atd_tutorialDone';
   let replayTutorialPending = false; // true trong lúc resetState() của lần "Chơi lại hướng dẫn" — giữ góc nhìn gốc như ván đầu
+  let rotatePaused = false;         // đang hiện nhắc xoay ngang giữa ván solo → đóng băng ván
   let helpPaused = false;           // đang mở hộp hướng dẫn giữa ván solo → đóng băng ván
   let tutorialActive = false; // true = đang ở ván solo đầu tiên, chưa bấm Tab lần nào
   let tutorialReleased = false; // đã bấm Tab lần đầu (Sếp được thả) — chỉ từ đó coachmark "Sếp lại gần" mới có nghĩa
@@ -2606,7 +2660,7 @@
   }
 
   function toggleMode(){
-    if(!state.running || !state.gameStarted || helpPaused) return;
+    if(!state.running || !state.gameStarted || helpPaused || rotatePaused) return;
     state.mode = state.mode === 'work' ? 'personal' : 'work';
     renderScreen();
     switcherOverlay.classList.add('show');
@@ -3141,7 +3195,7 @@
     }
 
     if(!state.gameStarted || !state.running){ queueTick(); return; }
-    if(helpPaused){ state.lastTick = now; queueTick(); return; } // hộp hướng dẫn đang mở: đóng băng ván solo
+    if(helpPaused || rotatePaused){ state.lastTick = now; queueTick(); return; } // hộp hướng dẫn đang mở: đóng băng ván solo
     if(roomMode === 'guest'){
       window.__tickGaps = window.__tickGaps || [];
       if(window.__lastTickAt) window.__tickGaps.push(Math.round(now - window.__lastTickAt));
@@ -3287,6 +3341,40 @@
     if(e.key === 'Tab'){ e.preventDefault(); toggleMode(); }
   });
   tabBtn.addEventListener('click', toggleMode);
+
+  /* ---------- Tự xoay ngang trên điện thoại (như Tốc Chiến/Liên Quân) ----------
+     Web KHÔNG tự xoay được nếu không có thao tác của người dùng: phải gọi trong
+     chính cú chạm "Bắt đầu"/"Tạo phòng": toàn màn hình + screen.orientation.lock
+     ('landscape') — chạy được trên Android Chrome (kể cả khi tắt xoay tự động của
+     máy). iOS Safari và trình duyệt trong app (Zalo/Facebook) không hỗ trợ → hiện
+     nhắc xoay ngang có nút "Vẫn chơi dọc". KHÔNG dùng CSS rotate(90deg): từng thử và
+     bỏ vì bàn phím ảo không xoay theo, đo kích thước sai (xem ghi chú ở CSS). */
+  const rotatePromptEl = document.getElementById('rotatePrompt');
+  let rotateSkipped = false;
+  const isPhoneDevice = () => window.matchMedia('(pointer: coarse)').matches && Math.min(screen.width, screen.height) <= 700;
+  const isPortraitNow = () => window.matchMedia('(orientation: portrait)').matches;
+  function refreshRotatePrompt(){
+    const need = isPhoneDevice() && isPortraitNow() && !rotateSkipped && !!state && state.gameStarted && state.running && roomMode === 'solo';
+    rotatePromptEl.classList.toggle('show', need);
+    rotatePaused = need; // chỉ đóng băng ván solo; trong phòng chung không bao giờ hiện/đóng băng
+  }
+  async function requestLandscape(){
+    if(!isPhoneDevice() || !isPortraitNow()) return;
+    try{
+      if(!document.fullscreenElement && document.documentElement.requestFullscreen){
+        await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
+      }
+    }catch(e){}
+    try{
+      if(screen.orientation && screen.orientation.lock) await screen.orientation.lock('landscape');
+    }catch(e){}
+    setTimeout(refreshRotatePrompt, 700); // chưa xoay được sau khi thử → hiện nhắc
+  }
+  startBtn.addEventListener('click', requestLandscape);
+  createRoomBtn.addEventListener('click', requestLandscape);
+  window.addEventListener('resize', refreshRotatePrompt);
+  if(screen.orientation && screen.orientation.addEventListener) screen.orientation.addEventListener('change', refreshRotatePrompt);
+  el('rotateSkipBtn').addEventListener('click', ()=>{ rotateSkipped = true; refreshRotatePrompt(); });
 
   // Bước đầu của tutorial ép: dùng cho ván solo đầu tiên VÀ khi người chơi bấm
   // "Chơi lại hướng dẫn" ở nút ❓ trên thanh HUD (xem startTutorialReplay()).
