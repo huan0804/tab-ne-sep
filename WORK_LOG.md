@@ -2,7 +2,15 @@
 
 > File này ghi lại trạng thái dự án để tiếp tục ở phiên làm việc sau. Cập nhật mỗi khi có tiến triển lớn, dọn bớt phần đã lỗi thời để tránh phình to.
 
-## Trạng thái hiện tại (2026-09-23, phiên chiều)
+## Cập nhật 2026-10-08
+
+**✅ v2-perspective là bản chính.** `/play` (và alias `/play-3d`) → `game/TAB-Ne-Sep_v2-perspective.html` (phép chiếu pinhole thật, `UI_VARIANT='perspective'`); bản elip cũ `game/TAB-Ne-Sep.html` giữ ở `/play-2d` làm dự phòng. User đã test `/play-3d` và xác nhận ổn. Lưu ý: góc nhìn ngẫu nhiên mỗi ván (`pickViewAngle`) chỉ có ở bản elip, bản v2 dùng camera cố định. **Chưa test phòng nhiều máy trên v2.**
+
+**✅ Vá thuật toán Sếp (`b17ca9b`, áp dụng cả 2 bản, CHƯA test tay trong trình duyệt)** — user báo tần suất Sếp lại gần thấp. Mô phỏng Node cho thấy: (1) ~40% lần áp sát không tạo "lần vào 1m" mới vì Sếp bị kéo vào lần áp sát kế tiếp trước khi ra tới `rearmRadius` 1.8m nên `wasClose` không nạp lại; (2) ~7% đích áp sát nằm ngoài 1m do `checkTarget*` tính theo toạ độ game còn `dist` nhân y với `ellipseRatio`. Fix: nạp lại `wasClose` khi Sếp bắt đầu áp sát mới mà đang ngoài `catchRadius` (biến `prevBossForced` trong `tick()`), và chia đích cho `hypot(cos, sin·ellipseRatio)`. Kết quả mô phỏng: lần vào 1m/ván 60s tăng ~12.9 → ~17.8. Nếu quá gắt, chỉnh `checkGapStart/End`.
+
+---
+
+## Trạng thái trước đó (2026-09-23, phiên chiều)
 
 **✅ Đã chạy `schema.sql` thành công trên Supabase production** — việc ưu tiên cao nhất từ phiên trước đã xong. Verify: `select proname from pg_proc where proname in ('ensure_player','submit_match_result','start_room_match')` → đúng 3 dòng. Gặp 2 lỗi CHECK constraint chặn giữa chừng khi chạy, cả hai đã xử lý:
 - `players_avg_score_range` bị chặn bởi 1 dòng rác thật (id `06d8871f-...`, tên "tunnDavaoDa"): `avg_score≈1 tỷ`, `total_correct_time≈100 tỷ`, `best_score=30` (hợp lệ). Đây là dấu vết khai thác lỗ hổng RLS cũ (mục 1 dưới đây, `ff94716`) — sửa điểm trực tiếp qua REST trước khi RPC tồn tại. Đã reset dòng này về 0 (giữ lại id/tên, không xoá hẳn, để không phá liên kết `sessions.player_id` nếu có).
@@ -89,10 +97,11 @@ Bắt đầu từ vấn đề lag multiplayer đã treo từ phiên trước (ng
 ## File liên quan
 
 ```
-game/TAB-Ne-Sep.html            — bản chính: room "1 Sếp chung" + streak + challenge-link + mobile UX (portrait thật, không rotate) + ad slot trung lập + analytics ngày/tuần + tutorial ép ván đầu + monitor scale theo field + nhân vật Tom&Jerry/Pikachu
+game/TAB-Ne-Sep_v2-perspective.html — BẢN CHÍNH hiện tại (`/play`, `/play-3d`): bản dưới nhưng vòng khoảng cách phối cảnh thật
+game/TAB-Ne-Sep.html            — bản elip cũ (`/play-2d`, dự phòng): room "1 Sếp chung" + streak + challenge-link + mobile UX (portrait thật, không rotate) + ad slot trung lập + analytics ngày/tuần + tutorial ép ván đầu + monitor scale theo field + nhân vật Tom&Jerry/Pikachu
 game/TAB-Ne-Sep_v1-radar.html   — bản radar, CHỈ có bug fix + icon + mobile cũ, lạc hậu nhiều phiên so với bản chính
 supabase/schema.sql             — players/sessions/rooms + 6 RPC increment_* (analytics all-time + theo ngày/tuần) + RLS, đã verify chạy thành công trên Supabase production (2026-09-22)
-vercel.json                     — root "/" redirect → "/play", rewrite "/play" → "/game/TAB-Ne-Sep.html"
+vercel.json                     — root "/" redirect → "/play"; rewrite "/play" và "/play-3d" → v2-perspective, "/play-2d" → TAB-Ne-Sep.html
 ```
 
 **Branch riêng (chưa merge):** `canvas-poc` (commit `1efb0a3`) — POC vẽ vòng tròn khoảng cách bằng canvas thay DOM, xem mục "Việc dở" ở trên. `git checkout canvas-poc` để tự mở test.

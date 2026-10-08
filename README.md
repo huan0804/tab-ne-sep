@@ -6,7 +6,8 @@ Mini-game hài hước mô phỏng "lén xem phim trong giờ làm, né sếp ki
 
 ## Chơi thử
 
-- **Bản hiện hành (vòng vây elip):** xem [`game/TAB-Ne-Sep.html`](game/TAB-Ne-Sep.html) — mở link Artifact đã publish để có đầy đủ bảng xếp hạng + chia sẻ, hoặc mở file trực tiếp bằng trình duyệt để chơi offline (leaderboard sẽ tự chuyển sang lưu cục bộ).
+- **Bản hiện hành (vòng khoảng cách phối cảnh):** xem [`game/TAB-Ne-Sep_v2-perspective.html`](game/TAB-Ne-Sep_v2-perspective.html) (`/play`) — mở link Artifact đã publish để có đầy đủ bảng xếp hạng + chia sẻ, hoặc mở file trực tiếp bằng trình duyệt để chơi offline (leaderboard sẽ tự chuyển sang lưu cục bộ).
+- **Bản elip cũ:** [`game/TAB-Ne-Sep.html`](game/TAB-Ne-Sep.html) (`/play-2d`)
 - **Bản gốc (radar góc màn hình):** [`game/TAB-Ne-Sep_v1-radar.html`](game/TAB-Ne-Sep_v1-radar.html) — giữ lại để so sánh/A-B testing.
 
 ## Luật chơi cốt lõi
@@ -51,7 +52,8 @@ Nút Facebook dùng flow **copy link + mở tab Facebook trống** thay vì popu
 ```
 .
 ├── game/
-│   ├── TAB-Ne-Sep.html            # bản hiện hành — vòng vây elip
+│   ├── TAB-Ne-Sep_v2-perspective.html # bản hiện hành — vòng phối cảnh
+│   ├── TAB-Ne-Sep.html            # bản elip cũ (/play-2d)
 │   └── TAB-Ne-Sep_v1-radar.html   # bản gốc — radar góc màn hình
 ├── docs/
 │   └── GAME_SPEC.md               # đặc tả đầy đủ: luật chơi, AI, config, schema dữ liệu
