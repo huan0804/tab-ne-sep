@@ -2678,7 +2678,7 @@
     } else if(isRoomHost){
       hostBtn = document.createElement('button');
       hostBtn.textContent = '🔁 Chơi lại cả phòng';
-      hostBtn.style.cssText = 'margin-top:10px; width:100%; font-family:var(--body); font-weight:700; font-size:13px; padding:10px; border-radius:8px; border:1.5px solid #2563eb; background:#e8f0fe; color:#1e3a6d; cursor:pointer;';
+      hostBtn.style.cssText = 'margin-top:10px; width:100%; font-family:var(--body); font-weight:700; font-size:13px; padding:10px; border-radius:8px; border:none; background:#c1272d; color:#fff; box-shadow:0 6px 16px rgba(193,39,45,0.35); cursor:pointer;';
       hostBtn.addEventListener('click', ()=>{
         modal.classList.remove('show');
         startRoomMatchForEveryone();
