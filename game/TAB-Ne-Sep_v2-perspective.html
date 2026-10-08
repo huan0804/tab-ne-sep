@@ -479,6 +479,44 @@
     .bossPhotoRow{margin-top:6px;}
   }
 
+
+  /* GIAO DIỆN NGANG ÉP BẰNG CSS (html.fl) — chỉ khi người chơi chủ động chọn "Xoay giao diện"
+     vì máy/trình duyệt không khoá/không tự xoay được. Xoay #stage 90° quanh góc trên-trái; các luật
+     bên dưới là bản sao của khối landscape (media query KHÔNG thấy được khung đã xoay nên phải
+     lặp lại bằng class) + reset các luật màn hẹp/portrait đang áp theo viewport dọc thật. */
+  html.fl #stage{position:fixed; top:0; left:100%; width:100vh; width:100dvh; height:100vw; height:100dvw; transform-origin:0 0; transform:rotate(90deg);}
+  html.fl #hud{padding:4px 12px; gap:10px; flex-wrap:nowrap;}
+  html.fl #hud #title{display:none;}
+  html.fl .hud-block{flex-direction:row; align-items:baseline; gap:6px; min-width:0;}
+  html.fl .hud-label{font-size:9px;}
+  html.fl .hud-value{font-size:15px;}
+  html.fl #lives{font-size:14px; letter-spacing:1px;}
+  html.fl #progressWrap{flex:1; min-width:110px; max-width:260px;}
+  html.fl #progressTrack{height:9px;}
+  html.fl #hudStopBtn, html.fl #hudHelpBtn{padding:4px 8px; font-size:12px;}
+  html.fl #hudHelpBtn .hudHelpLabel{display:inline;}
+  html.fl #controls{position:absolute; right:14px; bottom:12px; z-index:31; width:auto; padding:0; border:none; background:transparent;}
+  html.fl #hint{display:none;}
+  html.fl #tabBtn{padding:14px 26px; font-size:15px; min-height:52px; background:#c1272d; border-color:#e0454b; box-shadow:0 6px 18px rgba(193,39,45,0.5); animation:none;}
+  html.fl #tabBtn:active{background:#a01f24;}
+  html.fl #coachmark{bottom:78px;}
+  html.fl .mouse, html.fl .succulent{display:none;}
+  html.fl #introCard, html.fl #roomWaitCard, html.fl #helpCard, html.fl #modalCard, html.fl #lbCard{padding:14px 18px; max-height:96dvh;}
+  html.fl #introCard{max-width:520px;}
+  html.fl #introCard h1{font-size:19px; margin-bottom:4px;}
+  html.fl .introLead{font-size:12.5px; margin-bottom:8px;}
+  html.fl #recordLine{margin-bottom:6px;}
+  html.fl #nameSuggestions{margin-top:4px; gap:4px;}
+  html.fl .nameChip{font-size:11px; padding:3px 8px;}
+  html.fl #startBtn{padding:10px 26px; font-size:14px;}
+  html.fl #createRoomBtn{margin-top:6px; padding:7px 14px;}
+  html.fl .bossPhotoRow{margin-top:6px;}
+  html.fl .keyboard{width:190px; height:52px;}
+  html.fl .column{width:38px;}
+  html.fl #bossFaceSvgWrap{width:64px; height:64px;}
+  html.fl #monitor{width:clamp(320px, 48cqw, 660px); height:clamp(200px, 33cqh, 420px);}
+  html.fl #monitorRig{bottom:28%;}
+
   /* Nhắc xoay ngang: chỉ hiện khi điện thoại đang dọc mà không khoá được hướng ngang
      (iOS, trình duyệt trong app Zalo/Facebook…) — luôn có nút "Vẫn chơi dọc". */
   #rotatePrompt{position:fixed; inset:0; z-index:200; display:none; flex-direction:column; align-items:center; justify-content:center; gap:14px; background:rgba(10,12,22,0.97); color:#fff; text-align:center; padding:24px;}
@@ -487,6 +525,9 @@
   @keyframes rotatePhone{0%,25%{transform:rotate(0deg);} 60%,100%{transform:rotate(-90deg);}}
   #rotatePrompt h2{font-family:var(--display); font-size:22px; margin:0;}
   #rotatePrompt p{font-size:13.5px; color:#c9c4b6; margin:0; max-width:300px; line-height:1.5;}
+  #rotateForceBtn{margin-top:4px; font-family:var(--body); font-weight:700; font-size:14.5px; padding:12px 22px; border-radius:10px; border:none; background:#c1272d; color:#fff; cursor:pointer; box-shadow:0 6px 18px rgba(193,39,45,0.5);}
+  #rotateDiag{font-size:10.5px; color:#7d7a72; max-width:300px; min-height:12px;}
+  #helpRotateBtn{display:none; width:100%; margin:0 0 8px; font-family:var(--body); font-weight:700; font-size:13.5px; padding:10px 14px; border-radius:10px; border:1.5px solid #8a6d1f; background:#fff; color:#8a6d1f; cursor:pointer;}
   #rotateSkipBtn{margin-top:6px; font-family:var(--body); font-weight:700; font-size:13.5px; padding:10px 20px; border-radius:10px; border:1.5px solid rgba(255,255,255,0.4); background:transparent; color:#fff; cursor:pointer;}
   @media (prefers-reduced-motion: reduce){ #rotatePhone{animation:none;} }
 
@@ -528,8 +569,10 @@
   <div id="rotatePrompt">
     <div id="rotatePhone">📱</div>
     <h2>Xoay ngang điện thoại để chơi</h2>
-    <p>Game thiết kế cho màn hình ngang — nhìn Sếp và các vòng khoảng cách rõ hơn nhiều.</p>
+    <p>Game thiết kế cho màn hình ngang — nhìn Sếp và các vòng khoảng cách rõ hơn nhiều. Xoay máy mà màn hình không chịu xoay? Bấm nút dưới để game tự xoay ngang, rồi nghiêng điện thoại sang trái.</p>
+    <button id="rotateForceBtn" type="button">↻ Xoay giao diện sang ngang</button>
     <button id="rotateSkipBtn" type="button">Vẫn chơi dọc</button>
+    <div id="rotateDiag"></div>
   </div>
   <input type="file" id="bossPhotoInput" accept="image/*" hidden>
 
@@ -702,6 +745,7 @@
       <h2>❓ Hướng dẫn chơi</h2>
       <div id="helpSteps" class="introSteps open"></div>
       <div id="helpNote"></div>
+      <button id="helpRotateBtn" type="button">📱 Xoay giao diện sang ngang</button>
       <button id="helpReplayBtn">🎓 Chơi lại hướng dẫn từng bước</button>
       <button id="helpCloseBtn">Đóng</button>
     </div>
@@ -3353,8 +3397,23 @@
   let rotateSkipped = false;
   const isPhoneDevice = () => window.matchMedia('(pointer: coarse)').matches && Math.min(screen.width, screen.height) <= 700;
   const isPortraitNow = () => window.matchMedia('(orientation: portrait)').matches;
+  const rootEl = document.documentElement;
+  let lastLockError = '';
+  // Giao diện ngang ép bằng CSS (html.fl): người chơi tự chọn khi máy/trình duyệt không xoay được.
+  function setForceLandscape(on){
+    rootEl.classList.toggle('fl', on);
+    try{ sessionStorage.setItem('atd_fl', on ? '1' : ''); }catch(e){}
+    // Khung đã đổi kích thước → buộc tính lại thang vòng khoảng cách/màn hình theo #scene mới.
+    requestAnimationFrame(()=> window.dispatchEvent(new Event('resize')));
+    refreshRotatePrompt();
+  }
   function refreshRotatePrompt(){
-    const need = isPhoneDevice() && isPortraitNow() && !rotateSkipped && !!state && state.gameStarted && state.running && roomMode === 'solo';
+    // Máy thật sự xoay ngang rồi → bỏ ép CSS để khỏi xoay đôi.
+    if(rootEl.classList.contains('fl') && !isPortraitNow()){ rootEl.classList.remove('fl'); try{ sessionStorage.setItem('atd_fl',''); }catch(e){} }
+    const forced = rootEl.classList.contains('fl');
+    const need = isPhoneDevice() && isPortraitNow() && !forced && !rotateSkipped && !!state && state.gameStarted && state.running && roomMode === 'solo';
+    const hb = document.getElementById('helpRotateBtn');
+    if(hb) hb.style.display = (isPhoneDevice() && isPortraitNow() && !forced) ? 'block' : 'none';
     rotatePromptEl.classList.toggle('show', need);
     rotatePaused = need; // chỉ đóng băng ván solo; trong phòng chung không bao giờ hiện/đóng băng
   }
@@ -3367,7 +3426,10 @@
     }catch(e){}
     try{
       if(screen.orientation && screen.orientation.lock) await screen.orientation.lock('landscape');
-    }catch(e){}
+      else lastLockError = 'trình duyệt không hỗ trợ khoá hướng';
+    }catch(e){ lastLockError = (e && e.name) ? e.name : 'lỗi không rõ'; }
+    const diag = document.getElementById('rotateDiag');
+    if(diag) diag.textContent = lastLockError ? ('(Không khoá được hướng ngang: ' + lastLockError + ')') : '';
     setTimeout(refreshRotatePrompt, 700); // chưa xoay được sau khi thử → hiện nhắc
   }
   startBtn.addEventListener('click', requestLandscape);
@@ -3375,6 +3437,10 @@
   window.addEventListener('resize', refreshRotatePrompt);
   if(screen.orientation && screen.orientation.addEventListener) screen.orientation.addEventListener('change', refreshRotatePrompt);
   el('rotateSkipBtn').addEventListener('click', ()=>{ rotateSkipped = true; refreshRotatePrompt(); });
+  el('rotateForceBtn').addEventListener('click', ()=> setForceLandscape(true));
+  el('helpRotateBtn').addEventListener('click', ()=>{ setForceLandscape(true); closeHelp(); });
+  // Nhớ lựa chọn trong phiên (vd. sau "Về trang chủ"/tải lại trang): vẫn ngang nếu máy vẫn dọc.
+  try{ if(sessionStorage.getItem('atd_fl') === '1' && isPhoneDevice() && isPortraitNow()) setForceLandscape(true); }catch(e){}
 
   // Bước đầu của tutorial ép: dùng cho ván solo đầu tiên VÀ khi người chơi bấm
   // "Chơi lại hướng dẫn" ở nút ❓ trên thanh HUD (xem startTutorialReplay()).
