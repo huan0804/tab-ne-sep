@@ -2,50 +2,42 @@
 
 > File này ghi lại trạng thái dự án để tiếp tục ở phiên làm việc sau. Cập nhật mỗi khi có tiến triển lớn, dọn bớt phần đã lỗi thời để tránh phình to.
 
-## Cập nhật 2026-10-08 (cuối phiên) — phòng nhóm & tutorial, đã push
+## Tổng kết phiên 2026-10-08 — 20 commit (`3451efa` → `f2dff55`), TOÀN BỘ đã push, production = `master`
 
-**✅ Đã xác nhận trên production:** schema.sql mục 5 đã chạy thành công; ghi điểm solo qua secret hoạt động (người dùng xác nhận bảng xếp hạng cập nhật). **Chưa xác nhận trên production:** tạo phòng/chơi lại bằng RPC có secret (đã test bằng Supabase giả + PGlite).
+### Trạng thái cuối phiên
+- `/play` (alias `/play-3d`) = `game/TAB-Ne-Sep_v2-perspective.html` — **bản chính duy nhất nhận tính năng mới**. `/play-2d` = `TAB-Ne-Sep.html` (bản elip cũ, chỉ nhận bản vá bảo mật + sửa lỗi tutorial/tick, KHÔNG có phòng-xin-chơi-lại/hướng dẫn/xoay ngang/dead reckoning). `v1-radar` không còn được deploy (`.vercelignore`).
+- **`supabase/schema.sql` mục 5 (hardening) ĐÃ chạy trên production** (người dùng xác nhận "Success"); curl xác nhận: ghi trực tiếp bị từ chối, RPC cũ biến mất, `schema.sql`/WORK_LOG/CLAUDE.md/docs trả 404, header bảo mật đủ.
+- **Đã xác nhận trên production:** ghi điểm solo qua secret; bảng xếp hạng; tải/hiện ảnh Sếp; nút Về trang chủ; nút Hướng dẫn; xoay giao diện CSS trên máy thật (ảnh người dùng gửi).
+- **CHƯA xác nhận trên máy/mạng thật:** tạo phòng + chơi lại + chuyển host bằng RPC có secret trên production (chỉ test bằng Supabase giả + PGlite); snapshot/dead reckoning trên mạng thật; tutorial làm tối + nhãn Sếp + phòng 5 người trên điện thoại; `orientation.lock` trên Android Chrome thật.
 
-Đã làm (commit `b5e4ca0` → `99a8006`, đều đã push, chỉ bản `TAB-Ne-Sep_v2-perspective.html`):
-- Nút "Chơi lại cả phòng" màu đỏ (CTA chính).
-- Nhãn dưới Sếp trong phòng: "👀 Đang kiểm tra <tên>" / "🎯 Đang nhắm BẠN!" — giữ nguyên số mét/viền đỏ cho cả phòng (cố ý, để cả phòng cùng căng thẳng). Việc Sếp <1m mà không bắt người không bị nhắm là THIẾT KẾ, không phải lỗi.
-- Chọn mục tiêu bằng shuffle-bag (`pickNextTargetPlayerId`): mỗi vòng mọi người bị nhắm đúng 1 lần. Cũ (random độc lập) chênh tới 6/7/9; mới 7/7/7.
-- Tutorial: làm tối phần không cần thiết (#tutorialDim, `setTutorialFocus`): bước 1 sáng màn hình + nút Tab, bước 2 thêm Sếp + vòng; tắt khi Tab lần 2/bị bắt/hết ván/14s. Sửa banner "SẾP ĐANG LẠI GẦN" hiện sớm.
-- Nội suy Sếp phía guest (snapshot interpolation), nút ❓ Hướng dẫn, "Về trang chủ", xin chơi lại tới host + chuyển host (xem các mục trước).
+### Đã làm (theo chủ đề)
+1. **Bản chính = v2-perspective**: route `/play` → v2; tài liệu cập nhật.
+2. **Thuật toán Sếp ít lại gần** (`b17ca9b`): ~40% lần áp sát không thành "lần vào 1m" vì `wasClose` chỉ nạp lại khi ra >1.8m, ~7% đích áp sát nằm ngoài 1m do trục y nhân `ellipseRatio`. Fix: nạp lại khi bắt đầu áp sát mới (`prevBossForced`) + chia đích cho `hypot(cos, sin·ellipseRatio)` → lần vào 1m/ván 12.9 → 17.8 (mô phỏng).
+3. **Tính năng người chơi**: ảnh Sếp tự chọn (localStorage, JPEG 192px, không upload); nút ❓ Hướng dẫn trên HUD (đóng băng ván solo, "Chơi lại hướng dẫn từng bước"); Về trang chủ ở popup kết quả; tutorial **làm tối** phần không cần thiết (`#tutorialDim`, `setTutorialFocus`: bước 1 sáng màn hình + Tab, bước 2 thêm Sếp + vòng; tắt khi Tab lần 2/bị bắt/hết ván/14s).
+4. **Phòng nhóm**: "Xin chơi lại" gửi tới host (không rời phòng), host chỉ bấm "Chơi lại cả phòng" khi mọi người xong; **chuyển host** khi host rời (người có `playerId` nhỏ nhất, mọi máy tự tính cùng kết quả; RPC `claim_room_host` best-effort, thiếu RPC vẫn chạy bằng broadcast `match_start`); nhãn "👀 Đang kiểm tra <tên>" / "🎯 Đang nhắm BẠN!" (giữ nguyên số mét/viền đỏ cho cả phòng — Sếp <1m mà không bắt người không bị nhắm là THIẾT KẾ); chọn mục tiêu bằng **shuffle-bag** (cũ chênh 6/7/9, mới 7/7/7); nút "Chơi lại cả phòng" màu đỏ.
+5. **Tải Realtime** (gói free Supabase = **100 tin/giây CẢ project, tính cả gửi lẫn nhận**): host từng phát vị trí Sếp 15Hz → phòng 5 người ~66 tin/giây. Qua 2 bước: (a) snapshot interpolation phía guest (trễ cố định 100ms, độ lệch đồng hồ min()+làm mượt); (b) **dead reckoning**: host chỉ gửi khi đích/tốc độ/mục tiêu đổi + heartbeat 1s (`CONFIG.bossHeartbeatMs`), guest tự tính ở giữa + hiệu chỉnh tắt dần ~150ms → **66 → 6,7 tin/giây**, độ giật P95 ~1,05 → ~0,43px (mạng giả lập giật, 7 cặp xen kẽ). Host cũ (stream 15Hz) vẫn được guest mới hỗ trợ.
+6. **Bảo mật** (schema.sql mục 5 + client + vercel.json):
+   - XSS giữa người chơi qua broadcast `player_state` (workData nối thẳng innerHTML) — dựng exploit thật: bản cũ chạy mã (8 lần/nạn nhân), bản vá 0. Mọi payload mạng qua `sanitize*`/`isSafeId`/`remote*`.
+   - Xác thực chủ `playerId` bằng secret 256-bit (`player_secrets`, lưu SHA-256; mọi RPC ghi nhận `p_secret`; CÓ THỂ DÙNG LẠI mẫu `player_auth()` cho RPC mới).
+   - Bỏ INSERT trực tiếp `sessions`/`rooms` (RPC `create_room`; `submit_match_result` tự ghi sessions), thu hồi quyền ghi của anon, rate-limit IP + người chơi, điểm bị chặn theo thời gian thật, streak kẹp ở server, validate RPC analytics.
+   - `vercel.json` CSP/X-Frame-Options/nosniff/Referrer/Permissions/COOP; `.vercelignore`; supabase-js ghim 2.117.3 + SRI; `window.open` noopener.
+7. **Điện thoại**: bấm Bắt đầu/Tạo phòng → toàn màn hình + `screen.orientation.lock('landscape')` (`requestLandscape()`); không khoá được → `#rotatePrompt` (đóng băng ván solo, không áp dụng trong phòng) với nút **"↻ Xoay giao diện sang ngang"** (cũng ở ❓ Hướng dẫn) = `html.fl` xoay #stage 90° bằng CSS, luật landscape SINH LẠI dưới tiền tố `html.fl` + reset luật màn hẹp; nghiêng máy sang TRÁI; tự bỏ khi máy xoay ngang thật; nhớ trong sessionStorage `atd_fl`; `#rotateDiag` in lý do khoá thất bại. Bố cục điện thoại nằm ngang (`@media (orientation:landscape) and (max-height:520px)`): HUD 1 hàng, nút Tab nổi góc dưới phải, cảnh cao 350px (trước ~265px).
+8. **Lỗi có sẵn tìm thấy & sửa**: `tick()` nhân đôi mỗi lần "Chơi lại" (1→2→3→4 vòng/khung hình; nay `queueTick()`, cả 2 bản); coachmark tutorial bước 1 bị bước 2 ghi đè ngay + banner "SẾP ĐANG LẠI GẦN" hiện sớm (cả 2 bản); guest không tự vào ván mới khi host "Chơi lại cả phòng" (`state.gameStarted` vẫn true sau `endGame`); Sếp bị phóng 5,6 lần che màn hình khi lang thang phía camera (chặn depth ở mép vòng 3m, tối đa ~3 lần).
 
-**Xoay ngang trên điện thoại:** bấm Bắt đầu/Tạo phòng → thử toàn màn hình + `screen.orientation.lock('landscape')` (`requestLandscape()`); không khoá được (iOS, trình duyệt trong app Zalo/Facebook) → hiện `#rotatePrompt` nhắc xoay ngang, có nút "Vẫn chơi dọc", đóng băng ván solo khi đang hiện (KHÔNG áp dụng trong phòng chung). KHÔNG dùng CSS rotate(90deg) (đã từng thử và bỏ: bàn phím ảo không xoay theo, đo kích thước sai). Thêm bố cục điện thoại nằm ngang (`@media (orientation:landscape) and (max-height:520px)`): HUD 1 hàng mỏng, nút Tab nổi góc dưới phải, bỏ dòng gợi ý → cảnh cao 350px thay vì ~265px. Sửa Sếp bị phóng to 5,6 lần che màn hình khi lang thang phía camera (chặn depth ở mép vòng 3m, tối đa ~3 lần). **Phản hồi thật (2026-10-08):** máy người dùng vào được toàn màn hình nhưng `orientation.lock` thất bại và xoay máy KHÔNG đổi viewport → màn nhắc không bao giờ tắt. Đã thêm đường dự phòng: nút "↻ Xoay giao diện sang ngang" (cũng có trong ❓ Hướng dẫn) bật `html.fl` = xoay #stage 90° bằng CSS, với toàn bộ luật landscape được SINH LẠI dưới tiền tố `html.fl` (media query không thấy khung đã xoay) + reset luật màn hẹp/portrait; tự bỏ khi máy xoay ngang thật; nhớ lựa chọn trong sessionStorage `atd_fl`; hiện lý do khoá thất bại (`#rotateDiag`). Người chơi phải nghiêng máy sang TRÁI để chữ đúng chiều. Rủi ro đã biết của cách CSS-rotate: bàn phím ảo không xoay theo (chỉ ảnh hưởng ô nhập tên ở màn bắt đầu), toạ độ heatmap analytics lệch. Còn **CHƯA test trên điện thoại thật** (headless không có lock/fullscreen thật): cần thử Android Chrome (kỳ vọng tự xoay) và trong Zalo/Facebook (kỳ vọng hiện nhắc).
+### Quyết định & bài học cần nhớ
+- **KHÔNG làm PWA** để ép ngang (người dùng chọn giữ nguyên cách khoá-hướng + nút xoay CSS). Lý do web không tự xoay "mặc định" như game app: app khai báo hướng với OS, web chỉ xin được sau thao tác người dùng và trình duyệt trong app (Zalo/Facebook) / iOS thường từ chối. Máy người dùng: vào được toàn màn hình nhưng lock thất bại, xoay máy không đổi viewport.
+- Cách CSS-rotate từng bị bỏ (bàn phím ảo không xoay theo, đo kích thước sai) nay quay lại có chọn lọc, chỉ khi người chơi tự bấm; rủi ro còn: bàn phím ảo (chỉ ô nhập tên ở màn bắt đầu), toạ độ heatmap analytics lệch.
+- 8 repo người dùng gửi (Open-Party-Lab, OpenParty, awesome-team-building, MultiplayerNetworkingResources, lightspeed, Vercidium/lag-compensation, ue5-server-side-rewind, player_lagcompensation.cpp): **không dùng thư viện nào**. Lag compensation/server-rewind là cho game bắn súng (cần server mô phỏng) — game này mỗi client tự chấm "bị bắt" theo đúng vị trí Sếp mình thấy nên không cần. Chỉ lấy ý "lịch sử có timestamp + nội suy".
+- Test kiểu "Supabase giả (hub trong Node, định tuyến realtime giữa nhiều Chrome headless) + PGlite (Postgres thật bằng WASM)" bắt được nhiều lỗi mà test đơn lẻ không thấy, và tránh làm bẩn leaderboard production. **Bộ test này nằm ở thư mục tạm của phiên, KHÔNG có trong repo** — dựng lại nếu cần (hub: mô phỏng channel/presence/broadcast/postgres_changes + RPC rooms; đo giật bằng cách parse `translate3d` của #bossUnit mỗi khung hình).
+- Đo trước, kết luận sau: phép đo giật rất nhiễu (đường đi Sếp ngẫu nhiên, 2–5 Chrome chung 1 máy) → chạy xen kẽ cũ/mới nhiều cặp và tách "rơi khung hình" khỏi "Sếp nhảy thật".
 
-**Tải Realtime (gói free Supabase = 100 tin/giây CẢ project, tính cả gửi lẫn nhận):** trước đây host phát vị trí Sếp 15Hz → phòng 5 người ~66 tin/giây (chỉ đủ ~1 phòng 5 người, ~7 người chơi phòng cùng lúc toàn game). Đã chuyển sang dead reckoning: host chỉ gửi khi đích/tốc độ/mục tiêu đổi + heartbeat 1s (`CONFIG.bossHeartbeatMs`), guest tự tính vị trí giữa các tin (`seg.sp !== undefined`), có độ lệch hiệu chỉnh tắt dần ~150ms khi đổi phân đoạn. Phòng 5 người còn ~6,7 tin/giây (~10x ít hơn). Đo trên trình duyệt thật + mạng giả lập giật, 7 cặp xen kẽ: độ giật P95 ~1,05 → ~0,43px, cú nhảy thật 31/2/3/1 → 0/0/0/0 (1 lượt đầu của bản mới có 24 cú nhảy chưa phân biệt được với rơi khung hình). Host cũ (còn stream 15Hz, không có tx/ty/sp) vẫn được guest mới hỗ trợ bằng nội suy. `/play-2d` KHÔNG đổi (vẫn 15Hz).
-
-**Việc còn mở:**
-- Test tay trên điện thoại/nhiều máy thật: tutorial làm tối, nhãn Sếp, phòng nhiều người, snapshot interpolation.
-- ~~Vòng lặp tick() bị nhân đôi mỗi lần "Chơi lại"~~ → ĐÃ SỬA: đo được 1→2→3→4 vòng/khung hình sau 3 lần chơi lại (vòng phụ dt=0 nên tốc độ game không đổi, nhưng nhân việc vẽ/HUD); nay `queueTick()` chỉ cho 1 lượt rAF chờ sẵn → luôn 1 vòng. Áp dụng cả `/play-2d`.
-- `/play-2d` (bản elip) chỉ nhận bản vá bảo mật + sửa tutorial, KHÔNG có tính năng phòng/hướng dẫn mới.
-
----
-
-## Cập nhật 2026-10-08 (phiên tối) — RÀ SOÁT & TĂNG CƯỜNG BẢO MẬT
-
-**⚠️ VIỆC BẮT BUỘC SAU KHI PUSH: chạy lại `supabase/schema.sql` (mục 5 mới) trong Supabase SQL Editor ngay sau khi Vercel deploy xong.** Chữ ký RPC cũ bị xoá nên client mới và schema mới phải đi cùng nhau; chưa chạy SQL thì tạo phòng/ghi điểm sẽ lỗi (graceful, không crash). Schema đã chạy thử 2 lần liên tiếp trên Postgres thật (PGlite) + 50 test, nhưng CHƯA chạy trên Supabase production.
-
-Đã phát hiện & vá:
-- **XSS giữa người chơi** qua broadcast `player_state` (workData đồng đội nối thẳng innerHTML): dựng exploit thật → bản cũ chạy được mã trong trình duyệt nạn nhân, bản vá = 0. Mọi payload nhận qua mạng giờ qua `sanitize*`/`isSafeId`.
-- **Không có xác thực chủ playerId** (id công khai trên leaderboard): ai cũng đổi tên/đẩy điểm/cướp host người khác → thêm secret 256-bit/người (`player_secrets`, lưu SHA-256), mọi RPC ghi yêu cầu `p_secret`.
-- **Ghi trực tiếp**: bỏ INSERT của `sessions`/`rooms` (chuyển RPC `create_room`, `submit_match_result` tự ghi sessions), thu hồi quyền ghi của anon, ẩn đọc `sessions`.
-- **Analytics RPC**: validate date_key/week_key (trước đây tạo được vô hạn dòng), heatmap JSON (giới hạn khoá/giá trị), duration (âm/NaN/khổng lồ).
-- **Rate-limit** theo IP + theo người chơi; điểm bị chặn theo thời gian thật; streak kẹp ở server; tên bỏ `<>`.
-- **Triển khai**: `vercel.json` thêm CSP/X-Frame-Options/nosniff/Referrer/Permissions/COOP; `.vercelignore` (trước đó schema.sql, WORK_LOG, CLAUDE.md, docs đang public trên domain); supabase-js ghim 2.117.3 + SRI; `window.open` thêm noopener.
-- Bản `v1-radar` không còn được deploy (mã cũ, chưa tương thích RPC mới). `/play-2d` đã cập nhật cùng client.
-
-Rủi ro còn lại (đã biết, chưa giải quyết): (1) dòng `players` CŨ chưa có chủ — ai gọi RPC với id đó trước chủ thật sẽ chiếm (người chơi bị chiếm sẽ bị "forbidden", cần xoá localStorage để tạo id mới); (2) kênh Realtime không xác thực → kẻ biết mã phòng giả được tin nhắn host (không chạy được mã, không đụng điểm); (3) điểm vẫn do client tự tính → cheat "hoàn hảo theo thời gian thật" không chặn được nếu không có server mô phỏng; (4) CSP còn `'unsafe-inline'` vì game là 1 file inline.
-
----
-
-## Cập nhật 2026-10-08 (phiên chiều)
-
-**✅ v2-perspective là bản chính.** `/play` (và alias `/play-3d`) → `game/TAB-Ne-Sep_v2-perspective.html` (phép chiếu pinhole thật, `UI_VARIANT='perspective'`); bản elip cũ `game/TAB-Ne-Sep.html` giữ ở `/play-2d` làm dự phòng. User đã test `/play-3d` và xác nhận ổn. Lưu ý: góc nhìn ngẫu nhiên mỗi ván (`pickViewAngle`) chỉ có ở bản elip, bản v2 dùng camera cố định. **Chưa test phòng nhiều máy trên v2.**
-
-**✅ Vá thuật toán Sếp (`b17ca9b`, áp dụng cả 2 bản, CHƯA test tay trong trình duyệt)** — user báo tần suất Sếp lại gần thấp. Mô phỏng Node cho thấy: (1) ~40% lần áp sát không tạo "lần vào 1m" mới vì Sếp bị kéo vào lần áp sát kế tiếp trước khi ra tới `rearmRadius` 1.8m nên `wasClose` không nạp lại; (2) ~7% đích áp sát nằm ngoài 1m do `checkTarget*` tính theo toạ độ game còn `dist` nhân y với `ellipseRatio`. Fix: nạp lại `wasClose` khi Sếp bắt đầu áp sát mới mà đang ngoài `catchRadius` (biến `prevBossForced` trong `tick()`), và chia đích cho `hypot(cos, sin·ellipseRatio)`. Kết quả mô phỏng: lần vào 1m/ván 60s tăng ~12.9 → ~17.8. Nếu quá gắt, chỉnh `checkGapStart/End`.
+### Việc còn mở
+- **Test tay trên điện thoại/nhiều máy thật** (ưu tiên): tạo phòng + chơi lại + chuyển host trên production; Sếp mượt ở guest; tutorial làm tối; nhãn Sếp; phòng 5 người; `orientation.lock` trên Android Chrome (mở trực tiếp) và nhắc xoay trong Zalo/Facebook; popup/HUD ở chế độ `html.fl`.
+- Rủi ro bảo mật còn lại: (1) dòng `players` CŨ chưa có chủ — ai gọi RPC với id đó trước chủ thật sẽ chiếm (người bị chiếm gặp "forbidden", xoá localStorage để tạo id mới); (2) kênh Realtime không xác thực → kẻ biết mã phòng giả được tin nhắn host (không chạy được mã, không đụng điểm); (3) điểm vẫn do client tính → cheat "hoàn hảo theo thời gian thật" không chặn được nếu thiếu server mô phỏng; (4) CSP còn `'unsafe-inline'` (game là 1 file inline); (5) `claim_room_host` ai biết mã phòng + id host cũ + có tài khoản hợp lệ đều gọi được.
+- Trần Realtime gói free vẫn là giới hạn quy mô: ~100 tin/giây cả project (nay ~1,3 tin/giây/người trong phòng → vài chục người phòng chung cùng lúc).
+- `/play-2d` thiếu hầu hết tính năng mới — cân nhắc gỡ hẳn route nếu không cần fallback.
+- README.md và docs/GAME_SPEC.md vẫn lỗi thời (không có streak/challenge/room/Supabase/phòng nhóm hiện tại).
+- Ad slot `#adSlot` chưa gắn network; Facebook Share Dialog vẫn bỏ qua (cần App ID).
 
 ---
 
@@ -136,11 +128,13 @@ Bắt đầu từ vấn đề lag multiplayer đã treo từ phiên trước (ng
 ## File liên quan
 
 ```
-game/TAB-Ne-Sep_v2-perspective.html — BẢN CHÍNH hiện tại (`/play`, `/play-3d`): bản dưới nhưng vòng khoảng cách phối cảnh thật
-game/TAB-Ne-Sep.html            — bản elip cũ (`/play-2d`, dự phòng): room "1 Sếp chung" + streak + challenge-link + mobile UX (portrait thật, không rotate) + ad slot trung lập + analytics ngày/tuần + tutorial ép ván đầu + monitor scale theo field + nhân vật Tom&Jerry/Pikachu
-game/TAB-Ne-Sep_v1-radar.html   — bản radar, CHỈ có bug fix + icon + mobile cũ, lạc hậu nhiều phiên so với bản chính
-supabase/schema.sql             — players/sessions/rooms + 6 RPC increment_* (analytics all-time + theo ngày/tuần) + RLS, đã verify chạy thành công trên Supabase production (2026-09-22)
-vercel.json                     — root "/" redirect → "/play"; rewrite "/play" và "/play-3d" → v2-perspective, "/play-2d" → TAB-Ne-Sep.html
+game/TAB-Ne-Sep_v2-perspective.html — BẢN CHÍNH (`/play`, `/play-3d`): phối cảnh thật, phòng nhóm (xin chơi lại, chuyển host, shuffle-bag, dead reckoning), ảnh Sếp, ❓ Hướng dẫn, tutorial làm tối, xoay ngang, secret theo người chơi
+game/TAB-Ne-Sep.html            — bản elip cũ (`/play-2d`, dự phòng): chỉ bản vá bảo mật + sửa tutorial/tick, thiếu tính năng mới
+game/TAB-Ne-Sep_v1-radar.html   — bản radar cũ, KHÔNG còn deploy (.vercelignore), chưa tương thích RPC mới
+supabase/schema.sql             — bảng + RPC + RLS; MỤC 5 (cuối file) = hardening: player_secrets, rate_limits, player_auth(), create_room, validate_*, thu hồi quyền ghi; idempotent; chạy lại toàn bộ khi sửa; ĐÃ chạy trên production (2026-10-08)
+vercel.json                     — redirect "/" → "/play"; rewrite /play + /play-3d → v2, /play-2d → TAB-Ne-Sep.html; header bảo mật (CSP, X-Frame-Options, nosniff, Referrer, Permissions, COOP)
+.vercelignore                   — loại supabase/, docs/, *.md, .claude/, v1-radar khỏi bản deploy công khai
+CLAUDE.md                       — mô hình bảo mật + quy tắc dữ liệu mạng không tin cậy + bề mặt deploy (cập nhật 2026-10-08)
 ```
 
 **Branch riêng (chưa merge):** `canvas-poc` (commit `1efb0a3`) — POC vẽ vòng tròn khoảng cách bằng canvas thay DOM, xem mục "Việc dở" ở trên. `git checkout canvas-poc` để tự mở test.
