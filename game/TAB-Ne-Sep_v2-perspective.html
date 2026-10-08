@@ -71,6 +71,17 @@
   .ring.r1{border-color:rgba(220,38,38,0.4);}
   .ring-label{position:absolute; top:50%; font-family:var(--mono); font-size:10px; font-weight:700; color:#8a8a86; background:rgba(255,255,255,0.55); padding:1px 5px; border-radius:4px; white-space:nowrap;}
   .ring-label.danger{color:#b91c1c; background:rgba(255,255,255,0.75);}
+  /* Tutorial: làm tối mọi thứ không cần thiết để người mới tập trung vào đúng bước.
+     #tutorialDim nằm ở z-index 7 trong #scene: phần tử z < 7 bị phủ tối, phần tử
+     được nâng lên z > 7 vẫn sáng. Bước 1 (xem phim + Tab): chỉ màn hình + nút Tab
+     sáng. Bước 2 (Sếp lại gần): thêm Sếp + các vòng khoảng cách. */
+  #tutorialDim{position:absolute; inset:0; z-index:7; background:rgba(8,10,20,0.68); opacity:0; pointer-events:none; transition:opacity 0.35s;}
+  #stage.tutStep1 #tutorialDim, #stage.tutStep2 #tutorialDim{opacity:1;}
+  #stage.tutStep1 #desk, #stage.tutStep2 #desk{z-index:9;}
+  #stage.tutStep1 #bossUnit{z-index:6;}
+  #stage.tutStep2 #proxField{z-index:8;}
+  #stage.tutStep1 #hud, #stage.tutStep2 #hud, #stage.tutStep1 #hint, #stage.tutStep2 #hint{opacity:0.3; transition:opacity 0.35s;}
+  #stage.tutStep1 #tabBtn, #stage.tutStep2 #tabBtn{box-shadow:0 0 0 3px rgba(255,255,255,0.9), 0 0 24px 6px rgba(193,39,45,0.75); position:relative; z-index:31;}
   #radarAlert{position:absolute; top:12px; left:50%; transform:translateX(-50%); z-index:26; font-size:12px; font-weight:bold; color:#fff; background:rgba(220,38,38,0.85); padding:4px 14px; border-radius:20px; opacity:0; transition:opacity 0.15s; text-align:center;}
   #radarAlert.show{opacity:1;}
 
@@ -562,6 +573,7 @@
       <div class="co-desk"><div class="silhouette"></div><div class="headsil"></div><div class="glow"></div><div class="drawer"></div></div>
     </div>
 
+    <div id="tutorialDim"></div>
     <div id="radarAlert">🚨 SẾP ĐANG LẠI GẦN!</div>
 
     <div id="proxField"></div>
@@ -2270,6 +2282,7 @@
     // sẽ chạy lại từ bước 1 sạch sẽ (thay vì kẹt ở giữa nếu chỉ tắt cờ mà
     // không dọn — resetState() ở startBtn handler tạo boss mới nên an toàn).
     tutorialActive = false;
+    setTutorialFocus(0);
     if(roomMode !== 'solo') resetRoomModeForReplay();
     transitionPhase('intro');
     introScreen.classList.remove('hide');
@@ -2600,7 +2613,8 @@
     // tiên — bất kể đổi sang mode nào, đây là tín hiệu "đã hiểu nút Tab dùng
     // để làm gì", nên thả Sếp ra (bước 2) ngay, không cần chờ mode cụ thể.
     if(tutorialActive){
-      tutorialReleased = true;
+      if(tutorialReleased) setTutorialFocus(0);       // Tab lần 2: đã biết né → trả lại giao diện bình thường
+      else { tutorialReleased = true; setTutorialFocus(2); } // Tab lần 1: tập trung vào Sếp + vòng khoảng cách
       boss.forced = false; // mở khoá — forceCloseApproach() tự nhiên trong tick() có thể chạy lại
       scheduleNextCheck();
     }
@@ -2922,7 +2936,7 @@
     bossDistTag.classList.toggle('danger', dist <= 1.5);
     bossDistTag.classList.toggle('warn', dist > 1.5 && dist <= 3);
 
-    radarAlert.classList.toggle('show', boss.forced);
+    radarAlert.classList.toggle('show', boss.forced && !(tutorialActive && !tutorialReleased));
     // Coachmark bước 1 (lúc startBtn) đã tự ẩn sau 6s từ trước khi Sếp thực
     // sự lại gần — người chơi lúc này chỉ còn #hint tĩnh ở cuối màn hình,
     // quá xa tầm mắt đang dán vào Sếp/banner đỏ giữa màn hình (phản hồi
@@ -2968,6 +2982,7 @@
     // lại" ngay trong modal kết quả.
     if(tutorialActive){
       tutorialActive = false;
+      setTutorialFocus(0);
       markHintSeen(HINT_TUTORIAL_DONE);
     }
     if(roomMode !== 'solo') roomFinishedPlayerIds.add(playerId);
@@ -3049,6 +3064,7 @@
     showBossBubble(pick(SCOLD_LINES), 1300);
     beep(140, 0.3, 'sawtooth', 0.09);
     if(tutorialActive){
+      setTutorialFocus(0); // bị bắt: trả lại giao diện đầy đủ (mạng/đồng hồ) để xem hậu quả
       // Bước 3: người phỏng vấn thật đã nhầm "màn hình laptop hiện ra = bị
       // bắt", trong khi thực chất laptop là do NGƯỜI CHƠI tự bấm Tab, còn bị
       // bắt là do bấm TRỄ. Nói thẳng nguyên nhân — cause-and-effect — thay vì
@@ -3225,7 +3241,18 @@
 
   // Bước đầu của tutorial ép: dùng cho ván solo đầu tiên VÀ khi người chơi bấm
   // "Chơi lại hướng dẫn" ở nút ❓ trên thanh HUD (xem startTutorialReplay()).
+  // 0 = tắt, 1 = bước xem phim + Tab, 2 = bước Sếp lại gần. Tự tắt sau khi người
+  // chơi bấm Tab lần 2 (đã né được), bị bắt, hoặc kết thúc/dừng ván.
+  let tutorialFocusTimer = null;
+  function setTutorialFocus(step){
+    clearTimeout(tutorialFocusTimer);
+    stageEl.classList.toggle('tutStep1', step === 1);
+    stageEl.classList.toggle('tutStep2', step === 2);
+    if(step === 2) tutorialFocusTimer = setTimeout(()=>setTutorialFocus(0), 14000); // chốt an toàn: không để tối mãi
+  }
+  const stageEl = document.getElementById('stage');
   function startTutorialCoaching(){
+    setTutorialFocus(1);
     tutorialActive = true;
     tutorialProximityWarned = false;
     boss.forced = true; // khoá forceCloseApproach() tự động trong tick()
