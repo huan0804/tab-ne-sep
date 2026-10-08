@@ -15,7 +15,7 @@
 
 **Việc còn mở:**
 - Test tay trên điện thoại/nhiều máy thật: tutorial làm tối, nhãn Sếp, phòng nhiều người, snapshot interpolation.
-- `modalBtn` ("Chơi lại") gọi thêm `requestAnimationFrame(tick)` mỗi lần dù `tick()` luôn tự lặp → có thể nhân đôi vòng lặp theo số lần chơi lại (chưa kiểm chứng có gây lỗi thật).
+- ~~Vòng lặp tick() bị nhân đôi mỗi lần "Chơi lại"~~ → ĐÃ SỬA: đo được 1→2→3→4 vòng/khung hình sau 3 lần chơi lại (vòng phụ dt=0 nên tốc độ game không đổi, nhưng nhân việc vẽ/HUD); nay `queueTick()` chỉ cho 1 lượt rAF chờ sẵn → luôn 1 vòng. Áp dụng cả `/play-2d`.
 - `/play-2d` (bản elip) chỉ nhận bản vá bảo mật + sửa tutorial, KHÔNG có tính năng phòng/hướng dẫn mới.
 
 ---

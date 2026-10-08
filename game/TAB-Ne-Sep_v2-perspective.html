@@ -2353,7 +2353,7 @@
     renderScreen();
     updateHUD();
     transitionPhase('game');
-    requestAnimationFrame(tick);
+    queueTick();
   });
   lbCloseX.addEventListener('click', ()=>lbModal.classList.remove('show'));
   lbModal.addEventListener('click', (e)=>{ if(e.target === lbModal) lbModal.classList.remove('show'); });
@@ -3078,6 +3078,18 @@
     if(state.lives <= 0){ endGame(false, 'caught'); }
   }
 
+  // CHỈ MỘT lượt rAF chờ sẵn tại mọi thời điểm. Trước đây "Chơi lại" gọi thêm
+  // requestAnimationFrame(tick) dù tick() luôn tự lặp → mỗi lần chơi lại thêm 1 vòng
+  // lặp song song (1→2→3→…), nhân đôi việc vẽ/HUD mỗi khung hình. Gọi queueTick()
+  // nhiều lần vô hại; nếu vòng lặp từng chết vì lỗi, gọi lại sẽ khởi động lại nó.
+  let tickQueued = false;
+  function tickFrame(t){ tickQueued = false; tick(t); }
+  function queueTick(){
+    if(tickQueued) return;
+    tickQueued = true;
+    requestAnimationFrame(tickFrame);
+  }
+
   function tick(now){
     // "1 Sếp chung": host phải tiếp tục mô phỏng + Broadcast Sếp cho cả phòng
     // NGAY CẢ SAU KHI chính host đã endGame() (state.running=false) — người
@@ -3114,8 +3126,8 @@
       }
     }
 
-    if(!state.gameStarted || !state.running){ requestAnimationFrame(tick); return; }
-    if(helpPaused){ state.lastTick = now; requestAnimationFrame(tick); return; } // hộp hướng dẫn đang mở: đóng băng ván solo
+    if(!state.gameStarted || !state.running){ queueTick(); return; }
+    if(helpPaused){ state.lastTick = now; queueTick(); return; } // hộp hướng dẫn đang mở: đóng băng ván solo
     if(roomMode === 'guest'){
       window.__tickGaps = window.__tickGaps || [];
       if(window.__lastTickAt) window.__tickGaps.push(Math.round(now - window.__lastTickAt));
@@ -3231,7 +3243,7 @@
     if(state.personalTime >= CONFIG.targetPersonalTime){ endGame(true); }
     else if(state.elapsed >= CONFIG.matchDuration){ endGame(false, 'timeout'); }
 
-    requestAnimationFrame(tick);
+    queueTick();
   }
 
   window.addEventListener('keydown', (e)=>{
@@ -3359,7 +3371,7 @@
     renderScreen();
     updateHUD();
     transitionPhase('game');
-    requestAnimationFrame(tick);
+    queueTick();
   });
 
   // Về màn hình đầu (chọn Solo / Tạo phòng / đổi ảnh Sếp) thay vì bắt buộc vào
@@ -3383,7 +3395,7 @@
   updateHUD();
   refreshBossPhotoUI();
   setBossFace('calm');
-  requestAnimationFrame(tick);
+  queueTick();
 })();
 </script>
 </body>
