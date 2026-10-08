@@ -692,7 +692,13 @@
     // nhận chồng lấn vì không đủ diện tích hình học. Chặn ở UI thay vì để
     // xảy ra bug hiển thị (đã từng gặp: người biến mất khỏi màn hình nhau).
     roomMaxPlayers: 6,
-    roomBroadcastHz: 15 // tần suất host gửi vị trí Sếp cho cả phòng
+    roomBroadcastHz: 15, // tần suất host gửi vị trí Sếp cho cả phòng
+    // Guest vẽ Sếp "trong quá khứ" đúng ngần này ms và nội suy giữa 2 snapshot
+    // đã nhận (snapshot interpolation) thay vì đuổi theo gói mới nhất — gói tới
+    // không đều (jitter) không còn làm Sếp khựng/giật. ≈1.5 chu kỳ broadcast
+    // (1000/15≈67ms) để hầu như luôn có sẵn 2 snapshot bao quanh thời điểm vẽ.
+    bossInterpDelayMs: 100,
+    bossExtrapolateMaxMs: 150 // gói trễ quá delay: ngoại suy tối đa chừng này rồi giữ yên
   };
 
   const el = id => document.getElementById(id);
@@ -1607,6 +1613,19 @@
         boss.x = payload.x; boss.y = payload.y;
       }
       boss.netX = payload.x; boss.netY = payload.y;
+      if(payload.ht !== undefined){
+        // Đồng hồ host/guest lệch nhau — ước lượng độ lệch + độ trễ mạng tối thiểu
+        // bằng min(thời điểm nhận − thời điểm gửi) trên cửa sổ trượt ~40 gói; gói
+        // nhận nhanh nhất là gói ít bị trễ thêm nhất. Nhờ vậy thời điểm vẽ không
+        // dao động theo jitter từng gói.
+        const snaps = boss.snaps || (boss.snaps = []);
+        const offs = boss.snapOffsets || (boss.snapOffsets = []);
+        offs.push(performance.now() - payload.ht);
+        if(offs.length > 40) offs.shift();
+        boss.netOffset = Math.min.apply(null, offs);
+        snaps.push({ t: payload.ht, x: payload.x, y: payload.y });
+        if(snaps.length > 30) snaps.shift();
+      }
       boss.forced = payload.forced; boss.targetPlayerId = payload.targetPlayerId;
       if(payload.finishedPlayerIds) roomFinishedPlayerIds = new Set(payload.finishedPlayerIds);
       updateTeammateTargetHighlight();
@@ -2886,7 +2905,7 @@
         if(nowMs - lastBroadcastAt >= 1000/CONFIG.roomBroadcastHz){
           lastBroadcastAt = nowMs;
           roomChannel.send({ type:'broadcast', event:'boss_state', payload:{
-            x: boss.x, y: boss.y, forced: boss.forced, targetPlayerId: currentTargetPlayerId,
+            x: boss.x, y: boss.y, ht: performance.now(), forced: boss.forced, targetPlayerId: currentTargetPlayerId,
             finishedPlayerIds: Array.from(roomFinishedPlayerIds)
           }});
         }
@@ -2936,7 +2955,37 @@
     // sang thẳng, để chuyển động mượt tương đương host. Hệ số 12 nghĩa là
     // "đuổi kịp" phần lớn khoảng cách trong ~1-2 lần broadcast — đủ nhanh để
     // không bị trễ tay khi Sếp đổi hướng đột ngột, đủ mượt để không giật.
-    if(roomMode === 'guest' && boss.netX !== undefined){
+    if(roomMode === 'guest' && boss.snaps && boss.snaps.length > 0){
+      // Snapshot interpolation: vẽ vị trí Sếp tại (bây giờ − độ trễ cố định) theo
+      // đồng hồ host, nội suy tuyến tính giữa 2 snapshot bao quanh thời điểm đó.
+      const snaps = boss.snaps;
+      // netOffset là ước lượng min() nên có thể nhảy cả chục ms khi gói nhanh nhất rời
+      // cửa sổ; Sếp đi tới 3.4m/s nên nhảy 100ms ≈ 0.34m ≈ vài chục px — làm mượt
+      // dần (hằng số thời gian ~0.5s) để không bao giờ thấy Sếp "dịch" đột ngột.
+      boss.offsetSmooth = boss.offsetSmooth === undefined ? boss.netOffset
+        : boss.offsetSmooth + (boss.netOffset - boss.offsetSmooth) * Math.min(1, dt * 2);
+      const rt = now - boss.offsetSmooth - CONFIG.bossInterpDelayMs; // rt: thời điểm cần vẽ, theo đồng hồ host
+      const last = snaps[snaps.length-1];
+      if(rt <= snaps[0].t){ boss.x = snaps[0].x; boss.y = snaps[0].y; }
+      else if(rt >= last.t){
+        // Hết snapshot (gói trễ/mất): ngoại suy ngắn theo vận tốc 2 gói cuối, rồi giữ yên.
+        const prev = snaps.length > 1 ? snaps[snaps.length-2] : null;
+        let ex = 0, ey = 0;
+        if(prev && last.t > prev.t){
+          const k = Math.min(rt - last.t, CONFIG.bossExtrapolateMaxMs) / (last.t - prev.t);
+          ex = (last.x - prev.x) * k; ey = (last.y - prev.y) * k;
+        }
+        boss.x = last.x + ex; boss.y = last.y + ey;
+      } else {
+        let i = snaps.length - 2;
+        while(i > 0 && snaps[i].t > rt) i--;
+        const a = snaps[i], b = snaps[i+1];
+        const u = (rt - a.t) / (b.t - a.t);
+        boss.x = a.x + (b.x - a.x) * u;
+        boss.y = a.y + (b.y - a.y) * u;
+      }
+    } else if(roomMode === 'guest' && boss.netX !== undefined){
+      // Dự phòng khi host cũ chưa gửi timestamp (ht): đuổi theo gói mới nhất như trước.
       const lerpFactor = Math.min(1, dt * 12);
       boss.x += (boss.netX - boss.x) * lerpFactor;
       boss.y += (boss.netY - boss.y) * lerpFactor;
