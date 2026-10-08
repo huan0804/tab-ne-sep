@@ -562,6 +562,30 @@ $$;
 
 grant execute on function start_room_match(text, text) to anon, authenticated;
 
+-- Chuyển quyền host khi host cũ rời phòng (host-migration phía client: các
+-- thành viên còn lại tự đồng thuận người có playerId nhỏ nhất). CHỈ đổi được
+-- nếu người gọi biết đúng host_player_id hiện tại của phòng — không có
+-- Supabase Auth nên đây là mức kiểm tra tối đa khả thi; tradeoff đã biết: ai
+-- biết cả mã phòng lẫn playerId của host cũ đều có thể gọi hàm này.
+create or replace function claim_room_host(p_room_id text, p_new_host_id text, p_old_host_id text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  update rooms set host_player_id = p_new_host_id
+  where id = p_room_id and host_player_id = p_old_host_id
+    and exists (select 1 from players where id = p_new_host_id);
+
+  if not found then
+    raise exception 'not authorized or invalid room state';
+  end if;
+end;
+$$;
+
+grant execute on function claim_room_host(text, text, text) to anon, authenticated;
+
 alter table analytics_access_hours_daily enable row level security;
 alter table analytics_screen_time_daily enable row level security;
 alter table analytics_heatmap_weekly enable row level security;

@@ -236,6 +236,7 @@
   #replayFab.show{display:flex;}
   #modalCard h2{ font-family:var(--display); font-size:24px; margin:0 0 8px; }
   #modalCard p{ font-size:13.5px; line-height:1.5; color:#333; }
+  #modalBtn:disabled{opacity:0.6; cursor:default;}
   #modalBtn{margin-top:14px; font-family:var(--mono); font-weight:bold; font-size:13px; padding:10px 22px; border-radius:6px; border:none; background:var(--ink); color:var(--paper); cursor:pointer;}
   /* Ad slot trung lập — KHÔNG gắn cứng network nào (AdSense/brand deal đều
      nạp vào đây qua renderAdSlot(), xem <script>). Rỗng = display:none, để
@@ -358,7 +359,7 @@
   #roomPlayerList{text-align:left; background:#f8f3e6; border-radius:12px; padding:10px 14px; margin-bottom:14px; max-height:180px; overflow-y:auto;}
   .roomPlayerRow{font-size:13.5px; padding:4px 0; color:#3a3327; display:flex; justify-content:space-between;}
   .roomPlayerRow .youTag{color:#8a6d1f; font-size:11px;}
-  #roomStartBtn{font-family:var(--mono); font-weight:bold; font-size:15px; padding:12px 30px; border-radius:12px; border:none; background:#c1272d; color:#fff; cursor:pointer; box-shadow:0 8px 20px rgba(193,39,45,0.4);}
+  #roomStartBtn{display:block; margin:0 auto; font-family:var(--mono); font-weight:bold; font-size:15px; padding:12px 30px; border-radius:12px; border:none; background:#c1272d; color:#fff; cursor:pointer; box-shadow:0 8px 20px rgba(193,39,45,0.4);}
   #roomWaitingForHost{font-size:13px; color:#8a6d1f; padding:10px 0;}
   #roomLeaveBtn{display:block; margin:12px auto 0; background:none; border:none; font-family:var(--body); font-size:12px; color:#999; text-decoration:underline; cursor:pointer;}
 
@@ -1496,6 +1497,14 @@
   let currentTargetPlayerId = null;   // null = Sếp đang ambient, không nhắm ai
   let lastAmbientAnchorId = null;     // người vừa bị nhắm gần nhất — tâm ambient kế tiếp
   let lastBroadcastAt = 0;
+  // Sau ván: ai (không phải host) đã bấm "Xin chơi lại" — Map id→tên, mọi client
+  // đều theo dõi qua broadcast 'replay_request' để cùng thấy ai đã sẵn sàng.
+  let roomReplayRequests = new Map();
+  let roomHostNotice = '';            // thông báo đổi chủ phòng, hiện trong modal kết quả
+  // true khi mình lên làm host do host cũ rời đi nhưng RPC claim_room_host chưa
+  // xác nhận được (chưa chạy schema.sql mới) — khi đó rooms.host_player_id ở DB
+  // vẫn là host cũ nên start_room_match sẽ bị từ chối; bắt đầu bằng broadcast thay thế.
+  let hostMigratedLocally = false;
 
   function genRoomCode(){
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // bỏ ký tự dễ nhầm (I/O/0/1)
@@ -1560,10 +1569,16 @@
       roomMode = 'guest';
       roomMatchResults = {};
       renderTeammates();
-      if(wasAlreadyInRoom && state && !state.gameStarted){
+      if(wasAlreadyInRoom && state && (!state.gameStarted || !state.running)){
         // Ván trước đã kết thúc (đang ở modal kết quả) và host vừa bấm chơi
         // lại — tự đưa mình vào ván mới ngay, không cần chờ postgres_changes.
         modal.classList.remove('show');
+        startRoomMatchForEveryone();
+      } else if(!wasAlreadyInRoom && roomWaitScreen.classList.contains('show')){
+        // Đang ở màn chờ: thường postgres_changes (rooms.status) lo việc vào
+        // ván, nhưng host mới (sau khi host cũ rời) có thể không đổi được
+        // status ở DB — match_start là đường dự phòng. startRoomMatchForEveryone()
+        // tự bỏ qua lần gọi thứ 2 nếu ván đã bắt đầu rồi.
         startRoomMatchForEveryone();
       }
     });
@@ -1618,17 +1633,14 @@
       renderRoomReplayUI();
     });
 
-    roomChannel.on('presence', { event: 'leave' }, ({ key }) => {
-      if(roomMode === 'host'){
-        // Khách rời giữa trận — coi như đã xong để Sếp không kẹt nhắm người
-        // không còn ở đó nữa.
-        roomFinishedPlayerIds.add(key);
-        return;
-      }
-      if(roomMode === 'guest' && key === roomChannel._hostPlayerId){
-        handleHostDisconnected();
-      }
+    // Ai đó (không phải host) bấm "Xin chơi lại" sau khi xong ván — host cần
+    // biết để quyết định bắt đầu; mọi người thấy danh sách ai đã sẵn sàng.
+    roomChannel.on('broadcast', { event: 'replay_request' }, ({ payload }) => {
+      roomReplayRequests.set(payload.playerId, payload.name || 'Ẩn danh');
+      renderRoomReplayUI();
     });
+
+    roomChannel.on('presence', { event: 'leave' }, ({ key }) => handleRoomMemberLeft(key));
 
     // Chặn phòng quá đông NGAY TRƯỚC khi track() presence của chính mình —
     // presenceState() lúc này chưa gồm mình nên đếm được đúng số người ĐÃ
@@ -1755,6 +1767,9 @@
     // link phòng — chờ tối đa vài trăm ms cho state sẵn sàng để tránh lỗi
     // runtime khi gán state.gameStarted trên object chưa tồn tại.
     if(typeof state === 'undefined' || !state){ setTimeout(startRoomMatchForEveryone, 100); return; }
+    // Có thể bị gọi 2 lần cho cùng 1 ván (postgres_changes + broadcast
+    // match_start cùng tới) — nếu đã trong ván phòng đang chạy thì bỏ qua.
+    if(state.gameStarted && state.running && roomMode !== 'solo') return;
 
     if(isRoomHost){
       roomPlayerIds = Object.keys(roomChannel.presenceState()).map(key => {
@@ -1786,6 +1801,8 @@
     // tức). resetState() tự đọc roomMode để tạo boss đúng kiểu (host mô
     // phỏng cục bộ quanh bossAnchor(), guest chờ broadcast).
     resetState();
+    roomReplayRequests = new Map();
+    roomHostNotice = '';
     hideRoomWaitScreen();
     state.gameStarted = true;
     state.lastTick = performance.now();
@@ -1806,6 +1823,7 @@
   // — muốn chơi chung lại thì tạo/vào phòng mới từ màn intro như bình thường.
   function resetRoomModeForReplay(){
     if(roomMode === 'solo') return;
+    roomReplayRequests = new Map(); roomHostNotice = ''; hostMigratedLocally = false;
     if(roomChannel){ try{ sb.removeChannel(roomChannel); }catch(e){} roomChannel = null; }
     roomMode = 'solo';
     currentRoomId = null;
@@ -1828,18 +1846,50 @@
     }catch(e){}
   }
 
-  async function handleHostDisconnected(){
-    if(!state || !state.running) return;
-    endGame(false, 'host_left');
-    if(roomChannel){ try{ await sb.removeChannel(roomChannel); }catch(e){} roomChannel = null; }
-    roomMode = 'solo';
-    currentRoomId = null;
-    isRoomHost = false;
-    teammatePlayerStates = {};
-    roomMatchResults = {};
-    teammatesLayer.innerHTML = '';
-    monitorEl.classList.remove('roomShrink');
-    sizeMonitorToField(); // targetRatio đổi theo roomShrink — tính lại ngay
+  // Có người rời phòng (presence leave). Ai cũng coi người đó là "đã xong" để
+  // không chờ/nhắm họ nữa. Nếu người rời là HOST: mọi client tự tính cùng một
+  // kết quả (người còn lại có playerId nhỏ nhất theo thứ tự chữ) nên không cần
+  // phối hợp qua mạng. Ván đang chạy thì dừng (không còn ai mô phỏng Sếp chung),
+  // nhưng mọi người ở lại phòng — host mới điều khiển ván kế tiếp.
+  function handleRoomMemberLeft(key){
+    if(!roomChannel) return;
+    roomFinishedPlayerIds.add(key);
+    if(key !== roomChannel._hostPlayerId){
+      renderRoomReplayUI();
+      return;
+    }
+    const presence = roomChannel.presenceState();
+    const remaining = Object.keys(presence).filter(k => k !== key).sort();
+    const newHostId = remaining[0];
+    if(!newHostId) return;
+    const meta = presence[newHostId] && presence[newHostId][0];
+    roomChannel._hostPlayerId = newHostId;
+    roomHostNotice = newHostId === playerId
+      ? '👑 Chủ phòng đã rời — bạn là chủ phòng mới.'
+      : '👑 Chủ phòng đã rời — ' + ((meta && meta.name) || 'một thành viên') + ' là chủ phòng mới.';
+    if(state && state.gameStarted && state.running && roomMode !== 'solo') endGame(false, 'host_left');
+    if(newHostId === playerId) becomeRoomHost(key);
+    else {
+      updateRoomHostUI();
+      renderRoomPlayerList(presence);
+    }
+    renderRoomReplayUI();
+  }
+
+  function becomeRoomHost(oldHostId){
+    isRoomHost = true;
+    hostMigratedLocally = true;
+    if(roomMode === 'guest') roomMode = 'host'; // đang ở modal kết quả — chỉ cần quyền host cho ván kế tiếp
+    updateRoomHostUI();
+    renderRoomPlayerList(roomChannel.presenceState());
+    showToastIn(roomToast, '👑 Bạn là chủ phòng mới');
+    // Cố gắng cập nhật rooms.host_player_id ở DB (best-effort, fail graceful nếu
+    // chưa chạy schema.sql có claim_room_host) để start_room_match còn dùng được.
+    if(sb && currentRoomId){
+      sb.rpc('claim_room_host', { p_room_id: currentRoomId, p_new_host_id: playerId, p_old_host_id: oldHostId })
+        .then(({ error }) => { if(!error) hostMigratedLocally = false; })
+        .catch(()=>{});
+    }
   }
 
   createRoomBtn.addEventListener('click', createRoom);
@@ -1850,12 +1900,13 @@
     // start_room_match trong supabase/schema.sql mục 2f) — isRoomHost ở
     // trên chỉ là kiểm tra UI, không phải nguồn tin cậy thật.
     const { error } = await sb.rpc('start_room_match', { p_room_id: currentRoomId, p_requester_id: playerId });
-    if(error) return;
+    if(error && !hostMigratedLocally) return;
     // Host tự chuyển màn ngay — client khác chuyển khi nhận postgres_changes.
     startRoomMatchForEveryone();
   });
 
   roomLeaveBtn.addEventListener('click', async ()=>{
+    roomReplayRequests = new Map(); roomHostNotice = ''; hostMigratedLocally = false;
     if(roomChannel){ try{ await sb.removeChannel(roomChannel); }catch(e){} roomChannel = null; }
     currentRoomId = null;
     isRoomHost = false;
@@ -2201,6 +2252,7 @@
   modalCloseX.addEventListener('click', closeResultModal);
   modal.addEventListener('click', (e)=>{ if(e.target === modal) closeResultModal(); });
   replayFab.addEventListener('click', ()=>{
+    if(roomMode !== 'solo'){ replayFab.classList.remove('show'); modal.classList.add('show'); renderRoomReplayUI(); return; }
     replayFab.classList.remove('show');
     resetRoomModeForReplay();
     resetState();
@@ -2510,34 +2562,54 @@
       + '</div>';
   }
 
-  // Nút "Chơi lại cả phòng" CHỈ hiện khi TẤT CẢ mọi người trong phòng đã
-  // finish (kể cả host) — nếu host bấm khi người khác còn đang chơi dở,
-  // match_start mới sẽ ghi đè deskLayout/boss của họ trong khi UI vẫn đang
-  // hiển thị ván cũ, gây lệch dữ liệu nghiêm trọng. Gọi lại hàm này mỗi khi
-  // có thêm người finish (broadcast player_finished tới) để tự động hiện
-  // nút đúng lúc, không cần đóng/mở lại modal.
+  // Sau ván trong phòng chung:
+  //  - Người chơi thường: nút chính thành "Xin chơi lại cùng phòng" — gửi yêu
+  //    cầu tới host (KHÔNG rời phòng như "Chơi lại" solo).
+  //  - Host: chỉ bấm "Chơi lại cả phòng" được khi TẤT CẢ mọi người đã finish —
+  //    nếu bấm khi người khác còn chơi dở, match_start mới sẽ ghi đè
+  //    deskLayout/boss của họ trong khi UI vẫn hiển thị ván cũ.
+  // Gọi lại mỗi khi có người finish/rời/xin chơi lại để cập nhật tức thì.
   function renderRoomReplayUI(){
     const replayEl = el('modalRoomReplay');
-    if(!replayEl || roomMode === 'solo') return;
-    const allFinished = roomFinishedPlayerIds.size >= roomPlayerIds.length;
-    if(!allFinished){
-      const waiting = roomPlayerIds.length - roomFinishedPlayerIds.size;
-      replayEl.innerHTML = '<div style="margin-top:10px; font-size:12px; color:#8a6d1f; text-align:center;">Đang chờ ' + waiting + ' người chơi khác hoàn thành...</div>';
+    if(roomMode === 'solo'){
+      modalBtn.style.display = '';
+      modalBtn.disabled = false;
+      modalBtn.textContent = 'Chơi lại';
       return;
     }
     if(isRoomHost){
-      replayEl.innerHTML = '';
-      const btn = document.createElement('button');
-      btn.textContent = '🔁 Chơi lại cả phòng';
-      btn.style.cssText = 'margin-top:10px; width:100%; font-family:var(--body); font-weight:700; font-size:13px; padding:10px; border-radius:8px; border:1.5px solid #2563eb; background:#e8f0fe; color:#1e3a6d; cursor:pointer;';
-      btn.addEventListener('click', ()=>{
+      modalBtn.style.display = 'none';
+    } else {
+      const requested = roomReplayRequests.has(playerId);
+      modalBtn.style.display = '';
+      modalBtn.disabled = requested;
+      modalBtn.textContent = requested ? '✅ Đã gửi yêu cầu chơi lại' : '🙋 Xin chơi lại cùng phòng';
+    }
+    if(!replayEl) return;
+    const note = (txt) => '<div style="margin-top:10px; font-size:12px; color:#8a6d1f; text-align:center;">' + txt + '</div>';
+    let html = '';
+    if(roomHostNotice) html += note(escapeHtml(roomHostNotice));
+    if(roomReplayRequests.size > 0){
+      html += note('🙋 Muốn chơi lại: <b>' + Array.from(roomReplayRequests.values()).map(escapeHtml).join(', ') + '</b>');
+    }
+    const allFinished = roomFinishedPlayerIds.size >= roomPlayerIds.length;
+    let hostBtn = null;
+    if(!allFinished){
+      const waiting = roomPlayerIds.length - roomFinishedPlayerIds.size;
+      html += note('Đang chờ ' + waiting + ' người chơi khác hoàn thành...' + (isRoomHost ? ' (bạn chỉ bắt đầu được khi mọi người xong)' : ''));
+    } else if(isRoomHost){
+      hostBtn = document.createElement('button');
+      hostBtn.textContent = '🔁 Chơi lại cả phòng';
+      hostBtn.style.cssText = 'margin-top:10px; width:100%; font-family:var(--body); font-weight:700; font-size:13px; padding:10px; border-radius:8px; border:1.5px solid #2563eb; background:#e8f0fe; color:#1e3a6d; cursor:pointer;';
+      hostBtn.addEventListener('click', ()=>{
         modal.classList.remove('show');
         startRoomMatchForEveryone();
       });
-      replayEl.appendChild(btn);
     } else {
-      replayEl.innerHTML = '<div style="margin-top:10px; font-size:12px; color:#8a6d1f; text-align:center;">Đang chờ chủ phòng bắt đầu ván mới...</div>';
+      html += note('Đang chờ chủ phòng bắt đầu ván mới...');
     }
+    replayEl.innerHTML = html;
+    if(hostBtn) replayEl.appendChild(hostBtn);
   }
 
   /* ---------- "1 Sếp chung": khoảng cách/toạ độ Sếp NHÌN TỪ GÓC CỦA MÌNH ----------
@@ -2705,10 +2777,10 @@
       modalTitle.textContent = '😬 Bị sếp bắt tại trận!';
       modalText.textContent = 'Bạn đã hết mạng vì để sếp lại gần dưới 1m mà chưa kịp chuyển tab. Canh sếp sát hơn nhé!';
     } else if(reason === 'host_left'){
-      // Không có host-migration ở bước này — phòng mất nguồn điều khiển Sếp
-      // chung thì kết thúc nhẹ nhàng cho người còn lại thay vì treo màn hình.
-      modalTitle.textContent = '📡 Phòng đã ngắt kết nối';
-      modalText.textContent = 'Chủ phòng đã rời đi nên ván chơi chung dừng lại. Bạn có thể tạo phòng mới hoặc chơi 1 mình.';
+      // Phòng mất nguồn điều khiển Sếp chung nên ván dừng; quyền chủ phòng đã
+      // chuyển cho người khác (xem handleRoomMemberLeft) — mọi người ở lại phòng.
+      modalTitle.textContent = '📡 Chủ phòng đã rời đi';
+      modalText.textContent = 'Ván chơi chung dừng lại vì chủ phòng đã rời. Phòng đã được giao cho thành viên khác — chờ họ bắt đầu ván mới, hoặc bấm "Về trang chủ" để rời phòng.';
     } else {
       modalTitle.textContent = '⏰ Hết giờ làm';
       modalText.textContent = 'Bạn mới tích lũy được ' + Math.floor(state.personalTime) + '/' + CONFIG.targetPersonalTime + ' giây việc riêng. Cố né sếp nhiều hơn để đạt chỉ tiêu!';
@@ -2718,11 +2790,11 @@
     let rows = '<div class="stats-row"><span>Điểm ván này (thời gian chơi đúng):</span><b>'+state.correctTime.toFixed(1)+'s</b></div>';
     rows += '<div class="stats-row"><span>Trung bình của bạn ('+lb.count+' ván):</span><b>'+avg+'s/ván</b></div>';
     modalStats.innerHTML = '<div class="stats-box">'+rows+'</div><div id="modalRoomResults"></div><div id="modalRoomReplay"></div><div id="modalLB">Đang tải bảng xếp hạng...</div>';
-    if(roomMode !== 'solo' && reason !== 'host_left'){
+    if(roomMode !== 'solo'){
       broadcastMyFinishResult(won, state.correctTime);
       renderRoomMatchResults();
-      renderRoomReplayUI();
     }
+    renderRoomReplayUI(); // cả solo: để đặt lại nút "Chơi lại" về trạng thái mặc định
 
     if(sb){
       recordSharedSession(state.correctTime, state.elapsed).then(async (result)=>{
@@ -2956,6 +3028,15 @@
   });
 
   modalBtn.addEventListener('click', ()=>{
+    if(roomMode !== 'solo'){
+      // Trong phòng chung "Chơi lại" = xin host chơi lại cùng phòng, không rời phòng.
+      if(isRoomHost || !roomChannel) return;
+      const name = getPlayerName() || 'Người chơi ẩn danh';
+      roomReplayRequests.set(playerId, name);
+      roomChannel.send({ type:'broadcast', event:'replay_request', payload:{ playerId, name } });
+      renderRoomReplayUI();
+      return;
+    }
     modal.classList.remove('show');
     replayFab.classList.remove('show');
     resetRoomModeForReplay();
