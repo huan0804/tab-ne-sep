@@ -1838,6 +1838,7 @@
   // bossAnchor() bên trong resetState() không vô tình dùng lại giá trị cũ
   // từ ván trước (ví dụ currentTargetPlayerId của người đã rời phòng).
   function resetRoomTargetingForHost(){
+    roomTargetBag = [];
     currentTargetPlayerId = null;
     lastAmbientAnchorId = roomPlayerIds[0] || playerId;
   }
@@ -2409,15 +2410,29 @@
   }
 
   /* ---------- "1 Sếp chung": ai đang là mục tiêu kế tiếp của Sếp ----------
-     Chỉ host gọi. Loại người đã xong ván/đã rời phòng, tránh lặp lại đúng
-     người vừa nhắm liền trước nếu còn người khác để chọn. */
+     Chỉ host gọi. KIỂM TRA ĐỀU: dùng "túi xáo trộn" (shuffle-bag) — mỗi vòng mọi
+     người còn trong ván bị nhắm ĐÚNG 1 LẦN theo thứ tự ngẫu nhiên, hết túi mới
+     xáo túi mới. Chọn ngẫu nhiên độc lập từng lần (cách cũ) có thể để 1 người bị
+     nhắm nhiều gấp đôi người khác trong cùng 1 ván. Người đã xong ván/đã rời bị
+     loại khỏi túi; ở ranh giới 2 vòng không để cùng 1 người bị nhắm 2 lần liền. */
+  let roomTargetBag = [];
   function pickNextTargetPlayerId(){
     const candidates = roomPlayerIds.filter(id => !roomFinishedPlayerIds.has(id));
-    if(candidates.length === 0) return null;
-    if(candidates.length === 1) return candidates[0];
-    const pool = candidates.filter(id => id !== currentTargetPlayerId);
-    const from = pool.length > 0 ? pool : candidates;
-    return from[Math.floor(Math.random()*from.length)];
+    if(candidates.length === 0){ roomTargetBag = []; return null; }
+    if(candidates.length === 1){ roomTargetBag = []; return candidates[0]; }
+    roomTargetBag = roomTargetBag.filter(id => candidates.includes(id));
+    if(roomTargetBag.length === 0){
+      const bag = candidates.slice();
+      for(let i = bag.length - 1; i > 0; i--){
+        const j = Math.floor(Math.random() * (i + 1));
+        const t = bag[i]; bag[i] = bag[j]; bag[j] = t;
+      }
+      // currentTargetPlayerId đã bị pickAmbientTarget() xoá về null → người vừa bị nhắm nằm ở lastAmbientAnchorId
+      const justTargeted = currentTargetPlayerId || lastAmbientAnchorId;
+      if(bag[0] === justTargeted){ const t = bag[0]; bag[0] = bag[bag.length-1]; bag[bag.length-1] = t; }
+      roomTargetBag = bag;
+    }
+    return roomTargetBag.shift();
   }
 
   /* ---------- "1 Sếp chung": rải vị trí bàn ngẫu nhiên, không chồng lấn ----------
