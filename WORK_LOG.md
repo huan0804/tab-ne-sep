@@ -2,6 +2,24 @@
 
 > File này ghi lại trạng thái dự án để tiếp tục ở phiên làm việc sau. Cập nhật mỗi khi có tiến triển lớn, dọn bớt phần đã lỗi thời để tránh phình to.
 
+## Cập nhật 2026-10-08 (cuối phiên) — phòng nhóm & tutorial, đã push
+
+**✅ Đã xác nhận trên production:** schema.sql mục 5 đã chạy thành công; ghi điểm solo qua secret hoạt động (người dùng xác nhận bảng xếp hạng cập nhật). **Chưa xác nhận trên production:** tạo phòng/chơi lại bằng RPC có secret (đã test bằng Supabase giả + PGlite).
+
+Đã làm (commit `b5e4ca0` → `99a8006`, đều đã push, chỉ bản `TAB-Ne-Sep_v2-perspective.html`):
+- Nút "Chơi lại cả phòng" màu đỏ (CTA chính).
+- Nhãn dưới Sếp trong phòng: "👀 Đang kiểm tra <tên>" / "🎯 Đang nhắm BẠN!" — giữ nguyên số mét/viền đỏ cho cả phòng (cố ý, để cả phòng cùng căng thẳng). Việc Sếp <1m mà không bắt người không bị nhắm là THIẾT KẾ, không phải lỗi.
+- Chọn mục tiêu bằng shuffle-bag (`pickNextTargetPlayerId`): mỗi vòng mọi người bị nhắm đúng 1 lần. Cũ (random độc lập) chênh tới 6/7/9; mới 7/7/7.
+- Tutorial: làm tối phần không cần thiết (#tutorialDim, `setTutorialFocus`): bước 1 sáng màn hình + nút Tab, bước 2 thêm Sếp + vòng; tắt khi Tab lần 2/bị bắt/hết ván/14s. Sửa banner "SẾP ĐANG LẠI GẦN" hiện sớm.
+- Nội suy Sếp phía guest (snapshot interpolation), nút ❓ Hướng dẫn, "Về trang chủ", xin chơi lại tới host + chuyển host (xem các mục trước).
+
+**Việc còn mở:**
+- Test tay trên điện thoại/nhiều máy thật: tutorial làm tối, nhãn Sếp, phòng nhiều người, snapshot interpolation.
+- `modalBtn` ("Chơi lại") gọi thêm `requestAnimationFrame(tick)` mỗi lần dù `tick()` luôn tự lặp → có thể nhân đôi vòng lặp theo số lần chơi lại (chưa kiểm chứng có gây lỗi thật).
+- `/play-2d` (bản elip) chỉ nhận bản vá bảo mật + sửa tutorial, KHÔNG có tính năng phòng/hướng dẫn mới.
+
+---
+
 ## Cập nhật 2026-10-08 (phiên tối) — RÀ SOÁT & TĂNG CƯỜNG BẢO MẬT
 
 **⚠️ VIỆC BẮT BUỘC SAU KHI PUSH: chạy lại `supabase/schema.sql` (mục 5 mới) trong Supabase SQL Editor ngay sau khi Vercel deploy xong.** Chữ ký RPC cũ bị xoá nên client mới và schema mới phải đi cùng nhau; chưa chạy SQL thì tạo phòng/ghi điểm sẽ lỗi (graceful, không crash). Schema đã chạy thử 2 lần liên tiếp trên Postgres thật (PGlite) + 50 test, nhưng CHƯA chạy trên Supabase production.
