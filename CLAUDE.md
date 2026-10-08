@@ -6,26 +6,26 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 "TAB: Né Sếp" — a Vietnamese-language browser mini-game (office comedy: switch between fake work/personal screens to avoid being caught by a wandering "Boss"). Single-page HTML games, no build step, no package manager, no test suite.
 
-Production: `https://tab-ne-sep.vercel.app/play` (Vercel rewrites `/play` → `/game/TAB-Ne-Sep.html`, `/play-3d` → `/game/TAB-Ne-Sep_v2-perspective.html`, root `/` redirects to `/play`; see [vercel.json](vercel.json)).
+Production: `https://tab-ne-sep.vercel.app/play` (Vercel rewrites `/play` and `/play-3d` → `/game/TAB-Ne-Sep_v2-perspective.html`, `/play-2d` → `/game/TAB-Ne-Sep.html`, root `/` redirects to `/play`; see [vercel.json](vercel.json)).
 
 ## Commands
 
 There is no build/lint/test tooling in this repo. Development loop is: edit the HTML file directly, open it in a browser (or push to Vercel, which auto-deploys on push to the connected branch).
 
-- Local preview: open `game/TAB-Ne-Sep.html` directly in a browser (`file://`) — Supabase-backed leaderboard/multiplayer/analytics will fail gracefully and the game falls back to solo mode with `localStorage`.
+- Local preview: open `game/TAB-Ne-Sep_v2-perspective.html` directly in a browser (`file://`) — Supabase-backed leaderboard/multiplayer/analytics will fail gracefully and the game falls back to solo mode with `localStorage`.
 - Deploy: push to the git remote; Vercel builds automatically. **Always ask for confirmation before `git push`** — this is a standing rule for this repo, not just a one-off preference.
 - DB schema changes: run [supabase/schema.sql](supabase/schema.sql) in the Supabase SQL editor. It is idempotent (`create table if not exists`, `create or replace function`, existence checks before adding to publications) — safe to re-run in full after edits.
 
 ## Architecture
 
-### Three HTML variants, one actively maintained
+### Three HTML variants, one actively maintained (v2-perspective)
 
-- [game/TAB-Ne-Sep.html](game/TAB-Ne-Sep.html) — **current/production version**. Concentric ellipse distance rings drawn in-scene, room multiplayer ("1 Sếp chung"), streak system, challenge links, mobile UX fixes, daily/weekly analytics. This is the only file that receives new features.
+- [game/TAB-Ne-Sep_v2-perspective.html](game/TAB-Ne-Sep_v2-perspective.html) — **current/production version** (served at `/play`, alias `/play-3d`). `UI_VARIANT = 'perspective'`: distance rings drawn in-scene with a real pinhole projection (`cameraDist`/`cameraFH`) — far rings compress, Boss/colleague desks shrink with depth. Gameplay is unchanged because `dist` is computed in real metres. Includes room multiplayer ("1 Sếp chung"), streak system, challenge links, mobile UX fixes, daily/weekly analytics. This is the only file that receives new features.
+- [game/TAB-Ne-Sep.html](game/TAB-Ne-Sep.html) — previous production version with flat ellipse rings (served at `/play-2d`). Kept as fallback; shares no code with v2, so only port bug fixes (Boss algorithm fixes were applied to both), not new features, unless asked.
 - [game/TAB-Ne-Sep_v1-radar.html](game/TAB-Ne-Sep_v1-radar.html) — original version with a separate corner radar HUD instead of in-scene rings. Kept only for bug fixes/icon/mobile parity — **do not port new features here** unless explicitly asked; it is intentionally behind.
 
-- [game/TAB-Ne-Sep_v2-perspective.html](game/TAB-Ne-Sep_v2-perspective.html) — experimental copy of the current version (`UI_VARIANT = 'perspective'`) that replaces the flat ellipse rings with a real pinhole projection (`cameraDist`/`cameraFH`). Served at `/play-3d`. Gameplay is unchanged because `dist` is computed in real metres. Not yet tested in multi-device rooms; it shares no code with the main file, so fixes must be ported manually.
 
-The current version also randomizes each player's view per match (`pickViewAngle()`: `viewRatio` ∈ [1.4, 2.4] ring flatness + `viewRot` rotation of Boss/colleague positions; the first tutorial match keeps the original angle). This only changes rendering (`worldToScreenPx`); `dist` is view-invariant, so nothing needs syncing between clients in a room.
+The ellipse version (`TAB-Ne-Sep.html`) also randomizes each player's view per match (`pickViewAngle()`: `viewRatio` ∈ [1.4, 2.4] ring flatness + `viewRot` rotation of Boss/colleague positions; the first tutorial match keeps the original angle). This only changes rendering (`worldToScreenPx`); `dist` is view-invariant, so nothing needs syncing between clients in a room.
 
 Each file is a single self-contained HTML document (inline CSS/JS, no framework, no bundler). Only external dependencies are Google Fonts and the Supabase JS UMD build via CDN `<script>` tag. When editing, work directly in the inline `<script>`/`<style>` blocks — there is no source-map indirection to worry about.
 

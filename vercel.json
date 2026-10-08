@@ -3,7 +3,8 @@
     { "source": "/", "destination": "/play" }
   ],
   "rewrites": [
-    { "source": "/play", "destination": "/game/TAB-Ne-Sep.html" },
-    { "source": "/play-3d", "destination": "/game/TAB-Ne-Sep_v2-perspective.html" }
+    { "source": "/play", "destination": "/game/TAB-Ne-Sep_v2-perspective.html" },
+    { "source": "/play-3d", "destination": "/game/TAB-Ne-Sep_v2-perspective.html" },
+    { "source": "/play-2d", "destination": "/game/TAB-Ne-Sep.html" }
   ]
 }
