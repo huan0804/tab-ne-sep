@@ -78,7 +78,7 @@
 
 **Việc dở, chưa hoàn thành**:
 - Tích hợp Facebook Share Dialog (menu Messenger/WhatsApp/Nhóm...) — cần Facebook App ID, user bị lỗi xác minh số điện thoại đã gắn tài khoản Facebook chính, quyết định **bỏ qua**, giữ nguyên `sharer.php` hiện tại (vẫn hoạt động bình thường).
-- 2 dòng debug log cũ vẫn còn trong code (`[debug boss_state gaps]` ~dòng 1258, `[debug tick gaps]` ~dòng 2399) — chưa xoá, chờ xác nhận hết lag mới xoá.
+- 2 dòng debug log cũ (`[debug boss_state gaps]`, `[debug tick gaps]`): đã xoá khỏi bản chính v2-perspective ngày 2026-10-25. Bản `TAB-Ne-Sep.html` (không còn route) vẫn còn.
 - **Canvas POC cho vùng field (vòng tròn khoảng cách)** — branch `canvas-poc` (commit `1efb0a3`, KHÔNG merge vào master). Đã chuyển 3 ring 1/2/3m từ DOM (`buildProxRings()`) sang `<canvas id="fieldCanvas">`, verify qua Playwright (render đúng desktop+mobile, không lỗi, room creation vẫn hoạt động). Benchmark đo được: frame time gameplay bình thường KHÔNG đổi (16.58ms vs 16.64ms, vì ring không vẽ lại mỗi frame) — chỉ nhanh hơn ở resize-storm (~0.27ms vs ~0.46ms, không đáng kể). **Khuyến nghị: không đáng merge ở scope hiện tại** — làm nửa vời (chỉ ring) không giải quyết dứt điểm lớp bug "đồng bộ tay nhiều nguồn toạ độ" (đã xảy ra 2 lần: `#monitor` và `.teammateUnit`), muốn giải quyết triệt để phải chuyển cả Sếp + bàn đồng nghiệp sang canvas, chi phí viết lại lớn hơn nhiều. Giữ branch lại để **user tự test tay các phiên tới** trước khi quyết định merge/xoá hẳn.
 
 ### Tổng kết phiên 2026-09-22 — 10 commit, toàn bộ đã push lên GitHub
