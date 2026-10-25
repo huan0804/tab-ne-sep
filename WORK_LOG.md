@@ -35,8 +35,7 @@
 - **Test tay trên điện thoại/nhiều máy thật** (ưu tiên): tạo phòng + chơi lại + chuyển host trên production; Sếp mượt ở guest; tutorial làm tối; nhãn Sếp; phòng 5 người; `orientation.lock` trên Android Chrome (mở trực tiếp) và nhắc xoay trong Zalo/Facebook; popup/HUD ở chế độ `html.fl`.
 - Rủi ro bảo mật còn lại: (1) dòng `players` CŨ chưa có chủ — ai gọi RPC với id đó trước chủ thật sẽ chiếm (người bị chiếm gặp "forbidden", xoá localStorage để tạo id mới); (2) kênh Realtime không xác thực → kẻ biết mã phòng giả được tin nhắn host (không chạy được mã, không đụng điểm); (3) điểm vẫn do client tính → cheat "hoàn hảo theo thời gian thật" không chặn được nếu thiếu server mô phỏng; (4) CSP còn `'unsafe-inline'` (game là 1 file inline); (5) `claim_room_host` ai biết mã phòng + id host cũ + có tài khoản hợp lệ đều gọi được.
 - Trần Realtime gói free vẫn là giới hạn quy mô: ~100 tin/giây cả project (nay ~1,3 tin/giây/người trong phòng → vài chục người phòng chung cùng lúc).
-- `/play-2d` thiếu hầu hết tính năng mới — cân nhắc gỡ hẳn route nếu không cần fallback.
-- README.md và docs/GAME_SPEC.md vẫn lỗi thời (không có streak/challenge/room/Supabase/phòng nhóm hiện tại).
+- 2026-10-25: đã gỡ route `/play-2d` khỏi `vercel.json` (file `TAB-Ne-Sep.html` vẫn còn và vẫn truy cập được ở `/game/TAB-Ne-Sep.html`; muốn chặn hẳn thì thêm vào `.vercelignore`). Đã cập nhật README.md và docs/GAME_SPEC.md theo Supabase + bản v2.
 - Ad slot `#adSlot` chưa gắn network; Facebook Share Dialog vẫn bỏ qua (cần App ID).
 
 ---
@@ -132,7 +131,7 @@ game/TAB-Ne-Sep_v2-perspective.html — BẢN CHÍNH (`/play`, `/play-3d`): ph�
 game/TAB-Ne-Sep.html            — bản elip cũ (`/play-2d`, dự phòng): chỉ bản vá bảo mật + sửa tutorial/tick, thiếu tính năng mới
 game/TAB-Ne-Sep_v1-radar.html   — bản radar cũ, KHÔNG còn deploy (.vercelignore), chưa tương thích RPC mới
 supabase/schema.sql             — bảng + RPC + RLS; MỤC 5 (cuối file) = hardening: player_secrets, rate_limits, player_auth(), create_room, validate_*, thu hồi quyền ghi; idempotent; chạy lại toàn bộ khi sửa; ĐÃ chạy trên production (2026-10-08)
-vercel.json                     — redirect "/" → "/play"; rewrite /play + /play-3d → v2, /play-2d → TAB-Ne-Sep.html; header bảo mật (CSP, X-Frame-Options, nosniff, Referrer, Permissions, COOP)
+vercel.json                     — redirect "/" → "/play"; rewrite /play + /play-3d → v2 (không còn /play-2d); header bảo mật (CSP, X-Frame-Options, nosniff, Referrer, Permissions, COOP)
 .vercelignore                   — loại supabase/, docs/, *.md, .claude/, v1-radar khỏi bản deploy công khai
 CLAUDE.md                       — mô hình bảo mật + quy tắc dữ liệu mạng không tin cậy + bề mặt deploy (cập nhật 2026-10-08)
 ```

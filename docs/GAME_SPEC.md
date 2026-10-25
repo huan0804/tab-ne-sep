@@ -1,27 +1,27 @@
 # TAB: Né Sếp — Đặc tả game đầy đủ (v cuối cùng trong phiên làm việc)
 
-> **Cách dùng file này:** đưa file này (và file `TAB-Ne-Sep_SOURCE.html` đính kèm — đây mới là mã nguồn gốc chính xác 100%) cho Claude, yêu cầu: *"Đây là đặc tả + mã nguồn gốc của 1 game HTML tôi đã làm trước đó, hãy tái tạo lại y hệt / hoặc dùng làm nền để chỉnh tiếp."* Nếu chỉ cần y hệt, có thể bảo Claude copy nguyên file `.html` — đó là cách chắc chắn nhất, không lệch chi tiết.
+> **Trạng thái tài liệu (cập nhật 2026-10-25):** phần luật chơi, AI Sếp, nội dung màn hình và UX bên dưới là đặc tả gốc; các con số đã được đối chiếu với `CONFIG` của bản chính `game/TAB-Ne-Sep_v2-perspective.html`. Phần lưu trữ/bảng xếp hạng/analytics (§8, §10) và nền tảng (§1, §12, §13) đã chuyển từ Claude Artifact `db` sang **Supabase** — xem các mục đó và `supabase/schema.sql`. Mã nguồn chính xác là các file trong `game/`. Tính năng sau đặc tả gốc (phòng nhóm, streak, thách đấu, tutorial ép hành động, ảnh Sếp tự chọn, xoay ngang trên điện thoại) được ghi ở §14.
 
 ---
 
 ## 1. Tổng quan
 
 - **Tên:** TAB: Né Sếp
-- **Định dạng:** 1 file HTML độc lập (không phụ thuộc file ngoài trừ Google Fonts + 1 vài host script CDN được whitelist), publish dưới dạng Claude Artifact (claude.ai/artifact).
+- **Định dạng:** 1 file HTML độc lập (CSS/JS inline; phụ thuộc ngoài chỉ có Google Fonts và supabase-js qua CDN), deploy trên Vercel (`https://tab-ne-sep.vercel.app/play`).
 - **Thể loại:** Mini-game hài hước, mô phỏng "lén xem phim trong giờ làm, né sếp kiểm tra". Tối đa hoá thời gian "xem phim" (personal) mà không bị sếp bắt gặp.
 - **Ngôn ngữ giao diện:** Tiếng Việt 100%.
-- **Nền tảng kỹ thuật đặc biệt:** dùng runtime capability `db` của Claude Artifact (kho dữ liệu JSON dùng chung, đồng bộ giữa mọi người mở cùng link) để làm bảng xếp hạng thật nhiều người chơi + analytics ẩn danh. Khi publish lại, PHẢI khai báo `capabilities: {"db": {}}`.
+- **Backend:** Supabase (Postgres + Realtime) cho bảng xếp hạng nhiều người chơi, phòng nhóm và analytics ẩn danh. Mở file bằng `file://` thì các phần này lùi về solo + `localStorage`.
 
 ---
 
 ## 2. Luật chơi cốt lõi
 
 1. Người chơi mặc định đang ở chế độ **"personal"** (xem phim/meme trên màn hình) — thời gian ở chế độ này được cộng dồn làm điểm thắng.
-2. Một "Sếp" di chuyển liên tục quanh văn phòng (mô phỏng bằng toạ độ 2D ẩn, không hiển thị bản đồ thật — chỉ hiện qua radar).
+2. Một "Sếp" di chuyển liên tục quanh văn phòng (toạ độ 2D ẩn; ở bản chính Sếp được vẽ trực tiếp trong scene với 3 vòng khoảng cách 1m/2m/3m, ở bản v1 thì hiện qua radar).
 3. Người chơi bấm phím **Tab** (hoặc nút "⇆ Đổi màn hình") để chuyển đổi màn hình giữa **work** (bảng tính/dashboard/chứng khoán) và **personal** (video/meme).
 4. **Luật thua:** nếu khoảng cách Sếp–người chơi ≤ **1.0** (đơn vị "mét") mà đang ở chế độ personal → bị bắt, mất 1 trong 3 mạng (❤️❤️❤️). Có "rearm radius" = 1.8 (phải lùi ra >1.8 mới có thể bị bắt lại lần nữa, tránh trừ liên tục).
-5. **Luật thắng:** tích luỹ đủ **60 giây** ở chế độ personal trong vòng **120 giây** thời lượng trận đấu, mà chưa hết 3 mạng.
-6. **Thua vì hết giờ:** hết 120s mà chưa đạt 60s personal → thua kiểu "hết giờ".
+5. **Luật thắng:** tích luỹ đủ **30 giây** ở chế độ personal trong vòng **60 giây** thời lượng trận đấu, mà chưa hết 3 mạng. *(Đặc tả gốc là 60s/120s; đã rút còn một nửa vì 120s quá dài, `CONFIG.targetPersonalTime`/`matchDuration`.)*
+6. **Thua vì hết giờ:** hết 60s mà chưa đạt 30s personal → thua kiểu "hết giờ".
 7. **Điểm số (khác với thắng/thua):** "thời gian chơi đúng" = tổng thời gian mà (mode=work VÀ dist≤1m) HOẶC (mode=personal VÀ dist>1m). Đây là điểm dùng cho bảng xếp hạng (không phải thời lượng personal).
 
 ---
@@ -32,8 +32,9 @@
 - Sếp di chuyển liên tục theo waypoint ngẫu nhiên (không phải spawn/despawn rời rạc):
   - **Ambient wander** (đi lượn thường): chọn điểm đích ngẫu nhiên cách gốc 2.5–6.5 (hoặc 1.2–3.2 nếu trúng "near bias", xác suất 15%→28% tăng theo thời gian).
   - **Forced close approach** (bắt buộc áp sát thật): cứ sau mỗi 5–7 giây (đầu trận) → rút dần còn 1.4–2.4 giây (cuối trận), Sếp buộc phải đi tới 1 điểm cách gốc 0.15–0.85 (tức chắc chắn xuyên qua ngưỡng bắt 1m) — đây là nguồn đe doạ chính, không phụ thuộc may rủi ambient.
-  - Tốc độ mỗi đoạn di chuyển ngẫu nhiên trong khoảng tăng dần theo độ khó (ramp trong 80 giây đầu): ambient 0.5–1.3 → 0.8–1.9 (đơn vị/giây); forced 0.6–2.0 → 1.2–3.4.
-- **Radar 360°**: hiển thị góc trên bên phải, đường kính 168px, 3 vòng tròn đồng tâm, chấm đỏ = Sếp (đổi màu xanh lá/vàng/đỏ theo khoảng cách: >3m xanh, 1.5–3m vàng, ≤1.5m đỏ), có số mét hiển thị trực tiếp, quét radar xoay liên tục (tắt khi `prefers-reduced-motion`).
+  - Tốc độ mỗi đoạn di chuyển ngẫu nhiên trong khoảng tăng dần theo độ khó (ramp trong 40 giây đầu ở bản chính; gốc là 80s): ambient 0.5–1.3 → 0.8–1.9 (đơn vị/giây); forced 0.6–2.0 → 1.2–3.4.
+  - Khoảng cách tính theo elip: `dist = hypot(x, y * ellipseRatio)` với `ellipseRatio = 1.4`; điểm đích áp sát được chia lại cho `hypot(cos, sin·ellipseRatio)` để lần áp sát nào cũng thật sự vào trong 1m.
+- **Radar 360° (chỉ bản v1)**: hiển thị góc trên bên phải, đường kính 168px, 3 vòng tròn đồng tâm, chấm đỏ = Sếp (đổi màu xanh lá/vàng/đỏ theo khoảng cách: >3m xanh, 1.5–3m vàng, ≤1.5m đỏ), có số mét hiển thị trực tiếp, quét radar xoay liên tục (tắt khi `prefers-reduced-motion`).
 - **Mặt Sếp biểu cảm** (132px, gần bằng kích thước radar) với 3 trạng thái: `calm` (đang lượn xa, mắt chớp nhẹ, có cổ áo sơ mi xanh), `alert` (đang trong pha forced-approach, mắt nheo + giọt mồ hôi, rung nhẹ), `angry` (vừa bắt được, mặt đỏ, gân nổi, rung mạnh, có bong bóng thoại với 1 trong 9 câu mắng ngẫu nhiên tiếng Việt hài hước).
 
 ---
@@ -46,8 +47,8 @@
 3. **Stock**: mã chứng khoán ngẫu nhiên (VNM/FPT/HPG/MWG/VIC/VCB/MSN/GAS) + giá + %, biểu đồ đường giá + biểu đồ khối lượng giao dịch + bảng theo dõi 3 mã khác kèm màu xanh/đỏ.
 
 ### Màn hình "Personal" — random 1 trong 4 kiểu mỗi ván:
-1–2. **2 kiểu lấy cảm hứng Dragon Ball** — nhân vật minh hoạ **gốc do vẽ bằng SVG tay** (tóc dựng đứng, hào quang pulse quanh đầu), KHÔNG sao chép thiết kế nhân vật Songoku thật (tránh vướng bản quyền hình ảnh nhân vật), chỉ chơi chữ bằng caption kiểu "Kamehameha", "Genki Dama", "Cực Phẩm Tăng Ca Saiyan".
-3–4. **2 kiểu meme hài tự vẽ**: mèo tổng giám đốc phê duyệt nghỉ ngơi; "Vẫn Ổn Thôi" khi sếp đi vòng vòng.
+*(Đặc tả gốc dùng SVG nhân vật gốc để tránh bản quyền. Từ 2026-09 bản chính đổi sang nhân vật có tên thật như **Tom & Jerry**, **Pikachu** theo yêu cầu của chủ dự án, đã được cảnh báo và chấp nhận rủi ro DMCA. Danh sách đầy đủ các kiểu màn hình personal: xem hàm `buildPersonalHTML` trong `game/TAB-Ne-Sep_v2-perspective.html`.)*
+- Các kiểu còn lại là meme hài tự vẽ, ví dụ mèo tổng giám đốc phê duyệt nghỉ ngơi; "Vẫn Ổn Thôi" khi sếp đi vòng vòng.
 - Khung hiển thị dạng player video giả: thanh "🔴 LIVE", tiến trình thanh đỏ chạy, số lượt thích/bình luận ngẫu nhiên.
 
 Cả 2 nội dung dùng chung 1 màn hình vật lý duy nhất (không phải 2-3 màn hình như bản đầu) — Tab chỉ đổi NỘI DUNG hiển thị trên cùng 1 monitor, đúng tinh thần Alt-Tab thật (chuyển cửa sổ, không chuyển màn hình vật lý).
@@ -102,30 +103,14 @@ Cả 2 nội dung dùng chung 1 màn hình vật lý duy nhất (không phải 2
 
 ## 8. Hệ thống điểm & bảng xếp hạng thật nhiều người chơi
 
-### Model lưu trữ — **Sharded (Phương án B)**, KHÔNG dùng 1-document-per-player:
-- Lý do: `db` capability giới hạn cứng **5.000 document/artifact tính tổng mọi collection**. 1 người chơi = 1 doc sẽ cạn khi đủ 5.000 người từng ghé.
-- Giải pháp: **40 "ngăn" (shard) cố định** tại `players_shard/{0..39}`. Mỗi ngăn là 1 document dạng object `{ playerId: {record}, playerId2: {record}, ... }`.
-- Người chơi rơi vào ngăn nào = hash cố định trên playerId mod 40 (hàm djb2 hash đơn giản).
-- Sức chứa: mỗi ngăn ~1.000-1.400 người (dưới trần 256KB/doc) × 40 ngăn ≈ **40.000-56.000 người chơi**, chỉ tốn đúng 40 document.
-- Ghi dữ liệu: `update({[playerId]: record})`, nếu ngăn chưa tồn tại thì fallback `set({[playerId]: record})`.
-- **Đánh đổi đã chấp nhận**: mất `orderBy` phía server → đọc cả 40 ngăn, gộp mảng, `sort()` bằng JS phía client mỗi lần cần xếp hạng (chi phí cố định, không tăng theo số người chơi).
+### Model lưu trữ — Supabase (Postgres)
+*(Đặc tả gốc dùng Claude Artifact `db` với 40 shard `players_shard/{0..39}`; đã thay hoàn toàn. Không còn trần 5.000 document, xếp hạng dùng `ORDER BY avg_score DESC` thật.)*
+- `players`: 1 dòng/người chơi (id = `playerId` ngẫu nhiên theo trình duyệt, lưu `localStorage`). Cột chính: `name`, `session_count`, `total_correct_time`, `avg_score`, `best_score`, `total_play_time`, `last_visit`, streak. Xem `supabase/schema.sql`.
+- `sessions`: 1 dòng/ván, để phân tích A/B giữa các biến thể UI. Client không đọc được bảng này.
+- Mọi ghi dữ liệu đi qua RPC `security definer` (`ensure_player`, `submit_match_result`, `create_room`, ...), mỗi RPC nhận `p_secret` (secret 256-bit của người chơi, server chỉ lưu SHA-256). Điểm bị chặn theo thời gian thật đã trôi qua; streak bị kẹp phía server; tên được `sanitize_player_name()`.
+- `avg_score = total_correct_time / session_count` — chỉ số dùng để xếp hạng.
 
-### Schema mỗi player record:
-```json
-{
-  "name": "string",
-  "sessionCount": 0,
-  "totalCorrectTime": 0,
-  "avgScore": 0,
-  "bestScore": 0,
-  "totalPlayTime": 0,
-  "createdAt": 0,
-  "lastVisit": 0
-}
-```
-`avgScore = totalCorrectTime / sessionCount` — đây là chỉ số dùng để xếp hạng.
-
-### 6 "đối thủ ảo" seed sẵn (để bảng không trống lúc đầu, kích thích cạnh tranh — id cố định nên ghi đè idempotent, sửa tên trong code là áp dụng ngay không cần xoá dữ liệu cũ):
+### 6 "đối thủ ảo" seed sẵn trong `supabase/schema.sql` (để bảng không trống lúc đầu; id cố định nên chạy lại schema là ghi đè idempotent):
 ```
 seed_a1  Long Lươn            14 ván, best 55.2s
 seed_a2  Vy Vui Vẻ             9 ván, best 47.1s
@@ -157,28 +142,23 @@ seed_a6  Chíp Lười Biếng       7 ván, best 40.2s
 
 ## 10. Analytics hành vi (ẩn danh, gộp số liệu — KHÔNG log từng sự kiện)
 
-Vì cùng chung giới hạn 5.000 document, tuyệt đối không tạo 1 document/sự kiện. Thay vào đó dùng đúng **4 document cố định**, luôn ghi đè (đọc → cộng → ghi):
-
-| Document | Nội dung |
-|---|---|
-| `analytics/accessHours` | Đếm dồn theo giờ trong ngày (`h0`..`h23` + `total`) |
-| `analytics/screenTime` | Tổng + số lần mỗi phase (`introSum/introCount`, `gameSum/gameCount`, `resultSum/resultCount`) → tính trung bình thời gian mỗi màn hình |
-| `analytics/heatmap_intro` | Lưới toạ độ chuột 10×10 (key `"col_row"` → count) trong lúc ở màn hình giới thiệu |
-| `analytics/heatmap_game` | Tương tự, trong lúc đang chơi (và cả lúc xem kết quả, gộp chung) |
-
-- Mouse/touch tracking: throttle 150ms, bucket toạ độ theo % chiều rộng/cao cửa sổ vào lưới 10×10.
-- Chuyển phase ghi nhận tại các mốc: mở game (intro) → bấm Bắt Đầu (→ game) → kết thúc ván (→ result) → bấm Chơi lại (→ game mới). Có `beforeunload` để cố gắng flush nốt phase đang dở khi đóng tab.
-- Ẩn danh 100%: chỉ gắn với `playerId` ngẫu nhiên theo trình duyệt, có dòng minh bạch nhỏ ở màn hình giới thiệu: *"Game ghi nhận ẩn danh thời gian chơi & thao tác để cải thiện trải nghiệm."*
-- **Chưa có:** dashboard trực quan (heatmap màu, biểu đồ giờ truy cập) để XEM lại các số liệu này — mới chỉ có phần THU THẬP. Nếu cần, đây là việc tiếp theo (1 màn hình admin đọc lại 4 document trên và vẽ ra).
+- Lưu trong các bảng đếm cố định của Supabase, cập nhật bằng RPC `increment_*` nguyên tử (`x = x + n` trong 1 `UPDATE`), không còn kiểu đọc-cộng-ghi từ client (từng gây mất số liệu khi nhiều người ghi cùng lúc).
+- Có hai tầng song song: **cộng dồn toàn thời gian** (`analytics_access_hours`, `analytics_screen_time`, `analytics_heatmap`) và **theo ngày/tuần** (`analytics_access_hours_daily`, `analytics_screen_time_daily`, `analytics_heatmap_weekly`) để trả lời DAU/MAU/cohort/funnel. Khoá ngày/tuần tính ở client theo giờ Việt Nam cố định (UTC+7).
+- Nội dung: đếm theo giờ truy cập, tổng + số lần thời gian mỗi màn hình (intro/game/result), heatmap chuột lưới 10×10 (throttle 150ms).
+- RPC analytics có rate-limit và validate đầu vào (khoá ngày/tuần, JSON heatmap, thời lượng).
+- Ẩn danh: chỉ gắn với `playerId` ngẫu nhiên theo trình duyệt; màn hình giới thiệu có dòng minh bạch về việc ghi nhận ẩn danh.
+- **Chưa có:** dashboard trực quan để xem lại các số liệu này; mới chỉ có phần thu thập.
 
 ---
 
 ## 11. Các thông số cấu hình chính (copy chính xác từ code, để tái tạo đúng độ khó)
 
+Các giá trị luật chơi/độ khó trong `CONFIG` của bản chính (nguồn đúng là `game/TAB-Ne-Sep_v2-perspective.html`, tìm `const CONFIG`):
+
 ```js
 const CONFIG = {
-  targetPersonalTime: 60, matchDuration: 120, maxLives: 3,
-  catchRadius: 1.0, rearmRadius: 1.8, radarRangeMeters: 6,
+  targetPersonalTime: 30, matchDuration: 60, maxLives: 3,
+  catchRadius: 1.0, rearmRadius: 1.8,
   ambientBoundsMin: 2.5, ambientBoundsMax: 6.5,
   ambientNearBiasProbStart: 0.15, ambientNearBiasProbEnd: 0.28,
   ambientNearMin: 1.2, ambientNearMax: 3.2,
@@ -186,22 +166,39 @@ const CONFIG = {
   speedCheckStart: [0.6, 2.0], speedCheckEnd: [1.2, 3.4],
   checkGapStart: [5.0, 7.0], checkGapEnd: [1.4, 2.4],
   checkTargetMin: 0.15, checkTargetMax: 0.85,
-  difficultyRampSeconds: 80
+  difficultyRampSeconds: 40,
+  fieldRangeMeters: 3, ellipseRatio: 1.4,
+  roomMaxPlayers: 6
 };
-const NUM_SHARDS = 40;
 ```
+Ngoài ra `CONFIG` còn các tham số render phối cảnh (`cameraDist`, `cameraFH`), rải bàn phòng nhóm (`roomDesk*`) và đồng bộ Sếp qua Realtime (`bossHeartbeatMs`, `bossInterpDelayMs`); xem trực tiếp trong code.
 
 ---
 
-## 12. Ràng buộc kỹ thuật quan trọng khi tái tạo trên môi trường khác
+## 12. Ràng buộc kỹ thuật quan trọng
 
-- Đây là **1 file HTML duy nhất**, toàn bộ CSS/JS inline, không dùng framework (vanilla JS + CSS thuần, chỉ Google Fonts qua `<link>`).
-- Nếu tái tạo trong Claude Desktop / môi trường **không phải** claude.ai Artifact publish: **sẽ không có** `window.claude.use('db')` — cần code fallback (bản gốc đã có sẵn: nếu `dbNS` null, toàn bộ tính năng xếp hạng/chia sẻ tự chuyển về `localStorage` cục bộ, không crash).
-- Nếu muốn publish lại y hệt lên claude.ai làm Artifact: nhớ khai báo `capabilities: {"db": {}}` khi gọi publish, nếu không bảng xếp hạng sẽ không hoạt động dù code không lỗi.
-- Toàn bộ chữ, tên biến, comment trong code đều bằng tiếng Việt/tiếng Anh trộn lẫn tự nhiên (giữ nguyên để dễ đọc lại sau này).
+- Mỗi bản là **1 file HTML duy nhất**, CSS/JS inline, vanilla JS. Vì vậy CSP trong `vercel.json` vẫn cho `'unsafe-inline'`; thư viện ngoài (supabase-js) ghim đúng phiên bản + SRI.
+- Mọi dữ liệu nhận qua Realtime (Broadcast/Presence) là **không tin cậy** — phải qua các hàm `sanitize*`/`isSafeId`/`remote*`, không đưa chuỗi từ xa vào `innerHTML`. Tên người chơi luôn đi qua `escapeHtml()`.
+- Mọi tính năng dùng Supabase phải lỗi nhẹ nhàng (try/catch, không làm hỏng UI) nếu bảng/cột chưa tồn tại hoặc mở bằng `file://`.
+- Gói free của Supabase: trần ~100 tin Realtime/giây cho cả project (tính cả gửi và nhận), và project tự pause sau ~7 ngày không traffic.
 
 ---
 
-## 13. File đính kèm
+## 13. Tệp liên quan
 
-- `TAB-Ne-Sep_SOURCE.html` — **mã nguồn đầy đủ, chính xác 100%** của bản game hiện tại. Đây là nguồn tham chiếu chắc chắn nhất; nếu chỉ cần "y hệt", dùng thẳng file này (mở bằng trình duyệt là chạy được ngay, không cần build gì thêm).
+- `game/TAB-Ne-Sep_v2-perspective.html` — bản chính (`/play`).
+- `game/TAB-Ne-Sep.html` — bản elip cũ, route `/play-2d` đã gỡ; giữ file để tham khảo.
+- `game/TAB-Ne-Sep_v1-radar.html` — bản radar gốc, không còn deploy.
+- `supabase/schema.sql` — bảng, RPC, RLS.
+- `WORK_LOG.md` — nguồn cập nhật nhất về trạng thái và quyết định.
+
+---
+
+## 14. Tính năng thêm sau đặc tả gốc (tóm tắt, chi tiết trong `WORK_LOG.md`)
+
+- **Phòng nhóm "1 Sếp chung"** (tối đa 6 người): host mô phỏng Sếp, đồng bộ qua Supabase Realtime (host chỉ gửi khi đích/tốc độ/mục tiêu đổi + heartbeat 1s, máy khách tự ngoại suy). Xin chơi lại → host bấm "Chơi lại cả phòng" khi mọi người xong; tự chuyển host khi host rời. Sếp chọn người bị nhắm theo shuffle-bag.
+- **Streak** ngày chơi liên tiếp, tính theo giờ Việt Nam cố định.
+- **Thách đấu bạn bè** qua `?challenge=<id>` (khác phòng nhóm).
+- **Tutorial ép hành động** ở ván solo đầu tiên (cờ `localStorage` `atd_tutorialDone`), nút ❓ Hướng dẫn trên HUD.
+- **Ảnh Sếp tự chọn** (lưu `localStorage`, không upload).
+- **Điện thoại:** xin toàn màn hình + khoá ngang khi bấm Bắt đầu; nếu không khoá được thì có nút xoay giao diện bằng CSS.
