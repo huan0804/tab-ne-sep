@@ -38,6 +38,23 @@
 - 2026-10-25: đã gỡ route `/play-2d` khỏi `vercel.json` (file `TAB-Ne-Sep.html` vẫn còn và vẫn truy cập được ở `/game/TAB-Ne-Sep.html`; muốn chặn hẳn thì thêm vào `.vercelignore`). Đã cập nhật README.md và docs/GAME_SPEC.md theo Supabase + bản v2.
 - Ad slot `#adSlot` chưa gắn network; Facebook Share Dialog vẫn bỏ qua (cần App ID).
 
+### Hạng mục CHƯA làm có chủ đích (2026-10-25) — chỉ để tra cứu khi có issue
+Chủ dự án xác nhận hiện tại game đã ổn và đang trong giai đoạn build (chưa publish, chưa có người chơi thật), nên KHÔNG làm các mục dưới đây. Nếu sau này có lỗi liên quan, quay lại đây trước.
+
+**Test tay chưa làm:**
+- Phòng nhóm trên production: tạo phòng, chơi lại, chuyển host bằng RPC có secret; Sếp mượt ở guest; phòng 5 người.
+- Tutorial làm tối, nhãn Sếp, `orientation.lock` trên Android Chrome (mở trực tiếp), nhắc xoay trong Zalo/Facebook, popup/HUD ở chế độ `html.fl`.
+- Việc A (streak): dùng SQL Editor chỉnh `last_visit` giả lập mốc ngày, xác nhận cảnh báo giữ chuỗi + mốc thưởng.
+- Việc B (thách đấu `?challenge=<id>`): mở `/play?challenge=seed_a3`, xác nhận banner + nút thách đấu.
+- Guest vào muộn giữa trận (code có fallback về solo, chưa xác nhận trên trình duyệt thật).
+- UI chặn người thứ 7 vào phòng (`roomMaxPlayers: 6`, chặn ở `joinRoomChannel()`).
+
+**Quyết định chưa chốt (mặc định = giữ nguyên hiện trạng):**
+- Nhánh `canvas-poc` (`1efb0a3`): chưa merge, chưa xoá. Benchmark cho thấy không cải thiện frame time gameplay; WORK_LOG khuyến nghị không merge.
+- Dòng `players` cũ chưa có chủ: ai gọi RPC với id đó trước chủ thật sẽ chiếm; người bị chiếm gặp "forbidden" và phải xoá `localStorage`. Chấp nhận rủi ro, chưa xử lý.
+- `/game/TAB-Ne-Sep.html` vẫn truy cập được trực tiếp dù đã gỡ route `/play-2d`; chưa thêm vào `.vercelignore`.
+- Đo retention thật: hoãn đến khi có người chơi thật (dữ liệu hiện tại chủ yếu là người test, 23 người chơi lúc 2026-10-25).
+
 ---
 
 ## Trạng thái trước đó (2026-09-23, phiên chiều)
